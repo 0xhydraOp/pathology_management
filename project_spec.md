@@ -1,8 +1,8 @@
 # Pathological Lab Management System — Project Specification
 
-**Version:** 1.7  
-**Date:** March 17, 2026  
-**Last updated:** March 17, 2026  
+**Version:** 1.8  
+**Date:** March 18, 2026  
+**Last updated:** March 18, 2026  
 **Target:** Indian Small Pathology Labs (Universal/Offline)  
 **Lab:** MONDAL DIAGNOSTIC CENTRE
 
@@ -42,7 +42,7 @@ A **universal, offline-first** desktop application for pathology laboratories in
 - **Lab profile:** Name, address, phone, email, registration number (if any)
 - **Logo:** Upload lab logo for reports
 - **Printer:** Select default printer; default paper A4
-- **Pad layout:** A4 paper with **2 inch header** (pre-printed on pad); software prints below header; configurable margins to align
+- **Pad layout:** A4 paper with pre-printed header (lab branding on pad); software leaves **1.5 inch top gap** then prints patient details, test department, and results only; no software-printed letterhead
 - **Print calibration:** Grid print, visual margin adjustment, save alignment (see Section 10.4)
 - **Pathologist:** Name(s), qualification (for "Read by" on report)
 - **Clinical correlation line:** Customizable footer text (default: "Please correlate clinically")
@@ -77,7 +77,7 @@ A **universal, offline-first** desktop application for pathology laboratories in
     - **max_allowed_value** — maximum value accepted (reject entry above this; prevents typos)
     - **decimal_precision** — number of decimal places allowed (e.g. 2 → 12.34)
   - **Normal / Low / High / Critical:** Automatically calculated from result vs range (no manual input)
-  - **Critical alert popup:** When critical value is entered (e.g. Potassium = 7.2), system shows immediate popup: "CRITICAL VALUE DETECTED" with "Confirm result" — user must confirm before proceeding
+  - **Critical alert popup:** When critical value is entered and user **leaves the field (on blur)**, system shows popup: "CRITICAL VALUE DETECTED" with "Confirm result" — user must confirm before proceeding (does not fire while typing partial values)
 
 ### 4.3.1 Investigation Editor (Template Editor) — *Removed in v1.7*
 
@@ -97,21 +97,15 @@ A **universal, offline-first** desktop application for pathology laboratories in
 - **Report watermark option:** Optional watermark for draft reports; e.g. "DRAFT REPORT" printed diagonally across the page; user can enable when printing draft
 - **Printout design:** Clean, easy to read — not messy (see Section 5.4)
 - **Report layout:**
-  - **From pad:** Lab name, address, logo (pre-printed)
-  - **From software:**
-    - Patient: Name, Age, Sex, **Patient ID** (e.g. PT01-MAR-2026)
-    - Referred by (referring doctor)
-    - Address
-    - **Date & Time** (captured automatically at printing time; DD-MM-YYYY HH:MM:SS)
+  - **From pad:** Lab name, address, logo, pathologist signature (all pre-printed on pad)
+  - **From software:** 1.5 inch top gap; then:
+    - **Patient details:** Name, Patient ID, Age, Sex, Phone, Referred by, Address (card layout)
+    - **Department/section title** (e.g. Hematology, Biochemistry)
     - Investigation results with units
     - **Numerical values in BOLD**
     - **Reference range in brackets** (e.g. (13.0 - 17.0)) — alphanumeric, patient-friendly
     - **Normal / Low / High** automatically calculated and displayed; abnormal highlighted (red/underline)
-    - Pathologist signature (pre-printed on pad; already signed by doctor)
-    - “Read by” (pathologist name)
-    - **"Printed by"** (staff/operator name — person who prints the report)
-    - Date & Time (same as above; printed at print moment)
-    - **Clinical correlation line** (footer at bottom of report; e.g. "Please correlate clinically" — lab can customize)
+    - **Minimal footer:** Read by, Printed by, Date & Time, Clinical correlation line
 - **Range logic (fully automatic):**
   - Use age/sex-specific range if defined; else default range
   - Normal / Low / High / Critical calculated automatically from result vs range
@@ -179,6 +173,16 @@ A **universal, offline-first** desktop application for pathology laboratories in
 **Typography:** Headings 16–24px semibold; body 14px; stat numbers 26–32px bold; labels 12–13px.
 
 **Spacing & shadows:** Card padding 16–24px; card gap 16–20px; card shadow `0 2px 12px rgba(0,0,0,0.06)`.
+
+### 4.6.2 Window & Desktop Behavior (Electron)
+
+- **Dynamic window title:** Title updates with current page (e.g. "MONDAL DIAGNOSTIC CENTRE - Dashboard", "- Reports")
+- **Window state persistence:** Remembers size, position, maximized state, and always-on-top on restart
+- **Minimum window size:** 900×600 to prevent layout breakage
+- **Print preview window:** Centered on first open; remembers size on subsequent opens
+- **Always on top:** Toggle in header (Pin button) for lab desk workflow
+- **Splash screen:** Brief loading screen while database initializes
+- **Global shortcut:** Ctrl+P triggers print (main window) or prints PDF (preview window)
 
 ### 4.7 Referral / Commission Tracking
 
@@ -264,17 +268,17 @@ Map machine output parameters to system investigations for result import from la
 ### 5.1 Pad Layout (Pre-printed)
 
 - **Paper:** A4
-- **Header:** 2 inch fixed header (pre-printed on pad); software prints below it
+- **Header:** Pre-printed on pad (lab logo, name, address); software leaves **1.5 inch top gap** then prints content
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   2 INCH HEADER (pre-printed)            │
+│              PRE-PRINTED HEADER (on pad)                 │
 │  [LAB LOGO]              MONDAL DIAGNOSTIC CENTRE         │
 │                              Full Address                │
 │                         Phone | Email                    │
 │  Reg. No: ___________    (if applicable)                 │
 ├─────────────────────────────────────────────────────────┤
-│  [Printable area - software prints below 2" header]       │
+│  [1.5" gap] [Printable area - patient, department, results]│
 │                                                          │
 │                                                          │
 │                                                          │
@@ -322,11 +326,11 @@ Map machine output parameters to system investigations for result import from la
 - **Normal [N]:** Value within reference range → black
 - **Low [L]:** Below minimum → red/bold
 - **High [H]:** Above maximum → red/bold
-- **Critical [C]:** Beyond critical threshold (if defined) → red + **immediate popup alert**
+- **Critical [C]:** Beyond critical threshold (if defined) → red + **popup alert on blur**
 
 ### 5.3.1 Critical Alert Popup
 
-When user enters a result that falls in the critical range (critical_low or critical_high), the system must **warn immediately** with a popup:
+When user enters a result that falls in the critical range (critical_low or critical_high) and **leaves the field (on blur)**, the system shows a popup:
 
 **Example:** Potassium = 7.2 (critical high)
 
@@ -342,7 +346,7 @@ When user enters a result that falls in the critical range (critical_low or crit
 ```
 
 - User must **Confirm result** to accept and save, or **Edit/Cancel** to correct
-- Popup appears as soon as critical value is entered (on blur/enter or save)
+- Popup appears **on blur** (when user tabs out or clicks away) — does not fire while typing partial values (e.g. typing "7" for Hb before completing "7.5")
 - Prevents accidental submission of critical values without acknowledgment
 
 ### 5.4 Report Design — Clean & Easy to Read
@@ -399,7 +403,7 @@ LDL               110 mg/dL
 | **Desktop app** | Electron + React / Tauri + React | Cross-platform, offline |
 | **Database** | SQLite (SQLCipher or similar) | File-based, no server, portable; AES encryption at rest |
 | **Printing** | System print API (e.g., Node/Web) | Works with local printers |
-| **Reports** | HTML/CSS → Print / PDF | Flexible layout, print-friendly; see `report_template.html` |
+| **Reports** | HTML/CSS → Print / PDF | Flexible layout, print-friendly |
 
 ### 6.1.1 Database Encryption (Default Data Protection)
 
@@ -414,7 +418,8 @@ LDL               110 mg/dL
 
 ### 6.3 Deployment
 
-- **Offline installer:** Single .exe or .msi; installable without internet; bundled runtime (no separate Node/.NET install)
+- **Offline installer:** NSIS installer (.exe); installable without internet; bundled runtime (no separate Node/.NET install)
+- **Build outputs:** NSIS Setup (.exe), ZIP archive (portable), win-unpacked folder (portable .exe)
 - **Target OS:** Windows 10 minimum
 - No cloud dependency; runs fully offline
 
@@ -837,7 +842,7 @@ CREATE TABLE lab (
 );
 ```
 
-*Note: `margin_*` in mm or points; `margin_top` default ~51 (2 inch) for A4 pad header.*
+*Note: `margin_*` in mm or points; `margin_top` default ~38 (1.5 inch) for pad top gap.*
 
 ### 9.2 Patients
 
@@ -1166,9 +1171,9 @@ MachineImportMapping (machine_parameter → system investigation)
 
 ### 10.1 Pad-Based Printing
 
-- **Pad:** A4 paper with **2 inch header** (pre-printed: lab logo, name, address, etc.)
-- Software prints only variable content **below the 2 inch header**
-- Default margin_top = 2 inch (50.8 mm) to skip header; configurable for alignment
+- **Pad:** A4 paper with pre-printed header (lab logo, name, address)
+- Software leaves **1.5 inch top gap**; prints only patient details, department, results, minimal footer
+- Default margin_top = 1.5 inch (38 mm) for pad top gap; configurable for alignment
 - Support for multiple pad designs (template selection)
 
 ### 10.2 Supported Printers
@@ -1236,7 +1241,7 @@ Align software output with pre-printed pad:
 - [x] User-friendly UI with dashboard navigation
 - [x] Core investigation catalogue (50 tests)
 - [x] Order creation, result entry
-- [x] Critical alert popup (immediate warning on critical value; confirm before save)
+- [x] Critical alert popup (on blur when critical value; confirm before save)
 - [x] Basic report layout with bold values, ranges; clean, easy-to-read printout
 - [x] Pad-based printing (pad pre-signed by doctor)
 - [x] Date & time auto-captured at print; real-time clock in app UI
@@ -1244,7 +1249,7 @@ Align software output with pre-printed pad:
 
 ### Phase 2 — Enhancement (4–6 weeks)
 
-- [ ] Offline installer (single .exe/.msi; no internet required)
+- [x] Offline installer (NSIS .exe, ZIP, portable; no internet required)
 - [ ] Full 100-investigation catalogue
 - [x] Age/sex-specific ranges
 - [ ] Investigation editor (removed in v1.7; reload catalogue from Settings)
@@ -1397,7 +1402,7 @@ Please correlate clinically.
 - **CBC:** Complete Blood Count
 - **LFT:** Liver Function Test
 - **KFT/RFT:** Kidney Function Test
-- **Pad:** A4 pre-printed stationery with 2 inch header (lab branding); software prints below header
+- **Pad:** A4 pre-printed stationery with lab branding; software leaves 1.5 inch top gap, then prints patient details, department, results
 - **Print calibration:** Grid print, visual margin adjustment, save alignment — align software output with pad
 - **Machine import profiles:** Map machine_parameter (e.g. HB, PLT) → system_parameter (e.g. Haemoglobin, Platelet Count) for result import
 - **Report watermark:** Optional "DRAFT REPORT" (or custom text) printed diagonally for draft reports
@@ -1408,7 +1413,7 @@ Please correlate clinically.
 - **Clinical correlation:** Standard disclaimer at bottom of report (e.g. "Please correlate clinically"); lab can customize
 - **Range in brackets:** Reference range shown in brackets (e.g. (13.0 - 17.0)); Normal/Low/High auto-calculated; patient-friendly
 - **Result validation:** min_allowed_value, max_allowed_value, decimal_precision — validate result entry per test
-- **Critical alert popup:** Immediate popup when critical value entered; "CRITICAL VALUE DETECTED" with Confirm/Edit; user must acknowledge
+- **Critical alert popup:** Popup on blur when critical value entered; "CRITICAL VALUE DETECTED" with Confirm/Edit; user must acknowledge (does not fire while typing)
 - **display_order:** Order tests appear on report (e.g. CBC: 1 Haemoglobin, 2 RBC, 3 WBC, 4 Platelet, 5 PCV)
 - **section:** Report section for grouping (e.g. Hematology, Biochemistry, Lipid, Thyroid, Serology); ranges array with sex, min_age, max_age, low, high
 - **Referred by autocomplete:** Type first few letters → matching referrer names appear from previously saved entries; select with Enter; new names auto-saved for next time

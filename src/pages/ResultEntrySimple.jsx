@@ -92,7 +92,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
     try {
       await window.db.run(
         `INSERT INTO order_results (order_id, parameter_id, result_value, result_text, flag) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(order_id, parameter_id) DO UPDATE SET result_value=excluded.result_value`,
+         ON CONFLICT(order_id, parameter_id) DO UPDATE SET result_value=excluded.result_value, result_text=excluded.result_text, flag=excluded.flag`,
         [currentOrder.id, selectedParam.id, numVal, null, 'N']
       );
       setValues((v) => ({ ...v, [currentOrder.id]: val }));
@@ -391,7 +391,8 @@ export default function ResultEntrySimple() {
 
   useEffect(() => {
     if (orderIdParam) {
-      loadOrderDetails(parseInt(orderIdParam));
+      const id = parseInt(orderIdParam, 10);
+      if (!isNaN(id)) loadOrderDetails(id);
     }
   }, [orderIdParam, loadOrderDetails]);
 

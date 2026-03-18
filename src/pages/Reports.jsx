@@ -46,7 +46,7 @@ export default function Reports() {
   const today = toLocalDateStr(new Date());
   const [orderFilter, setOrderFilter] = useState({ dateFrom: today, dateTo: today });
 
-  const margins = { top: 144, left: 28, right: 28, bottom: 48 };
+  const margins = { top: 192, left: 28, right: 28, bottom: 48 };
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
@@ -144,7 +144,7 @@ export default function Reports() {
         const rr = rangeMap[r.parameter_id];
         const lo = rr?.low_value;
         const hi = rr?.high_value;
-        const refRange = (lo != null || hi != null) ? `(${lo ?? '—'} - ${hi ?? '—'})` : '';
+        const refRange = (lo != null || hi != null) ? `(${lo ?? '—'} – ${hi ?? '—'})` : '';
         return { ...r, refRange };
       });
       setReportData({ ...selectedOrder, results: resultsWithRange });
@@ -408,7 +408,7 @@ export default function Reports() {
                 paddingBottom: margins.bottom,
               }}
             >
-              <div style={styles.reportHeader}>
+              <div style={styles.reportHeader} className="report-header-no-break">
                 <div style={styles.patientCard} className="patient-card-print">
                   <div style={styles.patientCardMain}>
                     <div style={styles.patientName}>{reportData.patient_name}</div>
@@ -436,6 +436,7 @@ export default function Reports() {
                     <span style={styles.patientLabel}>Address</span>
                     <span style={styles.patientValue}>{reportData.address || '—'}</span>
                   </div>
+                  <div style={styles.reportDate}>Report Date: {formatDate(new Date())}</div>
                 </div>
                 <div style={styles.departmentTitle}>{sectionName}</div>
               </div>
@@ -453,11 +454,11 @@ export default function Reports() {
                   {resultsBySection[sectionName].map((r, i) => (
                     <tr key={i}>
                       <td style={styles.td}>{r.test_name}</td>
-                      <td style={{ ...styles.td, fontWeight: 600 }}>
+                      <td style={{ ...styles.td, fontWeight: 700, fontSize: 13 }}>
                         {r.result_value != null ? r.result_value : r.result_text || '—'}
                       </td>
                       <td style={styles.td}>{r.unit || '—'}</td>
-                      <td style={{ ...styles.td, fontSize: 12, color: '#666' }}>{r.refRange || '—'}</td>
+                      <td style={{ ...styles.td, fontSize: 11, color: '#666' }}>{r.refRange || '—'}</td>
                       <td style={{ ...styles.td, color: r.flag === 'L' || r.flag === 'H' || r.flag === 'C' ? '#c00' : '#666' }}>
                         {r.flag === 'N' ? 'N' : r.flag === 'L' ? '↓' : r.flag === 'H' ? '↑' : r.flag === 'C' ? '!!' : r.flag || 'N'}
                       </td>
@@ -468,6 +469,9 @@ export default function Reports() {
               <div style={styles.footer}>
                 <div style={styles.footerReadBy}>Read by: {labConfig.pathologist_name} · Printed by: {getPrintedBy()} · {formatDate(new Date())}</div>
                 <div style={styles.footerClinical}>{labConfig.clinical_correlation_text || 'Please correlate clinically'}</div>
+                {orderedSections.length > 1 && (
+                  <div style={styles.pageNumber}>Page {sectionIdx + 1} of {orderedSections.length}</div>
+                )}
               </div>
             </div>
           ))}
@@ -590,30 +594,32 @@ const styles = {
   input: { width: '100%', minWidth: 140, padding: '12px 14px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, transition: 'border-color 0.2s' },
   searchInput: { width: '100%', minWidth: 180, padding: '12px 14px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, transition: 'border-color 0.2s' },
   select: { width: '100%', padding: '12px 14px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, transition: 'border-color 0.2s' },
-  reportHeader: { marginTop: 0, marginBottom: 20, paddingBottom: 12 },
+  reportHeader: { marginTop: 0, marginBottom: 12, paddingBottom: 8 },
   patientCard: {
     background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
     border: '1px solid #e2e8f0',
-    borderRadius: 12,
-    padding: '16px 20px',
-    marginBottom: 16,
-    borderLeft: '4px solid #0d7377',
+    borderRadius: 8,
+    padding: '8px 12px',
+    marginBottom: 10,
+    borderLeft: '3px solid #0d7377',
   },
-  patientCardMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  patientName: { fontSize: 18, fontWeight: 700, color: '#1e293b', letterSpacing: '0.3px' },
-  patientId: { fontSize: 12, fontWeight: 600, color: '#0d7377', backgroundColor: 'rgba(13,115,119,0.12)', padding: '4px 10px', borderRadius: 6 },
-  patientCardGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px 24px', marginBottom: 12 },
-  patientItem: { display: 'flex', flexDirection: 'column', gap: 2 },
-  patientLabel: { fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' },
-  patientValue: { fontSize: 13, fontWeight: 500, color: '#334155' },
-  patientAddress: { display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 10, borderTop: '1px dashed #e2e8f0' },
-  departmentTitle: { fontSize: 17, fontWeight: 700, marginTop: 16, marginBottom: 14, color: '#0d7377', borderBottom: '3px solid #0d7377', paddingBottom: 10, textAlign: 'center', letterSpacing: '0.5px' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
-  th: { textAlign: 'left', padding: '12px 16px', borderBottom: '2px solid #e2e8f0', fontWeight: 600, fontSize: 12, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
-  td: { padding: '12px 16px', borderBottom: '1px solid #f1f5f9' },
-  footer: { marginTop: 24, paddingTop: 16, fontSize: 12, color: '#64748b' },
+  patientCardMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 4, marginBottom: 6 },
+  patientName: { fontSize: 14, fontWeight: 700, color: '#1e293b', letterSpacing: '0.2px' },
+  patientId: { fontSize: 10, fontWeight: 600, color: '#0d7377', backgroundColor: 'rgba(13,115,119,0.12)', padding: '2px 6px', borderRadius: 4 },
+  patientCardGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px 16px', marginBottom: 6 },
+  patientItem: { display: 'flex', flexDirection: 'column', gap: 0 },
+  patientLabel: { fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px' },
+  patientValue: { fontSize: 11, fontWeight: 500, color: '#334155' },
+  patientAddress: { display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 6, borderTop: '1px dashed #e2e8f0' },
+  reportDate: { fontSize: 11, fontWeight: 600, color: '#0d7377', marginTop: 6, paddingTop: 4 },
+  departmentTitle: { fontSize: 14, fontWeight: 700, marginTop: 10, marginBottom: 10, color: '#0d7377', borderBottom: '2px solid #0d7377', paddingBottom: 6, textAlign: 'center', letterSpacing: '0.5px' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+  th: { textAlign: 'left', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: 600, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  td: { padding: '8px 12px', borderBottom: '1px solid #f1f5f9' },
+  footer: { marginTop: 16, paddingTop: 10, fontSize: 11, color: '#64748b' },
   footerReadBy: { marginBottom: 8 },
   footerClinical: { fontStyle: 'italic' },
+  pageNumber: { marginTop: 8, fontSize: 11, color: '#64748b', textAlign: 'center' },
   actions: { display: 'flex', gap: 14, alignItems: 'center', marginTop: 20, padding: '18px 20px', background: 'linear-gradient(to right, #f8fafc 0%, #f1f5f9 100%)', borderRadius: 12, border: '1px solid #e2e8f0' },
   copiesSelect: { padding: '10px 16px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, background: '#fff' },
   previewBtn: { background: 'linear-gradient(135deg, #475569 0%, #64748b 100%)', color: '#fff', border: 'none', padding: '12px 22px', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px rgba(71,85,105,0.25)' },

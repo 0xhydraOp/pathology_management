@@ -213,6 +213,24 @@ export default function Referrals() {
     if (reportReferrer) loadReportData();
   }, [reportReferrer, reportFilter, reportFrom, reportTo, loadReportData]);
 
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (reportReferrer) setReportReferrer(null);
+        else if (selectedReferrer) setSelectedReferrer(null);
+      } else if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        loadReferrers();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedReferrer, reportReferrer, loadReferrers]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [filter, customFrom, customTo, search]);
+
   const openReportModal = (referrerName) => {
     setSelectedReferrer(null);
     setReportReferrer(referrerName);
@@ -258,6 +276,15 @@ export default function Referrals() {
     const x = new Date(d);
     return `${String(x.getDate()).padStart(2, '0')}-${String(x.getMonth() + 1).padStart(2, '0')}-${x.getFullYear()}`;
   };
+
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return '—';
+    const x = new Date(dateStr);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${String(x.getDate()).padStart(2, '0')} ${months[x.getMonth()]} ${x.getFullYear()}`;
+  };
+
+  const [start, end] = getDateRange(filter, customFrom, customTo);
 
   return (
     <div style={styles.container}>
@@ -306,6 +333,8 @@ export default function Referrals() {
           </div>
         </div>
       )}
+
+      <p style={styles.dateRangeLabel}>Showing: {formatDisplayDate(start)} – {formatDisplayDate(end)}</p>
 
       <div style={styles.toolbar}>
         <button style={styles.refreshBtn} onClick={loadReferrers} disabled={loading}>
@@ -451,7 +480,23 @@ export default function Referrals() {
           <div style={styles.reportModal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.reportModalHeader}>
               <h3 style={styles.reportModalTitle}>Performance Report — {reportReferrer}</h3>
-              <button style={styles.modalClose} onClick={() => setReportReferrer(null)}>×</button>
+              <div style={styles.modalHeaderActions}>
+                {reportData.patients.length > 0 && (
+                  <button
+                    style={styles.copyBtn}
+                    onClick={() => {
+                      const header = 'Patient ID\tName\tAge\tSex\tOrder Date';
+                      const rows = reportData.patients.map((pt) =>
+                        [pt.patient_id || '—', pt.name || '—', pt.age ?? '—', pt.sex || '—', formatDate(pt.order_date)].join('\t')
+                      ).join('\n');
+                      navigator.clipboard.writeText(`${header}\n${rows}`);
+                    }}
+                  >
+                    Copy
+                  </button>
+                )}
+                <button style={styles.modalClose} onClick={() => setReportReferrer(null)}>×</button>
+              </div>
             </div>
             <div style={styles.reportFilters}>
               {['week', 'month', 'lastmonth', 'custom'].map((pid) => (
@@ -512,7 +557,23 @@ export default function Referrals() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={styles.modalTitle}>Patients referred by {selectedReferrer}</h3>
-              <button style={styles.modalClose} onClick={() => setSelectedReferrer(null)}>×</button>
+              <div style={styles.modalHeaderActions}>
+                {patientList.length > 0 && (
+                  <button
+                    style={styles.copyBtn}
+                    onClick={() => {
+                      const header = 'Patient ID\tName\tAge\tSex\tOrder Date';
+                      const rows = patientList.map((pt) =>
+                        [pt.patient_id || '—', pt.name || '—', pt.age ?? '—', pt.sex || '—', formatDate(pt.order_date)].join('\t')
+                      ).join('\n');
+                      navigator.clipboard.writeText(`${header}\n${rows}`);
+                    }}
+                  >
+                    Copy
+                  </button>
+                )}
+                <button style={styles.modalClose} onClick={() => setSelectedReferrer(null)}>×</button>
+              </div>
             </div>
             {loadingPatients ? (
               <div style={styles.modalLoading}>Loading...</div>
@@ -610,6 +671,12 @@ const styles = {
     borderRadius: 8,
     border: '1px solid #ddd',
     fontSize: 14,
+  },
+  dateRangeLabel: {
+    fontSize: 13,
+    color: '#64748b',
+    margin: '0 0 16px',
+    fontWeight: 500,
   },
   toolbar: {
     display: 'flex',
@@ -968,6 +1035,21 @@ const styles = {
     fontWeight: 600,
     color: '#1e3a5f',
     margin: 0,
+  },
+  modalHeaderActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  copyBtn: {
+    padding: '6px 12px',
+    borderRadius: 6,
+    border: '1px solid #0d7377',
+    background: '#fff',
+    color: '#0d7377',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
   },
   modalClose: {
     background: 'none',

@@ -469,6 +469,17 @@ class DatabaseManager {
     return outPath;
   }
 
+  clearAllPatients() {
+    const batch = true;
+    this.run('DELETE FROM report_print_log', [], batch);
+    this.run('DELETE FROM order_results', [], batch);
+    this.run('DELETE FROM order_tests', [], batch);
+    this.run('DELETE FROM orders', [], batch);
+    this.run('DELETE FROM patients', [], batch);
+    this.run('DELETE FROM patient_sequence', [], batch);
+    this.save();
+  }
+
   static getNextPatientId(db) {
     const now = new Date();
     const month = now.getMonth() + 1;

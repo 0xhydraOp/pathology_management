@@ -137,9 +137,11 @@ export default function NewRegistration() {
       setForm({ name: '', age: '', sex: 'male', phone: '', address: '', referred_by: '', tests: [] });
       try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
       setSaveFeedback('Saved');
+      const validOrderId = orderId && !isNaN(parseInt(orderId, 10));
       setTimeout(() => {
         setSaveFeedback('');
-        navigate(`/result-entry?order=${orderId}`);
+        if (validOrderId) navigate(`/result-entry?order=${orderId}`);
+        else navigate('/result-entry');
       }, 600);
     } catch (err) {
       console.error(err);
