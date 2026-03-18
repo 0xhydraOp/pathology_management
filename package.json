@@ -11,6 +11,7 @@
     "build:icon": "node scripts/build-icon.mjs",
     "seed": "node scripts/seed-dummy-data.js",
     "test": "node scripts/test-system.js",
+    "release": "node scripts/create-release.js",
     "electron:build": "npm run build:icon && vite build && electron-builder",
     "start": "electron ."
   },
