@@ -1,0 +1,40 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electronApp', {
+  setTitle: (title) => ipcRenderer.invoke('app:setTitle', title),
+  setAlwaysOnTop: (on) => ipcRenderer.invoke('app:setAlwaysOnTop', on),
+  getAlwaysOnTop: () => ipcRenderer.invoke('app:getAlwaysOnTop'),
+  onPrintTrigger: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('app:print-trigger', handler);
+    return () => ipcRenderer.removeListener('app:print-trigger', handler);
+  },
+});
+
+contextBridge.exposeInMainWorld('db', {
+  query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
+  run: (sql, params) => ipcRenderer.invoke('db:run', sql, params),
+  get: (sql, params) => ipcRenderer.invoke('db:get', sql, params),
+  all: (sql, params) => ipcRenderer.invoke('db:all', sql, params),
+  init: () => ipcRenderer.invoke('db:init'),
+  seed: () => ipcRenderer.invoke('db:seed'),
+  nextPatientId: () => ipcRenderer.invoke('db:nextPatientId'),
+  logPrint: (orderId, printedBy) => ipcRenderer.invoke('db:logPrint', orderId, printedBy),
+  backup: () => ipcRenderer.invoke('db:backup'),
+  backupEncrypted: (password) => ipcRenderer.invoke('db:backupEncrypted', password),
+  verifyUser: (username, password) => ipcRenderer.invoke('db:verifyUser', username, password),
+  getLabConfig: () => ipcRenderer.invoke('db:getLabConfig'),
+  setLabConfig: (cfg) => ipcRenderer.invoke('db:setLabConfig', cfg),
+  exportOrdersExcel: (params) => ipcRenderer.invoke('db:exportOrdersExcel', params),
+  exportReferralsExcel: (params) => ipcRenderer.invoke('db:exportReferralsExcel', params),
+  getDatabaseSize: () => ipcRenderer.invoke('db:getDatabaseSize'),
+  getLastBackupDate: () => ipcRenderer.invoke('db:getLastBackupDate'),
+});
+
+contextBridge.exposeInMainWorld('electronPrint', (copies) =>
+  ipcRenderer.invoke('app:print', copies || 1)
+);
+
+contextBridge.exposeInMainWorld('electronPrintPreview', () =>
+  ipcRenderer.invoke('app:printPreview')
+);

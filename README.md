@@ -1,0 +1,68 @@
+# Pathological Lab Management System
+
+Offline-first desktop application for pathology laboratories in India. Handles patient registration, investigation management, report generation, and pad-based printing.
+
+## Project Structure
+
+```
+pathologycal lab managment system/
+├── assets/
+│   ├── logo.png             # Fallback logo
+│   └── icon.png             # App icon (magnifying glass + blood drop)
+├── build/
+│   └── icon.ico             # Windows app icon (generated)
+├── electron/
+│   ├── main.js              # Electron main process
+│   ├── preload.js           # IPC bridge
+│   └── database.js          # SQLite via sql.js
+├── public/
+│   └── assets/logo.png      # Web logo
+├── scripts/
+│   └── build-icon.mjs       # PNG → ICO converter
+├── src/                     # React app (Vite)
+├── pathology_parameters.json # Master test catalogue
+├── test_profiles.json       # Panels (CBC, LFT, Lipid Profile, etc.)
+├── project_spec.md          # Full specification
+└── README.md                # This file
+```
+
+## Tech Stack
+
+- **Desktop:** Electron + React + Vite
+- **Database:** sql.js (SQLite in JavaScript — no native build required)
+- **Reports:** HTML/CSS → Print (A4, pre-printed letterhead support)
+
+## Key Features
+
+- **New Registration** — Patient details + Ref. By + tests in one form
+- **Enter Results & Print** — Select patient → enter values → print report
+- Patient ID format: PT{seq}-{MON}-{YEAR}
+- Derived tests (LDL, VLDL, GLOB, A/G Ratio)
+- Pad-based printing (content below pre-printed header)
+- Referral/commission tracking
+- Offline, no internet required
+
+## Getting Started
+
+```powershell
+npm install
+npm run electron:dev
+```
+
+**Login:** admin / admin123
+
+## Build Windows Installer
+
+```powershell
+npm run electron:build
+```
+
+Installer output: `dist/`
+
+## Backup
+
+- Default: `%APPDATA%/MondalDiagnosticCentre/backups/`
+
+## License
+
+Proprietary — for lab use.

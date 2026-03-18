@@ -1,0 +1,35 @@
+END-USER LICENSE AGREEMENT (EULA)
+MONDAL DIAGNOSTIC CENTRE - Pathology Lab Management System
+
+Please read this agreement carefully before installing the software.
+
+1. ACCEPTANCE
+By installing this software, you agree to be bound by the terms of this licence.
+
+2. GRANT OF LICENCE
+MONDAL DIAGNOSTIC CENTRE grants you a non-exclusive, non-transferable licence to use this Pathology Lab Management System for your laboratory's internal use only.
+
+3. PERMITTED USE
+You may:
+- Install and use the software on computers within your laboratory
+- Use the software for patient registration, test results, and report generation
+- Create backups of your data as required
+
+4. RESTRICTIONS
+You may not:
+- Redistribute, sell, or sublicense the software
+- Reverse engineer or decompile the software
+- Remove any copyright or proprietary notices
+
+5. DATA & PRIVACY
+- Patient data is stored locally on your computer
+- You are responsible for maintaining data security and compliance with applicable laws
+- Regular backups are recommended
+
+6. DISCLAIMER
+The software is provided "as is" without warranty. The developer is not liable for any loss or damage arising from use of this software.
+
+7. SUPPORT
+For support, contact: iamrobiul94@gmail.com | +91 7029655755
+
+By clicking "I Agree" or proceeding with installation, you accept these terms.
