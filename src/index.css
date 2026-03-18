@@ -34,6 +34,18 @@ input, select, textarea {
 @media print {
   .no-print,
   .no-print * { display: none !important; }
+  /* Billing invoice - print only the invoice when modal is open */
+  .billing-invoice-overlay {
+    background: #fff !important;
+    align-items: flex-start !important;
+    padding: 20px !important;
+  }
+  .bill-invoice-print {
+    box-shadow: none !important;
+    width: 210mm !important;
+    height: 148.5mm !important;
+    min-height: 148.5mm !important;
+  }
   .app-layout { display: block !important; }
   .app-layout .layout-body,
   .main-content,
@@ -118,6 +130,16 @@ input, select, textarea {
 .result-entry-pending-item:hover {
   background: #e8f4f4 !important;
   border-color: #0d7377 !important;
+}
+
+/* Billing page - clickable cards */
+.billing-card-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(13,115,119,0.15) !important;
+  border-color: #0d7377 !important;
+}
+.billing-card-clickable:active {
+  transform: translateY(0);
 }
 
 .new-register-card:hover {

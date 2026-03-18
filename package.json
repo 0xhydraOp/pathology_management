@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build:icon": "node scripts/build-icon.mjs",
+    "seed": "node scripts/seed-dummy-data.js",
+    "test": "node scripts/test-system.js",
     "electron:build": "npm run build:icon && vite build && electron-builder",
     "start": "electron ."
   },
@@ -39,8 +41,7 @@
       "dist/**/*",
       "electron/**/*",
       "build/icon.ico",
-      "build/license.txt",
-      "database/**/*"
+      "build/license.txt"
     ],
     "win": {
       "target": ["nsis", "zip"],

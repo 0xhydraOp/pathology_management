@@ -134,6 +134,8 @@ export default function NewRegistration() {
         ]);
       }
 
+      await window.db.computeOrderBillAndCommission(orderId);
+
       setForm({ name: '', age: '', sex: 'male', phone: '', address: '', referred_by: '', tests: [] });
       try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
       setSaveFeedback('Saved');
@@ -158,7 +160,7 @@ export default function NewRegistration() {
     return acc;
   }, {});
 
-  const sectionOrder = ['Hematology', 'Biochemistry', 'LFT', 'KFT', 'Lipid', 'Serology', 'Immunology/Serology', 'Blood Group Tests', 'Surgery', 'C-Section', 'Other'];
+  const sectionOrder = ['DEPARTMENT OF HEMATOLOGY', 'DEPARTMENT OF BIOCHEMISTRY', 'DEPARTMENT OF LIVER FUNCTION TEST', 'DEPARTMENT OF KIDNEY FUNCTION TEST', 'DEPARTMENT OF LIPID PROFILE', 'DEPARTMENT OF SEROLOGY', 'DEPARTMENT OF IMMUNOLOGY', 'DEPARTMENT OF BLOOD GROUP TESTS', 'DEPARTMENT OF COAGULATION', 'DEPARTMENT OF CLINICAL PATHOLOGY', 'Other'];
   const orderedSections = Object.keys(testsBySection).sort((a, b) => {
     const ia = sectionOrder.indexOf(a);
     const ib = sectionOrder.indexOf(b);
@@ -339,7 +341,7 @@ const styles = {
   testHint: { fontSize: 13, color: '#666', marginBottom: 16 },
   testGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 },
   testGroup: { background: '#f8f9fa', padding: 16, borderRadius: 8, border: '1px solid #eee' },
-  testGroupTitle: { fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0d7377' },
+  testGroupTitle: { fontSize: 14, fontWeight: 700, marginBottom: 12, color: '#0d7377', textTransform: 'uppercase' },
   testList: { display: 'flex', flexDirection: 'column', gap: 8 },
   checkLabel: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 },
   actions: { display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 },

@@ -6,6 +6,7 @@ const TITLE_MAP = {
   '/new-registration': 'New Registration',
   '/result-entry': 'Enter Results & Print',
   '/reports': 'Reports',
+  '/billing': 'Billing',
   '/referrals': 'Referrals',
   '/settings': 'Settings',
 };
@@ -56,6 +57,7 @@ const navItems = [
   { to: '/new-registration', label: 'New Registration' },
   { to: '/result-entry', label: 'Enter Results & Print' },
   { to: '/reports', label: 'Reports' },
+  { to: '/billing', label: 'Billing' },
   { to: '/referrals', label: 'Referrals' },
   { to: '/settings', label: 'Settings' },
 ];
@@ -74,7 +76,14 @@ function formatDateTime() {
 export default function Layout({ children, onLogout }) {
   const [clock, setClock] = useState(formatDateTime());
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const [labName, setLabName] = useState('MONDAL DIAGNOSTIC CENTRE');
   const dbReady = typeof window !== 'undefined' && !!window.db;
+
+  useEffect(() => {
+    if (window.db?.getLabConfig) {
+      window.db.getLabConfig().then((c) => c?.name && setLabName(c.name)).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setClock(formatDateTime()), 1000);
@@ -111,7 +120,7 @@ export default function Layout({ children, onLogout }) {
       <header style={styles.header} className="no-print">
         <div style={styles.headerLeft}>
           <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
-          <span style={styles.labName}>MONDAL DIAGNOSTIC CENTRE</span>
+          <span style={styles.labName}>{labName}</span>
         </div>
         <div style={styles.headerRight}>
           <span style={styles.clock}>{clock}</span>

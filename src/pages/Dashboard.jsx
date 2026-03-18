@@ -38,6 +38,13 @@ function getGreeting() {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState('month');
+  const [labName, setLabName] = useState('MONDAL DIAGNOSTIC CENTRE');
+
+  useEffect(() => {
+    if (window.db?.getLabConfig) {
+      window.db.getLabConfig().then((c) => c?.name && setLabName(c.name)).catch(() => {});
+    }
+  }, []);
   const [todayPatients, setTodayPatients] = useState(0);
   const [periodPatients, setPeriodPatients] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -116,6 +123,7 @@ export default function Dashboard() {
   ];
 
   const shortcuts = [
+    { label: 'Billing', path: '/billing', desc: 'Payments & commission' },
     { label: 'Referrals', path: '/referrals', desc: 'Referrer summary' },
     { label: 'Settings', path: '/settings', desc: 'Lab configuration' },
   ];
@@ -123,7 +131,7 @@ export default function Dashboard() {
   return (
     <div style={styles.container}>
       <div style={styles.welcome}>
-        <h1 style={styles.title}>{getGreeting()}, welcome to MONDAL DIAGNOSTIC CENTRE</h1>
+        <h1 style={styles.title}>{getGreeting()}, welcome to {labName}</h1>
         <p style={styles.subtitle}>Quick access to your daily lab workflow</p>
       </div>
 

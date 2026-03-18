@@ -219,6 +219,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('db:exportReferralsExcel', (_, params) => db.exportReferralsExcel(params));
   ipcMain.handle('db:getDatabaseSize', () => db.getDatabaseSize());
   ipcMain.handle('db:getLastBackupDate', () => db.getLastBackupDate());
+  ipcMain.handle('db:computeOrderBillAndCommission', (_, orderId) => db.computeOrderBillAndCommission(orderId));
   ipcMain.handle('app:print', (_, copies) => doPrint(copies || 1));
   ipcMain.handle('app:printPreview', () => doPrintPreview());
   ipcMain.handle('app:setTitle', (_, title) => {

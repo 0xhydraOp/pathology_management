@@ -523,7 +523,7 @@ export default function ResultEntrySimple() {
     return items;
   }, [tests, results, patient, ranges]);
 
-  const performSave = async (doPrint = true) => {
+  const performSave = async (doPrint = true, stayOnCurrent = false) => {
     if (!window.db || !order?.id) return;
     setSaving(true);
     try {
@@ -557,7 +557,7 @@ export default function ResultEntrySimple() {
       setHasUnsavedChanges(false);
       if (doPrint) {
         navigate(`/reports?order=${order.id}&print=1`);
-      } else {
+      } else if (!stayOnCurrent) {
         const nextPending = await window.db.get(
           `SELECT o.id FROM orders o WHERE o.status IN ('pending','partial') AND o.id != ?
            ORDER BY o.order_date DESC, o.id DESC LIMIT 1`,
@@ -594,14 +594,14 @@ export default function ResultEntrySimple() {
     performSave(true);
   };
 
-  const handleSaveOnlyClick = () => {
+  const handleSaveOnlyClick = (moveToNext = false) => {
     const validationItems = getValidationSummary();
     if (validationItems.length > 0) {
-      pendingSaveAction.current = 'saveOnly';
+      pendingSaveAction.current = moveToNext ? 'saveAndNext' : 'saveOnly';
       setShowValidationSummary(true);
       return;
     }
-    performSave(false);
+    performSave(false, !moveToNext);
   };
 
   const confirmValidationProceed = () => {
@@ -609,7 +609,8 @@ export default function ResultEntrySimple() {
     setShowValidationSummary(false);
     pendingSaveAction.current = null;
     if (action === 'print') performSave(true);
-    else if (action === 'saveOnly') performSave(false);
+    else if (action === 'saveOnly') performSave(false, true);
+    else if (action === 'saveAndNext') performSave(false, false);
   };
 
   const formatRange = (range) => {
@@ -959,10 +960,10 @@ export default function ResultEntrySimple() {
         <button tabIndex={100} style={styles.btnPrimary} onClick={handleSaveClick} disabled={saving}>
           {saving ? 'Saving...' : 'Save & Print Report'}
         </button>
-        <button style={styles.btnSaveOnly} onClick={handleSaveOnlyClick} disabled={saving} title="Save without printing, then open next pending order">
+        <button style={styles.btnSaveOnly} onClick={() => handleSaveOnlyClick(false)} disabled={saving} title="Save without printing, stay on current order">
           Save only
         </button>
-        <button style={styles.btnNext} onClick={handleSaveOnlyClick} disabled={saving} title="Save and open next pending order">
+        <button style={styles.btnNext} onClick={() => handleSaveOnlyClick(true)} disabled={saving} title="Save and open next pending order">
           Next pending →
         </button>
         <button style={styles.btnSecondary} onClick={goBack}>
@@ -1002,7 +1003,7 @@ const styles = {
   progressText: { fontSize: 13, color: '#666', display: 'block', marginBottom: 4 },
   progressTrack: { height: 6, background: '#e8ecef', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', background: 'linear-gradient(90deg, #0d7377 0%, #14a3a8 100%)', borderRadius: 4, transition: 'width 0.3s' },
-  sectionHeader: { background: '#f0f4f8', cursor: 'pointer', borderBottom: '1px solid #ddd' },
+  sectionHeader: { background: '#f0f4f8', cursor: 'pointer', borderBottom: '1px solid #ddd', fontWeight: 700, textTransform: 'uppercase' },
   keyboardHint: { fontSize: 12, color: '#999', marginTop: 8 },
   btnSaveOnly: { background: '#5a9aa0', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: 8, fontWeight: 600, cursor: 'pointer' },
   btnNext: { background: '#14a3a8', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: 8, fontWeight: 600, cursor: 'pointer' },

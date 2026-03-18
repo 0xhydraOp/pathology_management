@@ -7,6 +7,7 @@ import ResultEntrySimple from './pages/ResultEntrySimple';
 import Layout from './components/Layout';
 
 const Reports = lazy(() => import('./pages/Reports'));
+const Billing = lazy(() => import('./pages/Billing'));
 const Referrals = lazy(() => import('./pages/Referrals'));
 const Settings = lazy(() => import('./pages/Settings'));
 
@@ -56,6 +57,7 @@ function App() {
               <Route path="new-registration" element={<NewRegistration />} />
               <Route path="result-entry" element={<ResultEntrySimple />} />
               <Route path="reports" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><Reports /></Suspense>} />
+              <Route path="billing" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><Billing /></Suspense>} />
               <Route path="referrals" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><Referrals /></Suspense>} />
               <Route path="settings" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><Settings /></Suspense>} />
             </Route>

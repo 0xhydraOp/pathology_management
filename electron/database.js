@@ -1,6 +1,7 @@
 const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -11,7 +12,7 @@ function hashPassword(pw) {
 
 class DatabaseManager {
   constructor() {
-    const userData = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
     const dbDir = path.join(userData, 'MondalDiagnosticCentre');
     if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
     this.dbPath = path.join(dbDir, 'lab.db');
@@ -49,8 +50,11 @@ class DatabaseManager {
       'ALTER TABLE lab ADD COLUMN staff_list TEXT',
       'ALTER TABLE parameters ADD COLUMN min_allowed_value REAL',
       'ALTER TABLE parameters ADD COLUMN max_allowed_value REAL',
+      'ALTER TABLE order_tests ADD COLUMN rate REAL',
+      'ALTER TABLE lab ADD COLUMN commission_default_percent REAL',
     ];
     alters.forEach((sql) => { try { this.db.run(sql); } catch (_) {} });
+    try { this.run('UPDATE lab SET commission_default_percent = 40 WHERE id = 1 AND commission_default_percent IS NULL'); } catch (_) {}
   }
 
   createTables() {
@@ -216,6 +220,34 @@ class DatabaseManager {
         changed_by TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS test_rates (
+        parameter_id INTEGER PRIMARY KEY,
+        rate REAL NOT NULL DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(parameter_id) REFERENCES parameters(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS referrer_commission (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrer_name TEXT NOT NULL,
+        parameter_id INTEGER,
+        commission_percent REAL NOT NULL DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(parameter_id) REFERENCES parameters(id),
+        UNIQUE(referrer_name, parameter_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS order_commission_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        referrer_name TEXT,
+        order_amount REAL,
+        commission_amount REAL,
+        commission_percent REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(order_id) REFERENCES orders(id)
+      );
+
       INSERT OR IGNORE INTO lab (id) VALUES (1);
 
       INSERT OR IGNORE INTO users (id, username, password_hash, role, display_name) VALUES
@@ -245,10 +277,17 @@ class DatabaseManager {
 
     if (!fs.existsSync(paramsPath)) return;
 
-    const paramsData = JSON.parse(fs.readFileSync(paramsPath, 'utf8'));
+    let paramsData;
+    try {
+      paramsData = JSON.parse(fs.readFileSync(paramsPath, 'utf8'));
+    } catch (e) {
+      console.error('Failed to load pathology_parameters.json:', e.message);
+      return;
+    }
     const parameters = paramsData.parameters || [];
     const batch = true;
 
+    this.run('DELETE FROM test_rates', [], batch);
     this.run('DELETE FROM parameter_ranges', [], batch);
     this.run('DELETE FROM formulas', [], batch);
     this.run('DELETE FROM parameters', [], batch);
@@ -288,8 +327,38 @@ class DatabaseManager {
       paramId++;
     }
 
+    const rateChartPath = path.join(projectRoot, 'rate_chart.json');
+    if (fs.existsSync(rateChartPath)) {
+      let rateData;
+      try {
+        rateData = JSON.parse(fs.readFileSync(rateChartPath, 'utf8'));
+      } catch (e) {
+        console.error('Failed to load rate_chart.json:', e.message);
+      }
+      if (!rateData) rateData = {};
+      const rates = rateData.rates || {};
+      const codeToParamId = {};
+      const allParams = this.all('SELECT id, code FROM parameters');
+      (allParams || []).forEach((x) => { codeToParamId[x.code] = x.id; });
+      for (const [code, rate] of Object.entries(rates)) {
+        const pid = codeToParamId[code];
+        const r = parseFloat(rate) || 0;
+        if (pid && r > 0) {
+          try {
+            this.run('INSERT OR REPLACE INTO test_rates (parameter_id, rate, updated_at) VALUES (?, ?, datetime("now"))', [pid, r], batch);
+          } catch (_) {}
+        }
+      }
+    }
+
     if (fs.existsSync(profilesPath)) {
-      const profilesData = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+      let profilesData;
+      try {
+        profilesData = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+      } catch (e) {
+        console.error('Failed to load test_profiles.json:', e.message);
+        return;
+      }
       const profiles = profilesData.profiles || [];
       this.run('DELETE FROM profile_parameters', [], batch);
       this.run('DELETE FROM test_profiles', [], batch);
@@ -372,7 +441,7 @@ class DatabaseManager {
   }
 
   backup() {
-    const userData = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
     const backupDir = path.join(userData, 'MondalDiagnosticCentre', 'backups');
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -391,7 +460,7 @@ class DatabaseManager {
   }
 
   getLastBackupDate() {
-    const userData = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
     const backupDir = path.join(userData, 'MondalDiagnosticCentre', 'backups');
     if (!fs.existsSync(backupDir)) return null;
     const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.db'));
@@ -410,7 +479,7 @@ class DatabaseManager {
   }
 
   backupEncrypted(password) {
-    const userData = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
     const backupDir = path.join(userData, 'MondalDiagnosticCentre', 'backups');
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -426,7 +495,7 @@ class DatabaseManager {
 
   exportOrdersExcel(params = {}) {
     const XLSX = require('xlsx');
-    const userData = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
     const exportDir = path.join(userData, 'MondalDiagnosticCentre', 'exports');
     if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -449,7 +518,7 @@ class DatabaseManager {
 
   exportReferralsExcel(params = {}) {
     const XLSX = require('xlsx');
-    const userData = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
     const exportDir = path.join(userData, 'MondalDiagnosticCentre', 'exports');
     if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -469,8 +538,47 @@ class DatabaseManager {
     return outPath;
   }
 
+  computeOrderBill(orderId) {
+    const DEFAULT_RATE = 50;
+    const batch = true;
+    const tests = this.all('SELECT id, parameter_id FROM order_tests WHERE order_id = ?', [orderId]);
+    if (!tests || tests.length === 0) return 0;
+    const rateMap = {};
+    const rateRows = this.all('SELECT parameter_id, rate FROM test_rates');
+    (rateRows || []).forEach((r) => { rateMap[r.parameter_id] = parseFloat(r.rate) || 0; });
+    let total = 0;
+    for (const t of tests) {
+      const rate = rateMap[t.parameter_id] ?? DEFAULT_RATE;
+      try { this.run('UPDATE order_tests SET rate = ? WHERE id = ?', [rate, t.id], batch); } catch (_) {}
+      total += rate;
+    }
+    try { this.run('UPDATE orders SET total_amount = ? WHERE id = ?', [total, orderId], batch); } catch (_) {}
+    this.save();
+    return total;
+  }
+
+  updateOrderCommission(orderId) {
+    const order = this.get('SELECT o.total_amount, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?', [orderId]);
+    if (!order || !order.referred_by || (order.referred_by || '').trim() === '') return;
+    const lab = this.get('SELECT commission_default_percent FROM lab WHERE id = 1');
+    const pct = parseFloat(lab?.commission_default_percent) ?? 40;
+    const amount = parseFloat(order.total_amount) || 0;
+    const commission = Math.round((amount * pct / 100) * 100) / 100;
+    this.run('DELETE FROM order_commission_log WHERE order_id = ?', [orderId]);
+    this.run(
+      'INSERT INTO order_commission_log (order_id, referrer_name, order_amount, commission_amount, commission_percent) VALUES (?, ?, ?, ?, ?)',
+      [orderId, order.referred_by.trim(), amount, commission, pct]
+    );
+  }
+
+  computeOrderBillAndCommission(orderId) {
+    this.computeOrderBill(orderId);
+    this.updateOrderCommission(orderId);
+  }
+
   clearAllPatients() {
     const batch = true;
+    this.run('DELETE FROM order_commission_log', [], batch);
     this.run('DELETE FROM report_print_log', [], batch);
     this.run('DELETE FROM order_results', [], batch);
     this.run('DELETE FROM order_tests', [], batch);

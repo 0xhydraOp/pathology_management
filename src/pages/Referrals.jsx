@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const PERIODS = [
+  { id: 'today', label: 'Today' },
   { id: 'week', label: 'Last Week' },
   { id: 'month', label: 'This Month' },
   { id: 'lastmonth', label: 'Last Month' },
@@ -43,7 +44,7 @@ function getDateRange(filter, customFrom, customTo) {
     start = d1 <= d2 ? d1 : d2;
     end = d1 <= d2 ? d2 : d1;
   } else {
-    start = new Date(0);
+    start = new Date(2000, 0, 1);
     end = new Date();
   }
   return [toLocalDateStr(start), toLocalDateStr(end)];
@@ -62,6 +63,7 @@ export default function Referrals() {
   const [customTo, setCustomTo] = useState(today);
   const [referrers, setReferrers] = useState([]);
   const [referrerPerformance, setReferrerPerformance] = useState({});
+  const [referrerCommission, setReferrerCommission] = useState({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState('');
@@ -145,11 +147,24 @@ export default function Referrals() {
       (monthRows || []).forEach((r) => { perfMap[r.name] = { ...(perfMap[r.name] || {}), month: r.count || 0 }; });
       (lastMonthRows || []).forEach((r) => { perfMap[r.name] = { ...(perfMap[r.name] || {}), lastMonth: r.count || 0 }; });
       setReferrerPerformance(perfMap);
+
+      const commissionRows = await window.db.all(
+        `SELECT ocl.referrer_name as name, SUM(ocl.commission_amount) as commission
+         FROM order_commission_log ocl
+         JOIN orders o ON o.id = ocl.order_id
+         WHERE date(o.order_date) >= ? AND date(o.order_date) <= ?
+         GROUP BY ocl.referrer_name`,
+        [start, end]
+      );
+      const commMap = {};
+      (commissionRows || []).forEach((r) => { commMap[r.name] = parseFloat(r.commission) || 0; });
+      setReferrerCommission(commMap);
     } catch (e) {
       if (reqId === loadReferrersRequestRef.current) {
         console.error(e);
         setReferrers([]);
         setReferrerPerformance({});
+        setReferrerCommission({});
         setLoadError(e?.message || 'Failed to load referral data');
       }
     } finally {
@@ -295,6 +310,10 @@ export default function Referrals() {
         </p>
       </div>
 
+      <div style={styles.commissionBanner}>
+        <strong>Commission (40%)</strong> — Auto-calculated from billed amount. Referrer gets 40% of total bill.
+      </div>
+
       <div style={styles.periodRow}>
         {PERIODS.map((p) => (
           <button
@@ -410,6 +429,7 @@ export default function Referrals() {
                   const badge = getRankBadge(rank);
                   const pct = totalPatients ? ((r.count / totalPatients) * 100).toFixed(1) : '0';
                   const perf = referrerPerformance[r.name] || {};
+                  const commission = referrerCommission[r.name] ?? 0;
                   return (
                     <div
                       key={i}
@@ -463,6 +483,10 @@ export default function Referrals() {
                         <div style={styles.referrerCardPerfRow}>
                           <span style={styles.referrerCardPerfLabel}>Last Month</span>
                           <span style={styles.referrerCardPerfVal}>{perf.lastMonth ?? 0}</span>
+                        </div>
+                        <div style={{ ...styles.referrerCardPerfRow, marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8ecef' }}>
+                          <span style={styles.referrerCardPerfLabel}>Commission (40%)</span>
+                          <span style={{ ...styles.referrerCardPerfVal, color: '#166534' }}>₹{commission.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                         </div>
                       </div>
                     </div>
@@ -628,6 +652,15 @@ const styles = {
     fontSize: 14,
     color: '#666',
     margin: 0,
+  },
+  commissionBanner: {
+    padding: 12,
+    marginBottom: 16,
+    background: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: 10,
+    fontSize: 13,
+    color: '#166534',
   },
   periodRow: {
     display: 'flex',

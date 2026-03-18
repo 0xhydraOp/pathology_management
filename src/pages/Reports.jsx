@@ -76,8 +76,11 @@ export default function Reports() {
       window.db.all(sql, params.length ? params : []).then((rows) => {
         setOrders(rows || []);
         if (orderId) {
-          const ord = (rows || []).find((r) => r.id === parseInt(orderId));
-          if (ord) setSelectedOrder(ord);
+          const id = parseInt(orderId, 10);
+          if (!isNaN(id)) {
+            const ord = (rows || []).find((r) => r.id === id);
+            if (ord) setSelectedOrder(ord);
+          }
         }
       }).catch(console.error);
     }
@@ -269,6 +272,7 @@ export default function Reports() {
             { id: 'today', label: 'Today', icon: '📅' },
             { id: 'yesterday', label: 'Yesterday', icon: '📆' },
             { id: 'last7', label: 'This Week', icon: '📋' },
+            { id: 'month', label: 'This Month', icon: '📆' },
             { id: 'lastmonth', label: 'Last Month', icon: '🗓️' },
           ].map(({ id, label, icon }) => {
             const preset = getDatePreset(id);
@@ -377,7 +381,7 @@ export default function Reports() {
           acc[sec].push(r);
           return acc;
         }, {});
-        const sectionOrder = ['Hematology', 'Biochemistry', 'LFT', 'KFT', 'Lipid', 'Serology', 'Immunology/Serology', 'Blood Group Tests', 'Surgery', 'C-Section', 'Other'];
+        const sectionOrder = ['DEPARTMENT OF HEMATOLOGY', 'DEPARTMENT OF BIOCHEMISTRY', 'DEPARTMENT OF LIVER FUNCTION TEST', 'DEPARTMENT OF KIDNEY FUNCTION TEST', 'DEPARTMENT OF LIPID PROFILE', 'DEPARTMENT OF SEROLOGY', 'DEPARTMENT OF IMMUNOLOGY', 'DEPARTMENT OF BLOOD GROUP TESTS', 'DEPARTMENT OF COAGULATION', 'DEPARTMENT OF CLINICAL PATHOLOGY', 'Other'];
         const orderedSections = Object.keys(resultsBySection).sort((a, b) => {
           const ia = sectionOrder.indexOf(a);
           const ib = sectionOrder.indexOf(b);
@@ -612,7 +616,7 @@ const styles = {
   patientValue: { fontSize: 11, fontWeight: 500, color: '#334155' },
   patientAddress: { display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 6, borderTop: '1px dashed #e2e8f0' },
   reportDate: { fontSize: 11, fontWeight: 600, color: '#0d7377', marginTop: 6, paddingTop: 4 },
-  departmentTitle: { fontSize: 14, fontWeight: 700, marginTop: 10, marginBottom: 10, color: '#0d7377', borderBottom: '2px solid #0d7377', paddingBottom: 6, textAlign: 'center', letterSpacing: '0.5px' },
+  departmentTitle: { fontSize: 14, fontWeight: 700, marginTop: 10, marginBottom: 10, color: '#0d7377', borderBottom: '2px solid #0d7377', paddingBottom: 6, textAlign: 'center', letterSpacing: '0.5px', textTransform: 'uppercase' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th: { textAlign: 'left', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: 600, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
   td: { padding: '8px 12px', borderBottom: '1px solid #f1f5f9' },

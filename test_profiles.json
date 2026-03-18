@@ -2,9 +2,9 @@
   "version": "1.2",
   "last_updated": "2026-03-17",
   "profiles": [
-    {"name": "CBC", "section": "Hematology", "display_order": 1, "tests": ["HB", "RBC", "WBC", "PLT", "PCV", "MCV", "MCH", "MCHC", "ESR", "NEUT", "LYMPH", "EOS", "MONO", "BASO"]},
-    {"name": "Liver Function Test", "section": "LFT", "display_order": 2, "tests": ["SGOT", "SGPT", "ALP", "BIL_TOTAL", "BIL_DIRECT", "TP", "ALB", "GLOB", "AGRATIO"]},
-    {"name": "Kidney Function Test", "section": "KFT", "display_order": 3, "tests": ["UREA", "CREAT", "URIC", "SODIUM", "POTASSIUM", "CHLORIDE"]},
-    {"name": "Lipid Profile", "section": "Lipid", "display_order": 4, "tests": ["TC", "TG", "HDL", "LDL", "VLDL"]}
+    {"name": "CBC", "section": "DEPARTMENT OF HEMATOLOGY", "display_order": 1, "tests": ["HB", "RBC", "WBC", "PLT", "PCV", "MCV", "MCH", "MCHC", "ESR", "NEUT", "LYMPH", "EOS", "MONO", "BASO"]},
+    {"name": "Liver Function Test", "section": "DEPARTMENT OF LIVER FUNCTION TEST", "display_order": 2, "tests": ["SGOT", "SGPT", "ALP", "BIL_TOTAL", "BIL_DIRECT", "TP", "ALB", "GLOB", "AGRATIO"]},
+    {"name": "Kidney Function Test", "section": "KIDNEY FUNCTION TEST", "display_order": 3, "tests": ["UREA", "CREAT", "URIC", "SODIUM", "POTASSIUM", "CHLORIDE"]},
+    {"name": "Lipid Profile", "section": "DEPARTMENT OF LIPID PROFILE", "display_order": 4, "tests": ["TC", "TG", "HDL", "LDL", "VLDL"]}
   ]
 }

@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('db', {
   exportReferralsExcel: (params) => ipcRenderer.invoke('db:exportReferralsExcel', params),
   getDatabaseSize: () => ipcRenderer.invoke('db:getDatabaseSize'),
   getLastBackupDate: () => ipcRenderer.invoke('db:getLastBackupDate'),
+  computeOrderBillAndCommission: (orderId) => ipcRenderer.invoke('db:computeOrderBillAndCommission', orderId),
 });
 
 contextBridge.exposeInMainWorld('electronPrint', (copies) =>
