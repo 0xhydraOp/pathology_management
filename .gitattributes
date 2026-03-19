@@ -1,0 +1,2 @@
+# Large Windows build ZIP (Git LFS — exceeds normal Git 100 MB file limit when needed)
+lfs-releases/*.zip filter=lfs diff=lfs merge=lfs -text
