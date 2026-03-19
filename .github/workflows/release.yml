@@ -1,0 +1,58 @@
+# Builds Windows NSIS installer + ZIP and publishes a GitHub Release (no personal token needed).
+# Trigger: push an annotated tag matching v* (e.g. v1.0.1), or run "workflow_dispatch" from Actions tab.
+
+name: Release Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app (Vite + NSIS + zip)
+        run: npm run electron:build
+
+      - name: Resolve release tag
+        id: meta
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+          } else {
+            $json = Get-Content package.json -Raw | ConvertFrom-Json
+            $tag = "v$($json.version)"
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }} - MONDAL DIAGNOSTIC CENTRE
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            release/*Setup*.exe
+            release/*-win.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
