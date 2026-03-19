@@ -1,6 +1,7 @@
 # Pathological Lab Management System — Project Specification
 
-**Version:** 1.8  
+**Document version:** 1.9  
+**App release:** 1.0.2  
 **Date:** March 18, 2026  
 **Last updated:** March 18, 2026  
 **Target:** Indian Small Pathology Labs (Universal/Offline)  
@@ -53,6 +54,8 @@ A **universal, offline-first** desktop application for pathology laboratories in
 
 - **Patient registration fields:** Name, Age (YY format — years, e.g. 45 Y), Sex, Referred by (referring doctor), Address (dedicated address box)
 - **Referred by — autocomplete:** When user types a referrer name, it is automatically saved. Next time, typing first few letters shows matching referrers from previously entered names; user selects from dropdown (Enter to select). No duplicate entry needed for same referrer.
+- **Walk-in / Self:** Default referrer can be **Self**; commission logic treats **Self** as non-referrer (no commission row). Referrer **dashboards and aggregates** (Dashboard top referrers, Referrals summaries, Excel referral export) **exclude** `Self` so counts align with commission.
+- **New Registration draft:** Optional autosave of **demographics and referred_by only** to browser storage — **tests to be done are never restored** from draft (always start unticked when opening the form).
 - **Patient ID:** Auto-generated, format `PT{seq}-{MON}-{YEAR}` (e.g. PT01-MAR-2026)
   - Sequence resets every month (new month starts from PT01)
   - Month: 3-letter short form (JAN, FEB, MAR, … DEC)
@@ -92,6 +95,7 @@ A **universal, offline-first** desktop application for pathology laboratories in
 
 ### 4.5 Report Generation & Printing
 
+- **Print audit (`report_print_log`):** A row is written when the user **actually initiates a print/preview** from the **Reports** screen — including **auto-print** after **Save & Print** from Result Entry (`?print=1`). Saving results **without** print does **not** log a print. Manual **Print** / **Ctrl+P** on Reports also logs once per action.
 - **Print option:** Print button/option available in the app (e.g. from report preview or order list)
 - **Print Preview (Windows):** Electron uses `printToPDF()` to generate PDF; opens in new window for preview before printing (avoids "print preview not supported" in system dialog)
 - **Report watermark option:** Optional watermark for draft reports; e.g. "DRAFT REPORT" printed diagonally across the page; user can enable when printing draft
@@ -159,11 +163,11 @@ A **universal, offline-first** desktop application for pathology laboratories in
 
 **Orders awaiting results:** List of recent pending/partial orders; click row → Result Entry for that order.
 
-**Top Referrers:** Referrer name + bar + count for selected period; link to Referrals page.
+**Top Referrers:** Referrer name + bar + count for selected period (**excludes walk-in `Self`**); link to Referrals page.
 
 **Refresh button:** Manual reload of all dashboard stats.
 
-**Sidebar navigation:** Dashboard, New Registration, Enter Results & Print, Reports, Referrals, Settings.
+**Sidebar navigation:** Dashboard, New Registration, Enter Results & Print, Reports, **Billing**, Referrals, **Referrer Commission**, **Test Prices (Rate Chart)**, Settings.
 
 **Simplified workflow (implemented):**
 1. **New Registration** — Patient details + Ref. By + tests in one form; saves and goes to result entry
@@ -201,7 +205,7 @@ Labs are commission-based; when someone refers a patient, the lab owner needs to
 - **Card view:** Referrers displayed as clickable cards; each card shows name, patient count, and performance breakdown (Today, This Week, This Month, Last Month)
 - **Click-through:** Click a referrer card → modal shows list of patients referred by that person
 - **Double-click:** Double-click a referrer card → performance report modal with week/month/custom date filters and patient list
-- **Export to Excel:** Export referral data (Referrer, PatientCount) for commission tracking; saved to %APPDATA%/MondalDiagnosticCentre/exports/
+- **Export to Excel:** Export referral data (Referrer, PatientCount) for commission tracking; saved under app **user data** `exports/` folder (see §4.10). Referrers export **excludes** `Self`.
 - **Refresh button:** Manual reload of referral data
 - **Use case:** Lab owner calculates commission per doctor/referrer for settlement
 
@@ -240,15 +244,22 @@ Map machine output parameters to system investigations for result import from la
 
 ### 4.10 Data & Backup
 
-- **App database:** All patient data (name, age, sex, address, referred by, etc.), orders, results, and reports saved in the app database (SQLite)
-- **Default data protection — database encryption:** SQLite files are easily copied; database encryption (AES) at rest planned for future release
-- **Backup option:** Backup button/option available in the app (e.g. from dashboard, Settings, or menu)
-- **Backup location:** Default backup stored in app data folder (e.g. `%APPDATA%/MondalDiagnosticCentre/backups/`); user can also choose local PC folder (e.g. Desktop, USB drive) for backup/restore
-- **Export to Excel option:** Export data to Excel (.xlsx) — patients, orders, results, reports; available from menu or Reports/Data section. See Section 4.10.1 for column schema.
-- Local SQLite database (offline); AES encryption at rest planned (SQLite files easily copied — encryption would protect patient data)
-- Export: PDF, Excel
-- Backup/restore to app folder or user-selected local folder
-- Optional: Daily auto-backup
+- **App database:** All patient data, orders, results, etc. persist via **sql.js** (SQLite in JS); the on-disk file is **`lab.db`** under the app’s **Electron user data** directory.
+- **User data layout (v1.0.2+):** On Windows, typically `%APPDATA%\<Electron app name>\` (see **Settings → Support** for the exact path on each PC). Same folder contains:
+  - `lab.db` — database
+  - `backups/` — quick backups (timestamped `.db` / `.db.enc`)
+  - `exports/` — Excel exports
+  - Window state JSON files
+- **Legacy migration:** Installations that used **`%APPDATA%\MondalDiagnosticCentre\lab.db`** before v1.0.2: on first launch the app **copies** that file into the new user-data location if `lab.db` is not yet present. The old folder may remain until deleted manually.
+- **Default data protection — database encryption:** Optional **encrypted backup** (AES-256-CBC, password); full database encryption at rest deferred.
+- **Backup (Settings):**
+  - **Backup to app folder** — copies `lab.db` into `backups/` under user data (with flush before copy).
+  - **Save to PC…** — Windows file dialog (default **Desktop**); user picks path for `.db` (USB, Documents, etc.).
+  - **Encrypted backup** — same choice of **app folder** or **Encrypted to PC…**
+- **Windows uninstall (NSIS):** With **`deleteAppDataOnUninstall: true`**, uninstaller can remove the **user data** folder (database + backups + exports). **Back up before uninstall** if data must be kept. Portable **ZIP** build has no uninstaller — delete folders manually.
+- **Export to Excel:** Orders and referrals to `.xlsx` from Settings / Referrals; see §4.10.1.
+- **Offline:** No cloud dependency
+- Optional future: Daily auto-backup
 
 ### 4.10.1 Excel Export Schema
 
@@ -418,9 +429,12 @@ LDL               110 mg/dL
 
 ### 6.3 Deployment
 
-- **Offline installer:** NSIS installer (.exe); installable without internet; bundled runtime (no separate Node/.NET install)
-- **Build outputs:** NSIS Setup (.exe), ZIP archive (portable), win-unpacked folder (portable .exe)
-- **Target OS:** Windows 10 minimum
+- **Stack:** **electron-builder** on **Windows x64**; `npm run electron:build` → icon build, Vite production bundle, pack.
+- **Offline installer:** NSIS **Setup .exe** (`allowToChangeInstallationDirectory`, Start Menu + Desktop shortcuts, license `build/license.txt`); **no code signing** by default (SmartScreen may prompt on first run).
+- **Build outputs:** `release/MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`, `release/MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`, `release/win-unpacked/` (folder app).
+- **Bundled catalogue files** (must ship inside installer): `pathology_parameters.json`, `rate_chart.json`, `test_profiles.json` (declared in `package.json` → `build.files`).
+- **Single-instance lock:** Second launch focuses existing window (one DB writer).
+- **Target OS:** Windows **10+**, **64-bit** (installer arch `x64`; ARM64 not in current build config)
 - No cloud dependency; runs fully offline
 
 ### 6.4 Minimum System Requirements
@@ -963,7 +977,7 @@ CREATE TABLE formulas (
 
 ### 9.8 Report Print Log
 
-Tracks every print.
+Rows are inserted when a **print or PDF preview** is initiated from the **Reports** page (manual Print / Ctrl+P / menu print trigger, or **auto-print** after Result Entry **Save & Print**). Not logged on result save alone.
 
 ```sql
 CREATE TABLE report_print_log (
@@ -1253,7 +1267,7 @@ Align software output with pre-printed pad:
 - [ ] Full 100-investigation catalogue
 - [x] Age/sex-specific ranges
 - [ ] Investigation editor (removed in v1.7; reload catalogue from Settings)
-- [ ] Billing, receipts
+- [x] Billing (payment status, invoices, recalc); receipts/printing as implemented
 - [x] Referral/commission tracking report (last month, last week, date-to-date, year, all — counted internally)
 - [ ] Business performance tracking (week, month, year, date-to-date — counted internally)
 - [ ] PDF export
@@ -1301,6 +1315,15 @@ Align software output with pre-printed pad:
 - **Print system:** Lab config (name, clinical_correlation_text) merged correctly for reports; auto-print fires once; main window used for print (not focused window)
 - **Code cleanup:** Removed unused pages (Orders.jsx, Patients.jsx, ResultEntry.jsx)
 
+### Implemented (v1.0.2)
+
+- **Data root:** Database, `backups/`, and `exports/` under **`app.getPath('userData')`**; NSIS uninstall can remove app data; migration from legacy `%APPDATA%\MondalDiagnosticCentre\`
+- **Backup UX:** Save backup to **user-chosen folder** (Desktop/USB); encrypted variant; README / license note on uninstall vs data loss
+- **Preload / IPC:** `backupChooseLocation`, `backupEncryptedChooseLocation`; `db:reloadCatalogue` for catalogue JSON reload
+- **Logic:** `computeOrderBillAndCommission` ignores invalid order IDs; New Registration validates patient/order IDs before `order_tests`; referrer aggregates exclude **Self** (Dashboard, Referrals, Referrer Commission list, referrals Excel); Billing payment toggle normalizes **`paid`** case-insensitively
+- **Result entry:** Order status “filled” counts respect **numeric** vs **text** (empty text not counted); print log only via **Reports** (manual + auto-print)
+- **Housekeeping:** `project_spec` / docs aligned; `npm run electron:build` produces **Setup 1.0.2.exe** and **1.0.2 ZIP**
+
 ### Implemented (v1.7)
 
 - **Investigation Editor removed:** Reload catalogue from Settings; editor UI deferred
@@ -1333,8 +1356,8 @@ Align software output with pre-printed pad:
 | **Startup** | < 5 seconds on typical PC |
 | **Report print** | < 10 seconds per report |
 | **UI** | User-friendly; dashboard navigation |
-| **Database** | SQLite with AES encryption; support 10,000+ patients, 100,000+ orders |
-| **Backup** | One-click backup/restore; default in app folder; user can choose local PC folder |
+| **Database** | sql.js + `lab.db` on disk; support large workloads; optional encrypted **backup** file |
+| **Backup** | Quick backup in `backups/`; **Save to PC…** dialog; uninstall may delete user data (back up first) |
 
 ---
 
@@ -1425,7 +1448,7 @@ Please correlate clinically.
 - **display_order:** Order tests appear on report (e.g. CBC: 1 Haemoglobin, 2 RBC, 3 WBC, 4 Platelet, 5 PCV)
 - **section:** Report section for grouping (e.g. Hematology, Biochemistry, Lipid, Thyroid, Serology); ranges array with sex, min_age, max_age, low, high
 - **Referred by autocomplete:** Type first few letters → matching referrer names appear from previously saved entries; select with Enter; new names auto-saved for next time
-- **Referral tracking:** Commission-based; summary shows which referrer gave how many patients; filter: last month, last week, date-to-date, year, or all; all counted internally
+- **Referral tracking:** Commission-based; summary shows which referrer gave how many patients ( **`Self` / walk-in excluded** from aggregate lists to match commission rules); filter: last month, last week, date-to-date, year, or all; all counted internally
 - **Referrer payment invoice:** On Referrals, double-click a referrer card (period = main filter) to open a printable **Payment invoice**: lab header, referrer name, each order with patient, tests, bill, commission and %; grand total commission right-aligned with rate line below
 - **Business performance:** Track lab performance (week, month, year, date-to-date); total patients, orders, revenue; all counted internally
 - **Dashboard:** Main home screen with quick access to key features; sidebar/top menu for navigation
