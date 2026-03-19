@@ -1,6 +1,13 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
+/** HashRouter: real route is in `location.hash`, not `window.location.pathname`. */
+function getHashRoutePath() {
+  const raw = (window.location.hash || '').replace(/^#/, '');
+  const pathOnly = raw.split('?')[0] || '/';
+  return pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`;
+}
+
 const TITLE_MAP = {
   '/': 'Dashboard',
   '/new-registration': 'New Registration',
@@ -8,6 +15,8 @@ const TITLE_MAP = {
   '/reports': 'Reports',
   '/billing': 'Billing',
   '/referrals': 'Referrals',
+  '/referrer-commission': 'Referrer Commission',
+  '/rate-chart': 'Test Prices',
   '/settings': 'Settings',
 };
 
@@ -59,6 +68,8 @@ const navItems = [
   { to: '/reports', label: 'Reports' },
   { to: '/billing', label: 'Billing' },
   { to: '/referrals', label: 'Referrals' },
+  { to: '/referrer-commission', label: 'Referrer' },
+  { to: '/rate-chart', label: 'Test Prices' },
   { to: '/settings', label: 'Settings' },
 ];
 
@@ -98,7 +109,7 @@ export default function Layout({ children, onLogout }) {
   useEffect(() => {
     if (!window.electronApp?.onPrintTrigger) return;
     return window.electronApp.onPrintTrigger(() => {
-      if (window.location.pathname === '/reports') {
+      if (getHashRoutePath() === '/reports') {
         window.dispatchEvent(new CustomEvent('app-print-trigger'));
       }
     });

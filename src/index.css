@@ -31,20 +31,147 @@ input, select, textarea {
   font-family: inherit;
 }
 
+/* Bill / report barcodes (CODE128 SVG) */
+.order-barcode-svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.report-barcode-section .order-barcode-wrap {
+  justify-content: center;
+}
+
 @media print {
   .no-print,
   .no-print * { display: none !important; }
-  /* Billing invoice - print only the invoice when modal is open */
+  /* Billing invoice — single sheet flow, no global 1.5in top (uses @page bill-invoice) */
   .billing-invoice-overlay {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
     background: #fff !important;
-    align-items: flex-start !important;
-    padding: 20px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    min-height: 0 !important;
+    height: auto !important;
+    z-index: auto !important;
   }
   .bill-invoice-print {
+    page: bill-invoice;
+    display: block !important;
+    position: relative !important;
     box-shadow: none !important;
-    width: 210mm !important;
-    height: 148.5mm !important;
-    min-height: 148.5mm !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 auto !important;
+    border-left: 5px solid #0d7377 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .invoice-sheet-body {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    flex: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Referrer payment invoice — A4, multi-page, repeating table header */
+  .referrer-invoice-overlay {
+    background: #fff !important;
+    align-items: flex-start !important;
+    padding: 0 !important;
+  }
+  .referrer-payment-print {
+    page: referrer-pay;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    border-left: 4px solid #0d7377 !important;
+    border-radius: 0 !important;
+    margin: 0 auto !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .referrer-invoice-body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 0 0 8mm 0 !important;
+    background: #fff !important;
+  }
+  .referrer-screen-header {
+    display: none !important;
+  }
+  .referrer-print-banner-row {
+    display: table-row !important;
+  }
+  .referrer-a4-table {
+    font-size: 9pt !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .referrer-a4-table thead {
+    display: table-header-group !important;
+  }
+  .referrer-a4-table th,
+  .referrer-a4-table td {
+    border: 1px solid #94a3b8 !important;
+    padding: 4px 5px !important;
+  }
+  .referrer-invoice-summary-block {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .referrer-invoice-footer-print {
+    page-break-inside: avoid !important;
+    margin-top: 6mm !important;
+  }
+  /* Bill invoice: keep each test line on one page — no row split, wrap words only at spaces */
+  .bill-invoice-print .bill-invoice-items-wrap {
+    overflow: visible !important;
+  }
+  .bill-invoice-print .bill-invoice-test-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+    align-items: flex-start !important;
+  }
+  .bill-invoice-print .bill-invoice-test-name {
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    hyphens: none !important;
+    -webkit-hyphens: none !important;
+    min-width: 0 !important;
+  }
+  /* Amount stays with row; shrink-wrap on the right */
+  .bill-invoice-print .bill-invoice-test-row .invoiceTestRate {
+    flex-shrink: 0 !important;
+    align-self: flex-start !important;
+    padding-top: 1px !important;
+  }
+  /* Bill invoice: grand total Block — keep label + amount on the right (matches amount column) */
+  .invoice-grand-total-row {
+    justify-content: flex-end !important;
+    text-align: right !important;
+  }
+  .bill-invoice-print .bill-invoice-grand-total,
+  .bill-invoice-print .bill-invoice-footer {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .order-barcode-svg,
+  .report-barcode-section {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .app-layout { display: block !important; }
   .app-layout .layout-body,
@@ -88,7 +215,95 @@ input, select, textarea {
 
 @page {
   size: A4;
-  margin: 0;
+  margin: 1.5in 0 0.5in 0; /* Top: 1.5" blank for pre-printed lab pad header; Bottom: 0.5" for border */
+}
+
+/* Referrer payment invoice only — full A4 content area (Chromium / Electron) */
+@page referrer-pay {
+  size: A4 portrait;
+  margin: 12mm 12mm 14mm 12mm;
+}
+
+/* Patient bill invoice — no pre-printed pad gap; normal A4 margins */
+@page bill-invoice {
+  size: A4 portrait;
+  margin: 10mm 12mm 12mm 12mm;
+}
+
+/* Screen: hide repeating print header row inside table */
+.referrer-print-banner-row {
+  display: none;
+}
+
+.referrer-a4-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+}
+.referrer-a4-table th,
+.referrer-a4-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.referrer-a4-table thead th {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8f4f4 100%);
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+.referrer-a4-table tbody td {
+  font-size: 10px;
+  color: #1e293b;
+}
+.referrer-print-banner-cell {
+  background: linear-gradient(135deg, #1e3a5f 0%, #0d7377 100%) !important;
+  color: #fff !important;
+  text-align: left !important;
+  padding: 10px 12px !important;
+  border: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.referrer-print-banner-title {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.referrer-print-banner-sub {
+  font-size: 9px;
+  opacity: 0.95;
+  line-height: 1.4;
+}
+.referrer-print-banner-doc {
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.referrer-a4-numeric {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+.referrer-a4-patient strong {
+  font-weight: 700;
+  color: #1e3a5f;
+}
+.referrer-a4-pid {
+  display: block;
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .calibration-print-grid { display: none; }
@@ -173,14 +388,25 @@ input, select, textarea {
 }
 
 /* Login page */
+.login-page input {
+  color: #1e293b !important;
+  background-color: #ffffff !important;
+}
+.login-page input::placeholder {
+  color: #94a3b8;
+}
 .login-page input:focus {
   outline: none;
   border-color: #0d7377;
   box-shadow: 0 0 0 3px rgba(13,115,119,0.2);
 }
 .login-page input:disabled {
-  background: #f8fafc;
+  background-color: #f8fafc !important;
+  color: #64748b !important;
   cursor: not-allowed;
+}
+.login-btn {
+  color: #ffffff !important;
 }
 .login-btn:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -188,6 +414,11 @@ input, select, textarea {
 }
 .login-btn:active:not(:disabled) {
   transform: translateY(0);
+}
+
+/* Billing - table row hover */
+.billing-table-row:hover {
+  background: #f0fdfa !important;
 }
 
 /* Reports page - screen only (print styles unchanged) */

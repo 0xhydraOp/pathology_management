@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 export default function Settings() {
-  const navigate = useNavigate();
   const [configMessage, setConfigMessage] = useState('');
   const [catalogueMessage, setCatalogueMessage] = useState('');
   const [backupMessage, setBackupMessage] = useState('');
@@ -23,6 +21,35 @@ export default function Settings() {
   const [exportDateTo, setExportDateTo] = useState(today);
   const [dbSize, setDbSize] = useState(null);
   const [lastBackupDate, setLastBackupDate] = useState(null);
+  const [appVersion, setAppVersion] = useState(null);
+  const [userDataPath, setUserDataPath] = useState(null);
+  const [supportRefreshing, setSupportRefreshing] = useState(false);
+
+  const refreshSupportStats = async () => {
+    setSupportRefreshing(true);
+    try {
+      if (window.db?.getDatabaseSize) {
+        const bytes = await window.db.getDatabaseSize();
+        setDbSize(bytes);
+      }
+      if (window.db?.getLastBackupDate) {
+        const d = await window.db.getLastBackupDate();
+        setLastBackupDate(d);
+      }
+      if (window.electronApp?.getVersion) {
+        const v = await window.electronApp.getVersion();
+        setAppVersion(v);
+      }
+      if (window.electronApp?.getPath) {
+        const p = await window.electronApp.getPath('userData');
+        setUserDataPath(p);
+      }
+    } catch (_) {
+      /* ignore */
+    } finally {
+      setSupportRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
@@ -41,15 +68,8 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    if (window.db?.getDatabaseSize) {
-      window.db.getDatabaseSize().then((bytes) => setDbSize(bytes)).catch(() => {});
-    }
-  }, [backupMessage]);
-
-  useEffect(() => {
-    if (window.db?.getLastBackupDate) {
-      window.db.getLastBackupDate().then((d) => setLastBackupDate(d)).catch(() => {});
-    }
+    refreshSupportStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional reload when backup/export completes
   }, [backupMessage]);
 
   const handleSaveLabConfig = async () => {
@@ -84,6 +104,7 @@ export default function Settings() {
         const p = await window.db.backupEncrypted(encryptPassword || undefined);
         setBackupMessage(`Encrypted backup saved: ${p}`);
         setEncryptPassword('');
+        window.db.getLastBackupDate?.().then((d) => setLastBackupDate(d)).catch(() => {});
       } catch (e) {
         setBackupMessage('Error: ' + e.message);
       }
@@ -172,7 +193,7 @@ export default function Settings() {
             <label style={styles.label}>Clinical correlation (footer text)</label>
             <input value={labConfig.clinical_correlation_text} onChange={(e) => setLabConfig({ ...labConfig, clinical_correlation_text: e.target.value })} style={styles.input} placeholder="Please correlate clinically" />
           </div>
-          <button tabIndex={4} style={styles.btn} onClick={handleSaveLabConfig} className="settings-btn">Save Configuration</button>
+          <button type="button" tabIndex={4} style={styles.btn} onClick={handleSaveLabConfig} className="settings-btn">Save Configuration</button>
           {configMessage && <p style={{ ...styles.message, color: configMessage.startsWith('Error') ? '#c00' : '#0d7377' }}>{configMessage}</p>}
         </div>
 
@@ -184,7 +205,7 @@ export default function Settings() {
             <h3 style={styles.sectionTitle}>Investigation Catalogue</h3>
           </div>
           <p style={styles.desc}>Reload parameters from JSON.</p>
-          <button style={styles.btn} onClick={handleReloadCatalog} className="settings-btn">
+          <button type="button" style={styles.btn} onClick={handleReloadCatalog} className="settings-btn">
             Reload Catalogue
           </button>
           {catalogueMessage && <p style={{ ...styles.message, color: catalogueMessage.startsWith('Error') ? '#c00' : '#0d7377' }}>{catalogueMessage}</p>}
@@ -198,23 +219,25 @@ export default function Settings() {
             <h3 style={styles.sectionTitle}>Backup</h3>
           </div>
           <p style={styles.desc}>Default location: %APPDATA%/MondalDiagnosticCentre/backups/</p>
-          {lastBackupDate && (
+          {lastBackupDate ? (
             <p style={{ ...styles.desc, marginBottom: 4 }}>
-              Last backup: {new Date(lastBackupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              Last backup: {new Date(lastBackupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               {(() => {
                 const days = Math.floor((Date.now() - new Date(lastBackupDate)) / 86400000);
                 return days > 7 ? <span style={{ color: '#c00', fontWeight: 600 }}> — {days} days ago, consider backing up</span> : null;
               })()}
             </p>
+          ) : (
+            <p style={{ ...styles.desc, marginBottom: 4, color: '#888' }}>No backup recorded yet on this computer.</p>
           )}
           {dbSize != null && (
             <p style={{ ...styles.desc, marginBottom: 8, fontSize: 13 }}>Database size: {(dbSize / 1024 / 1024).toFixed(2)} MB</p>
           )}
           <div style={styles.btnGroup}>
-            <button style={styles.btn} onClick={handleBackup} disabled={!window.db} className="settings-btn">Create Backup Now</button>
+            <button type="button" style={styles.btn} onClick={handleBackup} disabled={!window.db} className="settings-btn">Create Backup Now</button>
             <div style={styles.encryptRow}>
               <input type="password" value={encryptPassword} onChange={(e) => setEncryptPassword(e.target.value)} placeholder="Password for encrypted backup" style={{ ...styles.input, maxWidth: 220 }} />
-              <button style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncrypted} disabled={!window.db?.backupEncrypted} className="settings-btn">Encrypted Backup</button>
+              <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncrypted} disabled={!window.db?.backupEncrypted} className="settings-btn">Encrypted Backup</button>
             </div>
           </div>
           {backupMessage && <p style={styles.message}>{backupMessage}</p>}
@@ -233,7 +256,44 @@ export default function Settings() {
             <span style={styles.dateSep}>→</span>
             <input tabIndex={6} type="date" value={exportDateTo} onChange={(e) => setExportDateTo(e.target.value)} style={styles.input} placeholder="To" />
           </div>
-          <button style={styles.btn} onClick={handleExportExcel} disabled={!window.db?.exportOrdersExcel} className="settings-btn">Export Orders to Excel</button>
+          <button type="button" style={styles.btn} onClick={handleExportExcel} disabled={!window.db?.exportOrdersExcel} className="settings-btn">Export Orders to Excel</button>
+        </div>
+
+        <div style={{ ...styles.section, ...styles.sectionSupport }} className="settings-section">
+          <div style={{ ...styles.sectionIconBadge, ...styles.badgeSlate }}>
+            <span style={styles.sectionIcon}>ℹ</span>
+          </div>
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>Support &amp; diagnostics</h3>
+          </div>
+          <p style={styles.desc}>Use this when IT asks for version or data location. Help → About also shows the app version.</p>
+          <div style={styles.supportGrid}>
+            <div>
+              <span style={styles.supportLabel}>App version</span>
+              <p style={styles.supportValue}>{appVersion ?? (window.electronApp?.getVersion ? '…' : 'Browser preview (Electron only)')}</p>
+            </div>
+            <div>
+              <span style={styles.supportLabel}>Database</span>
+              <p style={styles.supportValue}>
+                {dbSize != null ? `${(dbSize / 1024 / 1024).toFixed(2)} MB` : '—'}
+              </p>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <span style={styles.supportLabel}>User data folder (backups, DB)</span>
+              <p style={{ ...styles.supportValue, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}>
+                {userDataPath ?? '—'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            style={{ ...styles.btn, ...styles.btnGhost }}
+            onClick={refreshSupportStats}
+            disabled={supportRefreshing}
+            className="settings-btn"
+          >
+            {supportRefreshing ? 'Refreshing…' : 'Refresh storage info'}
+          </button>
         </div>
       </div>
     </div>
@@ -285,6 +345,7 @@ const styles = {
   sectionCatalogue: { borderLeft: '5px solid #6c5ce7', background: 'linear-gradient(to bottom, #fff 0%, #f8f6ff 100%)' },
   sectionBackup: { borderLeft: '5px solid #00b894', background: 'linear-gradient(to bottom, #fff 0%, #f0fdf9 100%)' },
   sectionExport: { borderLeft: '5px solid #e17055', background: 'linear-gradient(to bottom, #fff 0%, #fff8f6 100%)' },
+  sectionSupport: { borderLeft: '5px solid #64748b', background: 'linear-gradient(to bottom, #fff 0%, #f8fafc 100%)' },
   sectionIconBadge: {
     width: 48,
     height: 48,
@@ -299,6 +360,16 @@ const styles = {
   badgePurple: { background: 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)', boxShadow: '0 4px 12px rgba(108,92,231,0.3)' },
   badgeGreen: { background: 'linear-gradient(135deg, #00b894 0%, #55efc4 100%)', boxShadow: '0 4px 12px rgba(0,184,148,0.3)' },
   badgeCoral: { background: 'linear-gradient(135deg, #e17055 0%, #fab1a0 100%)', boxShadow: '0 4px 12px rgba(225,112,85,0.3)' },
+  badgeSlate: { background: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)', boxShadow: '0 4px 12px rgba(100,116,139,0.3)' },
+  supportGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 },
+  supportLabel: { fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  supportValue: { margin: '6px 0 0', fontSize: 14, color: '#1e293b', fontWeight: 600 },
+  btnGhost: {
+    background: '#f1f5f9',
+    color: '#334155',
+    border: '2px solid #e2e8f0',
+    boxShadow: 'none',
+  },
   sectionHeader: { marginBottom: 12 },
   sectionIcon: { fontSize: 24 },
   sectionTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: '#1e3a5f' },

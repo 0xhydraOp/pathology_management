@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -9,6 +9,20 @@ let mainWindow;
 let splashWindow;
 let previewWindow;
 let db;
+
+/** One process = one DB file; second launch focuses the existing window (Windows/Linux). */
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
 
 const STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
 const PREVIEW_STATE_FILE = path.join(app.getPath('userData'), 'preview-state.json');
@@ -69,6 +83,80 @@ function savePreviewState(win) {
   } catch (_) {}
 }
 
+function showAboutDialog() {
+  const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : BrowserWindow.getFocusedWindow();
+  dialog.showMessageBox(parent || null, {
+    type: 'info',
+    title: 'About',
+    message: 'MONDAL DIAGNOSTIC CENTRE',
+    detail: `Pathology Lab Management System\n\nVersion ${app.getVersion()}`,
+    buttons: ['OK'],
+  }).catch(() => {});
+}
+
+function createApplicationMenu() {
+  const isDev = process.env.ELECTRON_DEV === '1';
+  const helpSubmenu = [
+    {
+      label: 'About MONDAL DIAGNOSTIC CENTRE',
+      click: () => showAboutDialog(),
+    },
+  ];
+  const viewSubmenu = [
+    ...(isDev
+      ? [
+          { role: 'reload', label: 'Reload' },
+          { role: 'forceReload', label: 'Force reload' },
+          { role: 'toggleDevTools', label: 'Toggle Developer Tools' },
+          { type: 'separator' },
+        ]
+      : []),
+    { role: 'resetZoom', label: 'Actual size' },
+    { role: 'zoomIn', label: 'Zoom in' },
+    { role: 'zoomOut', label: 'Zoom out' },
+    { type: 'separator' },
+    { role: 'togglefullscreen', label: 'Toggle full screen' },
+  ];
+
+  const template = [
+    ...(process.platform === 'darwin'
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { label: `About ${app.name}`, click: () => showAboutDialog() },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: 'File',
+      submenu:
+        process.platform === 'darwin'
+          ? [{ role: 'close', label: 'Close window' }]
+          : [{ role: 'quit', label: 'Exit' }],
+    },
+    {
+      label: 'View',
+      submenu: viewSubmenu,
+    },
+    {
+      label: 'Help',
+      submenu: helpSubmenu,
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 400,
@@ -120,11 +208,14 @@ function createWindow() {
 
   if (state?.isAlwaysOnTop) mainWindow.setAlwaysOnTop(true, 'floating');
 
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-  if (isDev) {
+  const distPath = path.join(__dirname, '../dist/index.html');
+  const useDevServer = process.env.ELECTRON_DEV === '1';
+  if (useDevServer) {
     mainWindow.loadURL('http://localhost:5173');
+  } else if (fs.existsSync(distPath)) {
+    mainWindow.loadFile(distPath);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadURL('http://localhost:5173');
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -146,7 +237,11 @@ function createWindow() {
 function doPrint(copies = 1) {
   const win = mainWindow || BrowserWindow.getFocusedWindow();
   if (win && win.webContents) {
-    win.webContents.print({ copies: Math.max(1, parseInt(copies, 10) || 1), silent: false });
+    win.webContents.print({
+      silent: false,
+      printBackground: true,
+      copies: Math.max(1, parseInt(copies, 10) || 1),
+    });
   }
 }
 
@@ -156,8 +251,9 @@ async function doPrintPreview() {
   try {
     const pdfData = await win.webContents.printToPDF({
       printBackground: true,
+      preferCSSPageSize: true,
       pageSize: 'A4',
-      margins: { top: 0.25, bottom: 0.25, left: 0.25, right: 0.25 },
+      margins: { top: 0.25, bottom: 0.25, left: 0.25, right: 0.25 }, // inches
     });
     const tmpDir = os.tmpdir();
     const pdfPath = path.join(tmpDir, `mondal-report-preview-${Date.now()}.pdf`);
@@ -165,19 +261,26 @@ async function doPrintPreview() {
     const prevState = loadPreviewState();
     const pw = prevState?.width ?? 900;
     const ph = prevState?.height ?? 700;
-    previewWindow = new BrowserWindow({
+    const pdfWin = new BrowserWindow({
       width: pw,
       height: ph,
       minWidth: 500,
       minHeight: 400,
       title: 'Print Preview - MONDAL DIAGNOSTIC CENTRE (Ctrl+P to print)',
       icon: getIconPath(),
-      webPreferences: {},
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
     });
-    if (!prevState) previewWindow.center();
-    previewWindow.loadURL(pathToFileURL(pdfPath).href);
-    previewWindow.on('closed', () => {
-      savePreviewState(previewWindow);
+    previewWindow = pdfWin;
+    if (!prevState) pdfWin.center();
+    pdfWin.loadURL(pathToFileURL(pdfPath).href);
+    pdfWin.on('close', () => {
+      savePreviewState(pdfWin);
+    });
+    pdfWin.on('closed', () => {
       previewWindow = null;
       try { fs.unlinkSync(pdfPath); } catch (_) {}
     });
@@ -234,13 +337,21 @@ app.whenReady().then(async () => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();
     return w && !w.isDestroyed() ? w.isAlwaysOnTop() : false;
   });
+  ipcMain.handle('app:getVersion', () => app.getVersion());
+  ipcMain.handle('app:getPath', (_, name) => {
+    try {
+      return app.getPath(name || 'userData');
+    } catch (_) {
+      return null;
+    }
+  });
 
   createWindow();
 
   globalShortcut.register('CommandOrControl+P', () => {
     const win = BrowserWindow.getFocusedWindow();
     if (win === previewWindow && win?.webContents) {
-      win.webContents.print({ silent: false });
+      win.webContents.print({ silent: false, printBackground: true });
     } else if (mainWindow?.webContents) {
       mainWindow.webContents.send('app:print-trigger');
       if (win !== mainWindow) mainWindow.focus();

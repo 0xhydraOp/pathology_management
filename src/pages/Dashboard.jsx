@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatOrderDateShortIN } from '../utils/dateDisplay';
 
 const PERIODS = [
   { id: 'today', label: 'Today' },
@@ -124,6 +125,8 @@ export default function Dashboard() {
 
   const shortcuts = [
     { label: 'Billing', path: '/billing', desc: 'Payments & commission' },
+    { label: 'Referrer', path: '/referrer-commission', desc: 'Adjust commission %' },
+    { label: 'Test Prices', path: '/rate-chart', desc: 'Edit test rates' },
     { label: 'Referrals', path: '/referrals', desc: 'Referrer summary' },
     { label: 'Settings', path: '/settings', desc: 'Lab configuration' },
   ];
@@ -231,10 +234,7 @@ export default function Dashboard() {
                 <span style={styles.pendingId}>#{o.id}</span>
                 <span style={styles.pendingName}>{o.name || '—'}</span>
                 <span style={styles.pendingDate}>
-                  {o.order_date ? (() => {
-                    const d = new Date(o.order_date);
-                    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-                  })() : '—'}
+                  {formatOrderDateShortIN(o.order_date)}
                 </span>
               </div>
             ))}

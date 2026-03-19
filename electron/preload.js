@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronApp', {
   setTitle: (title) => ipcRenderer.invoke('app:setTitle', title),
   setAlwaysOnTop: (on) => ipcRenderer.invoke('app:setAlwaysOnTop', on),
   getAlwaysOnTop: () => ipcRenderer.invoke('app:getAlwaysOnTop'),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getPath: (name) => ipcRenderer.invoke('app:getPath', name),
   onPrintTrigger: (cb) => {
     const handler = () => cb();
     ipcRenderer.on('app:print-trigger', handler);

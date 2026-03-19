@@ -357,7 +357,7 @@ Printout must look **easy and uncluttered**, not messy. Apply these principles:
 |-----------|-----------|
 | **Spacing** | Adequate whitespace between sections; consistent line spacing |
 | **Alignment** | Columns aligned (test name left, value centre, range right); no overlapping text |
-| **Grouping** | Tests grouped by section (Hematology, Biochemistry, LFT, KFT, Lipid, Serology, Immunology/Serology, Blood Group Tests, Surgery, etc.) |
+| **Grouping** | Tests grouped by section (Hematology, Biochemistry, LFT, KFT, Lipid, Serology, Immunology, Blood Group, Coagulation, Clinical Pathology, etc.) |
 | **Hierarchy** | Clear visual hierarchy: section headers → test names → values; avoid clutter |
 | **Readability** | Simple, legible font; consistent font sizes; no cramped or crowded layout |
 | **Structure** | Logical flow: patient info (name, age, sex, referred by, address) → results by section → footer (Read by, Printed by, etc.) |
@@ -1395,8 +1395,16 @@ Date & Time: 17-03-2026 14:35:42
 Please correlate clinically.
 ```
 
+### Bill barcode (report pick-up)
+
+- Each **order** (bill / visit) gets a unique **`access_code`** (10 characters, A–Z and 2–9 only — easy for CODE128 and USB scanners).
+- Codes are assigned when the bill is computed (`computeOrderBillAndCommission`), including after **New Registration**; existing orders are backfilled on app startup.
+- The **same barcode** appears on the **printed bill invoice** and on **printed test reports** for that order.
+- On the **Reports** screen, focus the search field and scan the bill: the scanner types the code and sends **Enter** → the matching order loads, the date range expands if needed, and that order is **pinned to the top** of the order dropdown list.
+
 ### B. Glossary
 
+- **Bill / order barcode (`access_code`):** Per-order scan token on invoice and report; scan in Reports search to open that order quickly
 - **Age format:** YY (years), e.g. 45 Y
 - **Date format:** DD-MM-YYYY (day-month-year); used consistently throughout the system
 - **CBC:** Complete Blood Count
@@ -1418,9 +1426,11 @@ Please correlate clinically.
 - **section:** Report section for grouping (e.g. Hematology, Biochemistry, Lipid, Thyroid, Serology); ranges array with sex, min_age, max_age, low, high
 - **Referred by autocomplete:** Type first few letters → matching referrer names appear from previously saved entries; select with Enter; new names auto-saved for next time
 - **Referral tracking:** Commission-based; summary shows which referrer gave how many patients; filter: last month, last week, date-to-date, year, or all; all counted internally
+- **Referrer payment invoice:** On Referrals, double-click a referrer card (period = main filter) to open a printable **Payment invoice**: lab header, referrer name, each order with patient, tests, bill, commission and %; grand total commission right-aligned with rate line below
 - **Business performance:** Track lab performance (week, month, year, date-to-date); total patients, orders, revenue; all counted internally
 - **Dashboard:** Main home screen with quick access to key features; sidebar/top menu for navigation
 
 ---
 
 *End of Project Specification*
+513

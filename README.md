@@ -18,7 +18,9 @@ pathologycal lab managment system/
 ├── public/
 │   └── assets/logo.png      # Web logo
 ├── scripts/
-│   └── build-icon.mjs       # PNG → ICO converter
+│   ├── build-icon.mjs       # PNG → ICO converter
+│   ├── create-release.js    # gh release upload (after electron:build)
+│   └── test-system.js       # Smoke tests
 ├── src/                     # React app (Vite)
 ├── pathology_parameters.json # Master test catalogue
 ├── test_profiles.json       # Panels (CBC, LFT, Lipid Profile, etc.)
@@ -51,13 +53,29 @@ npm run electron:dev
 
 **Login:** admin / admin123
 
-## Build Windows Installer
+## Build Windows installer + ZIP
 
 ```powershell
 npm run electron:build
 ```
 
-Installer output: `dist/`
+Artifacts (gitignored) are written to **`release/`**:
+
+- **`MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`** — NSIS installer (recommended; shortcuts + uninstaller)
+- **`MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`** — packaged folder as ZIP (optional)
+
+The web UI is built to **`dist/`** first; Electron bundles that into the app.
+
+### Publish to GitHub Releases
+
+1. [Install GitHub CLI](https://cli.github.com/) and run **`gh auth login`** once.
+2. After `npm run electron:build`, run:
+
+```powershell
+node scripts/create-release.js
+```
+
+This creates tag **`v<version>`** (from `package.json`) and uploads the **Setup .exe** and **.zip** assets. If the release already exists, it re-uploads assets (`--clobber`).
 
 ## Backup
 

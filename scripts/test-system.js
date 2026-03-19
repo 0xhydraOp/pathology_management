@@ -85,12 +85,42 @@ async function main() {
   run('All routes defined in App', () => {
     const appPath = path.join(root, 'src/App.jsx');
     const content = fs.readFileSync(appPath, 'utf8');
-    const routes = ['new-registration', 'result-entry', 'reports', 'billing', 'referrals', 'settings'];
+    const routes = ['new-registration', 'result-entry', 'reports', 'billing', 'referrals', 'referrer-commission', 'rate-chart', 'settings'];
     routes.forEach((r) => {
       if (!content.includes(`path="${r}"`) && !content.includes(`path='${r}'`)) {
         throw new Error(`Route ${r} not found in App.jsx`);
       }
     });
+  });
+
+  run('dateDisplay util (order dates)', () => {
+    const p = path.join(root, 'src/utils/dateDisplay.js');
+    if (!fs.existsSync(p)) throw new Error('src/utils/dateDisplay.js missing');
+    const content = fs.readFileSync(p, 'utf8');
+    if (!content.includes('T12:00:00')) throw new Error('dateDisplay must use local noon for YYYY-MM-DD');
+    if (!content.includes('formatOrderDateDisplay')) throw new Error('formatOrderDateDisplay export missing');
+  });
+
+  run('Single-instance lock in electron main', () => {
+    const mainPath = path.join(root, 'electron/main.js');
+    const content = fs.readFileSync(mainPath, 'utf8');
+    if (!content.includes('requestSingleInstanceLock')) {
+      throw new Error('main.js should call app.requestSingleInstanceLock() for DB safety');
+    }
+    if (!content.includes('second-instance')) {
+      throw new Error('main.js should handle second-instance to focus main window');
+    }
+  });
+
+  run('Layout uses hash path for print trigger (HashRouter)', () => {
+    const layoutPath = path.join(root, 'src/components/Layout.jsx');
+    const content = fs.readFileSync(layoutPath, 'utf8');
+    if (content.includes('window.location.pathname === \'/reports\'')) {
+      throw new Error('Layout must not use window.location.pathname for /reports with HashRouter');
+    }
+    if (!content.includes('getHashRoutePath') || !content.includes("getHashRoutePath() === '/reports'")) {
+      throw new Error('Layout should use getHashRoutePath() for Electron print trigger');
+    }
   });
 
   console.log(`\n--- Result: ${passed} passed, ${failed} failed ---\n`);

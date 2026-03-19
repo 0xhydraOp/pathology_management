@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const money = (n) => (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
 const PERIODS = [
   { id: 'today', label: 'Today' },
   { id: 'week', label: 'Last Week' },
@@ -50,6 +52,16 @@ function getDateRange(filter, customFrom, customTo) {
   return [toLocalDateStr(start), toLocalDateStr(end)];
 }
 
+/** Pretty date for invoice period (avoids UTC shift on YYYY-MM-DD). */
+function formatDisplayDateStr(dateStr) {
+  if (!dateStr) return '—';
+  const s = String(dateStr);
+  const x = new Date(s.length === 10 ? `${s}T12:00:00` : s);
+  if (isNaN(x.getTime())) return s;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${String(x.getDate()).padStart(2, '0')} ${months[x.getMonth()]} ${x.getFullYear()}`;
+}
+
 export default function Referrals() {
   const navigate = useNavigate();
   const today = toLocalDateStr(new Date());
@@ -71,12 +83,17 @@ export default function Referrals() {
   const [selectedReferrer, setSelectedReferrer] = useState(null);
   const [patientList, setPatientList] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
-  const [reportReferrer, setReportReferrer] = useState(null);
-  const [reportFilter, setReportFilter] = useState('month');
-  const [reportFrom, setReportFrom] = useState(weekAgo);
-  const [reportTo, setReportTo] = useState(today);
-  const [reportData, setReportData] = useState({ patients: [], total: 0 });
-  const [loadingReport, setLoadingReport] = useState(false);
+  /** Payment invoice (double-click card) — uses main period filter */
+  const [invoiceReferrer, setInvoiceReferrer] = useState(null);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+  const [invoicePrintHint, setInvoicePrintHint] = useState('');
+  const [labConfig, setLabConfig] = useState({
+    name: 'MONDAL DIAGNOSTIC CENTRE',
+    email: '',
+    phone: '',
+    default_printed_by: 'Admin',
+  });
 
   const loadReferrersRequestRef = useRef(0);
   const rowClickTimeoutRef = useRef(null);
@@ -176,6 +193,22 @@ export default function Referrals() {
     loadReferrers();
   }, [loadReferrers]);
 
+  useEffect(() => {
+    if (window.db?.getLabConfig) {
+      window.db.getLabConfig().then((c) => {
+        if (c) {
+          setLabConfig((prev) => ({
+            ...prev,
+            name: c.name || prev.name,
+            email: c.email || prev.email || '',
+            phone: c.phone || prev.phone || '',
+            default_printed_by: c.default_printed_by || prev.default_printed_by,
+          }));
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
   const loadPatientsRequestRef = useRef(null);
   const loadPatientsForReferrer = useCallback(async (referrerName) => {
     if (!window.db || !referrerName) return;
@@ -203,35 +236,126 @@ export default function Referrals() {
     }
   }, [filter, customFrom, customTo]);
 
-  const loadReportData = useCallback(async () => {
-    if (!window.db || !reportReferrer) return;
-    setLoadingReport(true);
+  const loadReferrerPaymentInvoice = useCallback(async (referrerName) => {
+    if (!window.db || !referrerName) return;
+    setInvoiceReferrer(referrerName);
+    setLoadingInvoice(true);
+    setInvoiceData(null);
     try {
-      const [start, end] = getDateRange(reportFilter, reportFrom, reportTo);
-      const rows = await window.db.all(
-        `SELECT p.patient_id, p.name, p.age, p.sex, o.order_date
-         FROM patients p JOIN orders o ON o.patient_id = p.id
-         WHERE p.referred_by = ? AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-         ORDER BY o.order_date DESC`,
-        [reportReferrer, start, end]
+      const [start, end] = getDateRange(filter, customFrom, customTo);
+      const ordersRows = await window.db.all(
+        `SELECT o.id, o.order_date, o.total_amount, p.patient_id, p.name as patient_name,
+                ocl.commission_amount, ocl.commission_percent, ocl.order_amount
+         FROM orders o
+         JOIN patients p ON o.patient_id = p.id
+         LEFT JOIN order_commission_log ocl ON ocl.order_id = o.id
+         WHERE p.referred_by = ?
+         AND date(o.order_date) >= ? AND date(o.order_date) <= ?
+         ORDER BY o.order_date DESC, o.id DESC`,
+        [referrerName, start, end]
       );
-      setReportData({ patients: rows || [], total: (rows || []).length });
+      const orderIds = (ordersRows || []).map((r) => r.id);
+      const testsByOrder = {};
+      if (orderIds.length > 0) {
+        const ph = orderIds.map(() => '?').join(',');
+        const testRows = await window.db.all(
+          `SELECT ot.order_id, pr.name as test_name, ot.display_order
+           FROM order_tests ot
+           JOIN parameters pr ON pr.id = ot.parameter_id
+           WHERE ot.order_id IN (${ph})
+           ORDER BY ot.order_id, ot.display_order`,
+          orderIds
+        );
+        (testRows || []).forEach((t) => {
+          if (!testsByOrder[t.order_id]) testsByOrder[t.order_id] = [];
+          testsByOrder[t.order_id].push(t.test_name);
+        });
+      }
+      const lines = (ordersRows || []).map((r) => {
+        const bill = parseFloat(r.order_amount);
+        const billAmt = !Number.isNaN(bill) && bill > 0 ? bill : (parseFloat(r.total_amount) || 0);
+        const comm = parseFloat(r.commission_amount);
+        const commissionAmount = !Number.isNaN(comm) ? comm : 0;
+        const cp = r.commission_percent != null ? parseFloat(r.commission_percent) : null;
+        return {
+          orderId: r.id,
+          patientName: r.patient_name || '—',
+          patientId: r.patient_id || '—',
+          orderDate: r.order_date,
+          tests: (testsByOrder[r.id] || []).join(', ') || '—',
+          billAmount: billAmt,
+          commissionAmount,
+          commissionPct: cp != null && !Number.isNaN(cp) ? cp : null,
+        };
+      });
+      const totalBill = lines.reduce((s, l) => s + l.billAmount, 0);
+      const totalCommission = lines.reduce((s, l) => s + l.commissionAmount, 0);
+      const pctRow = await window.db.get(
+        'SELECT commission_percent FROM referrer_commission_pct WHERE referrer_name = ?',
+        [referrerName]
+      );
+      const labRow = await window.db.get('SELECT commission_default_percent FROM lab WHERE id = 1');
+      const defaultPct = parseFloat(pctRow?.commission_percent ?? labRow?.commission_default_percent ?? 45);
+      const pctVals = lines.map((l) => l.commissionPct).filter((x) => x != null && !Number.isNaN(x));
+      const pctSet = new Set(pctVals);
+      let displayPct = defaultPct;
+      let rateNote = null;
+      if (pctSet.size === 1) displayPct = [...pctSet][0];
+      else if (pctSet.size > 1) {
+        displayPct = null;
+        rateNote = 'Multiple rates in period — see % column per order.';
+      }
+
+      setInvoiceData({
+        referrerName,
+        periodStart: start,
+        periodEnd: end,
+        periodLabel: `${formatDisplayDateStr(start)} – ${formatDisplayDateStr(end)}`,
+        lines,
+        orderCount: lines.length,
+        totalBill,
+        totalCommission,
+        displayPct,
+        defaultPct,
+        rateNote,
+      });
     } catch (e) {
       console.error(e);
-      setReportData({ patients: [], total: 0 });
+      setInvoiceData(null);
     } finally {
-      setLoadingReport(false);
+      setLoadingInvoice(false);
     }
-  }, [reportReferrer, reportFilter, reportFrom, reportTo]);
+  }, [filter, customFrom, customTo]);
 
-  useEffect(() => {
-    if (reportReferrer) loadReportData();
-  }, [reportReferrer, reportFilter, reportFrom, reportTo, loadReportData]);
+  const closeInvoiceModal = useCallback(() => {
+    setInvoiceReferrer(null);
+    setInvoiceData(null);
+    setInvoicePrintHint('');
+  }, []);
+
+  const runReferrerInvoicePrint = useCallback(async () => {
+    setInvoicePrintHint('');
+    if (typeof window.electronPrintPreview === 'function') {
+      const result = await window.electronPrintPreview();
+      if (result?.ok) {
+        setInvoicePrintHint('Opened in PDF preview — use Print there.');
+        setTimeout(() => setInvoicePrintHint(''), 4000);
+        return;
+      }
+    }
+    if (typeof window.electronPrint === 'function') {
+      await window.electronPrint(1);
+      setInvoicePrintHint('Use the print dialog to finish.');
+      setTimeout(() => setInvoicePrintHint(''), 3000);
+      return;
+    }
+    window.print();
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (reportReferrer) setReportReferrer(null);
+        if (invoiceReferrer) closeInvoiceModal();
         else if (selectedReferrer) setSelectedReferrer(null);
       } else if (e.ctrlKey && e.key === 'r') {
         e.preventDefault();
@@ -240,21 +364,11 @@ export default function Referrals() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedReferrer, reportReferrer, loadReferrers]);
+  }, [selectedReferrer, invoiceReferrer, closeInvoiceModal, loadReferrers]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [filter, customFrom, customTo, search]);
-
-  const openReportModal = (referrerName) => {
-    setSelectedReferrer(null);
-    setReportReferrer(referrerName);
-    setReportFilter('month');
-    const now = new Date();
-    const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    setReportFrom(toLocalDateStr(mStart));
-    setReportTo(today);
-  };
 
   const handleExportExcel = async () => {
     if (!window.db?.exportReferralsExcel) return;
@@ -292,6 +406,15 @@ export default function Referrals() {
     return `${String(x.getDate()).padStart(2, '0')}-${String(x.getMonth() + 1).padStart(2, '0')}-${x.getFullYear()}`;
   };
 
+  /** Order date on invoice table (avoids UTC shift on YYYY-MM-DD). */
+  const formatOrderDateOnly = (d) => {
+    if (!d) return '—';
+    const s = String(d);
+    const x = new Date(s.length === 10 ? `${s}T12:00:00` : s);
+    if (isNaN(x.getTime())) return '—';
+    return `${String(x.getDate()).padStart(2, '0')}-${String(x.getMonth() + 1).padStart(2, '0')}-${x.getFullYear()}`;
+  };
+
   const formatDisplayDate = (dateStr) => {
     if (!dateStr) return '—';
     const x = new Date(dateStr);
@@ -311,7 +434,7 @@ export default function Referrals() {
       </div>
 
       <div style={styles.commissionBanner}>
-        <strong>Commission (40%)</strong> — Auto-calculated from billed amount. Referrer gets 40% of total bill.
+        <strong>Commission</strong> — Per referrer rate (default 45%). Edit in Referrer tab.
       </div>
 
       <div style={styles.periodRow}>
@@ -422,7 +545,7 @@ export default function Referrals() {
               </div>
             ) : (
               <>
-                <p style={styles.clickHint}>Click to view patients · Double-click for performance report</p>
+                <p style={styles.clickHint}>Click: patient list · Double-click: referrer payment invoice (uses period above)</p>
                 <div style={styles.referrerCardGrid}>
                 {filteredReferrers.map((r, i) => {
                   const rank = referrers.findIndex((x) => x.name === r.name);
@@ -439,7 +562,8 @@ export default function Referrals() {
                         if (rowClickTimeoutRef.current) clearTimeout(rowClickTimeoutRef.current);
                         rowClickTimeoutRef.current = setTimeout(() => {
                           rowClickTimeoutRef.current = null;
-                          setReportReferrer(null);
+                          setInvoiceReferrer(null);
+                          setInvoiceData(null);
                           loadPatientsForReferrer(r.name);
                         }, 250);
                       }}
@@ -448,7 +572,8 @@ export default function Referrals() {
                           clearTimeout(rowClickTimeoutRef.current);
                           rowClickTimeoutRef.current = null;
                         }
-                        openReportModal(r.name);
+                        setSelectedReferrer(null);
+                        void loadReferrerPaymentInvoice(r.name);
                       }}
                     >
                       {badge && (
@@ -485,7 +610,7 @@ export default function Referrals() {
                           <span style={styles.referrerCardPerfVal}>{perf.lastMonth ?? 0}</span>
                         </div>
                         <div style={{ ...styles.referrerCardPerfRow, marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8ecef' }}>
-                          <span style={styles.referrerCardPerfLabel}>Commission (40%)</span>
+                          <span style={styles.referrerCardPerfLabel}>Commission</span>
                           <span style={{ ...styles.referrerCardPerfVal, color: '#166534' }}>₹{commission.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                         </div>
                       </div>
@@ -499,78 +624,155 @@ export default function Referrals() {
         </>
       )}
 
-      {reportReferrer && (
-        <div style={styles.modalOverlay} onClick={() => setReportReferrer(null)}>
-          <div style={styles.reportModal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.reportModalHeader}>
-              <h3 style={styles.reportModalTitle}>Performance Report — {reportReferrer}</h3>
+      {invoiceReferrer && (
+        <div className="referrer-invoice-overlay" style={styles.invoiceOverlay} onClick={closeInvoiceModal}>
+          <div
+            className="referrer-payment-print"
+            style={styles.invoiceSheet}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="no-print" style={styles.invoiceToolbar}>
+              <div>
+                <h3 style={styles.invoiceToolbarTitle}>Referrer payment invoice</h3>
+                {invoicePrintHint && <p style={styles.invoicePrintHint}>{invoicePrintHint}</p>}
+              </div>
               <div style={styles.modalHeaderActions}>
-                {reportData.patients.length > 0 && (
-                  <button
-                    style={styles.copyBtn}
-                    onClick={() => {
-                      const header = 'Patient ID\tName\tAge\tSex\tOrder Date';
-                      const rows = reportData.patients.map((pt) =>
-                        [pt.patient_id || '—', pt.name || '—', pt.age ?? '—', pt.sex || '—', formatDate(pt.order_date)].join('\t')
-                      ).join('\n');
-                      navigator.clipboard.writeText(`${header}\n${rows}`);
-                    }}
-                  >
-                    Copy
-                  </button>
-                )}
-                <button style={styles.modalClose} onClick={() => setReportReferrer(null)}>×</button>
-              </div>
-            </div>
-            <div style={styles.reportFilters}>
-              {['week', 'month', 'lastmonth', 'custom'].map((pid) => (
-                <button
-                  key={pid}
-                  type="button"
-                  style={{ ...styles.reportPeriodBtn, ...(reportFilter === pid ? styles.periodBtnActive : {}) }}
-                  onClick={() => setReportFilter(pid)}
-                >
-                  {pid === 'week' ? 'Week' : pid === 'month' ? 'This Month' : pid === 'lastmonth' ? 'Last Month' : 'From–To Date'}
+                <button type="button" style={styles.printBtn} onClick={runReferrerInvoicePrint}>
+                  🖨 Print invoice
                 </button>
-              ))}
-              {reportFilter === 'custom' && (
-                <div style={styles.reportDateRow}>
-                  <input type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.reportDateInput} />
-                  <span style={{ color: '#999' }}>→</span>
-                  <input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.reportDateInput} />
-                </div>
-              )}
+                <button type="button" style={styles.modalClose} onClick={closeInvoiceModal}>×</button>
+              </div>
             </div>
-            {loadingReport ? (
-              <div style={styles.modalLoading}>Loading...</div>
-            ) : (
-              <div style={styles.reportBody}>
-                <div style={styles.reportSummary}>
-                  <span style={styles.reportTotal}>{reportData.total}</span> patients in selected period
-                </div>
-                {reportData.patients.length > 0 ? (
-                  <div style={styles.reportTableWrap}>
-                    <div style={styles.patientRowHeader}>
-                      <span>Patient ID</span>
-                      <span>Name</span>
-                      <span>Age</span>
-                      <span>Sex</span>
-                      <span>Order Date</span>
-                    </div>
-                    {reportData.patients.map((pt, idx) => (
-                      <div key={idx} style={styles.patientRow}>
-                        <span>{pt.patient_id || '—'}</span>
-                        <span>{pt.name || '—'}</span>
-                        <span>{pt.age ?? '—'}</span>
-                        <span>{pt.sex || '—'}</span>
-                        <span>{formatDate(pt.order_date)}</span>
+            {loadingInvoice ? (
+              <div style={styles.modalLoading}>Loading invoice…</div>
+            ) : invoiceData ? (
+              <div className="referrer-invoice-body invoice-sheet-body" style={styles.invoiceBody}>
+                {/* On-screen header; hidden when printing — print uses table thead banner */}
+                <div className="referrer-screen-header">
+                  <div style={styles.invHero}>
+                    <div style={styles.invHeroInner}>
+                      <div style={styles.invMonogram} aria-hidden>
+                        {(labConfig.name || 'M').trim().charAt(0).toUpperCase()}
                       </div>
-                    ))}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={styles.invLabName}>{labConfig.name}</div>
+                        <div style={styles.invContactRow}>
+                          {labConfig.email ? (
+                            <span style={styles.invChip}>✉ {labConfig.email}</span>
+                          ) : null}
+                          {labConfig.phone ? (
+                            <span style={styles.invChip}>☎ {labConfig.phone}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
                   </div>
+
+                  <div style={styles.invDocTitle}>Payment invoice</div>
+                  <div style={styles.invMetaGrid}>
+                    <div>
+                      <span style={styles.invMetaK}>Referrer</span>
+                      <span style={styles.invMetaV}>{invoiceData.referrerName}</span>
+                    </div>
+                    <div>
+                      <span style={styles.invMetaK}>Period</span>
+                      <span style={styles.invMetaV}>{invoiceData.periodLabel}</span>
+                    </div>
+                    <div>
+                      <span style={styles.invMetaK}>Orders in period</span>
+                      <span style={styles.invMetaV}>{invoiceData.orderCount}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {invoiceData.lines.length === 0 ? (
+                  <p style={styles.modalEmpty}>No orders for this referrer in the selected period.</p>
                 ) : (
-                  <p style={styles.modalEmpty}>No patients in this period</p>
+                  <>
+                    <div style={styles.invTableWrap}>
+                      <table className="referrer-a4-table" style={{ width: '100%' }}>
+                        <colgroup>
+                          <col style={{ width: '17%' }} />
+                          <col style={{ width: '9%' }} />
+                          <col style={{ width: '40%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '10%' }} />
+                        </colgroup>
+                        <thead>
+                          <tr className="referrer-print-banner-row">
+                            <th colSpan={6} className="referrer-print-banner-cell">
+                              <div className="referrer-print-banner-title">{labConfig.name}</div>
+                              <div className="referrer-print-banner-sub">
+                                {[labConfig.email ? `✉ ${labConfig.email}` : null, labConfig.phone ? `☎ ${labConfig.phone}` : null].filter(Boolean).join(' · ') || '\u00A0'}
+                              </div>
+                              <div className="referrer-print-banner-doc">
+                                Payment invoice · {invoiceData.referrerName} · {invoiceData.periodLabel}
+                                {' · '}
+                                Orders: {invoiceData.orderCount}
+                              </div>
+                            </th>
+                          </tr>
+                          <tr>
+                            <th scope="col">Patient</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Tests</th>
+                            <th scope="col" className="referrer-a4-numeric">Bill (₹)</th>
+                            <th scope="col" className="referrer-a4-numeric">Comm (₹)</th>
+                            <th scope="col" className="referrer-a4-numeric">%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {invoiceData.lines.map((line) => (
+                            <tr key={line.orderId}>
+                              <td className="referrer-a4-patient">
+                                <strong>{line.patientName}</strong>
+                                <span className="referrer-a4-pid">{line.patientId}</span>
+                              </td>
+                              <td>{formatOrderDateOnly(line.orderDate)}</td>
+                              <td style={{ lineHeight: 1.35 }}>{line.tests}</td>
+                              <td className="referrer-a4-numeric">₹{money(line.billAmount)}</td>
+                              <td className="referrer-a4-numeric">₹{money(line.commissionAmount)}</td>
+                              <td className="referrer-a4-numeric">
+                                {line.commissionPct != null ? `${line.commissionPct}%` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="referrer-invoice-summary-block" style={styles.invSummaryBox}>
+                      <div style={styles.invSummaryLeft}>
+                        <div style={styles.invSummaryLine}>
+                          <span>Total patient billing</span>
+                          <strong>₹{money(invoiceData.totalBill)}</strong>
+                        </div>
+                        {invoiceData.rateNote && (
+                          <p style={styles.invRateNote}>{invoiceData.rateNote}</p>
+                        )}
+                      </div>
+                      <div style={styles.invSummaryRight}>
+                        <div style={styles.invGrandLabel}>Grand total (payable)</div>
+                        <div style={styles.invGrandAmount}>₹{money(invoiceData.totalCommission)}</div>
+                        <div style={styles.invPctBelow}>
+                          {invoiceData.displayPct != null
+                            ? `Commission rate: ${invoiceData.displayPct}%`
+                            : `Default rate: ${invoiceData.defaultPct}%`}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="referrer-invoice-footer-print" style={styles.invFooter}>
+                      Printed by <strong>{labConfig.default_printed_by}</strong>
+                      {' · '}
+                      {formatDate(new Date())}
+                    </div>
+                  </>
                 )}
               </div>
+            ) : (
+              <div style={styles.modalEmpty}>Could not load invoice.</div>
             )}
           </div>
         </div>
@@ -636,7 +838,7 @@ export default function Referrals() {
 
 const styles = {
   container: {
-    maxWidth: 720,
+    maxWidth: 920,
     paddingBottom: 40,
   },
   header: {
@@ -1131,5 +1333,189 @@ const styles = {
     borderBottom: '1px solid #f0f0f0',
     fontSize: 14,
     color: '#333',
+  },
+  printBtn: {
+    padding: '8px 16px',
+    borderRadius: 8,
+    border: 'none',
+    background: '#0d7377',
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  invoiceOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1100,
+    padding: 16,
+  },
+  invoiceSheet: {
+    background: '#fff',
+    borderRadius: 14,
+    boxShadow: '0 20px 48px rgba(15,40,71,0.2)',
+    width: '100%',
+    maxWidth: 820,
+    maxHeight: '92vh',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    borderLeft: '5px solid #0d7377',
+  },
+  invoiceToolbar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    borderBottom: '1px solid #e2e8f0',
+    background: '#f8fafb',
+    flexShrink: 0,
+  },
+  invoiceToolbarTitle: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 700,
+    color: '#1e3a5f',
+  },
+  invoicePrintHint: {
+    margin: '4px 0 0',
+    fontSize: 12,
+    color: '#0d7377',
+  },
+  invoiceBody: {
+    padding: '14px 16px 18px',
+    overflowY: 'auto',
+    flex: 1,
+    fontSize: 11,
+    background: 'linear-gradient(180deg, #f8fafc 0%, #fff 100px)',
+  },
+  invHero: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 12,
+    background: 'linear-gradient(135deg, #1e3a5f 0%, #0d7377 55%, #14a3a8 100%)',
+    boxShadow: '0 6px 20px rgba(13,115,119,0.25)',
+  },
+  invHeroInner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '14px 16px',
+  },
+  invMonogram: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    background: 'rgba(255,255,255,0.2)',
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 800,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    border: '2px solid rgba(255,255,255,0.35)',
+  },
+  invLabName: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#fff',
+    marginBottom: 6,
+    lineHeight: 1.2,
+  },
+  invContactRow: { display: 'flex', flexWrap: 'wrap', gap: 8 },
+  invChip: {
+    color: 'rgba(255,255,255,0.92)',
+    background: 'rgba(0,0,0,0.12)',
+    padding: '4px 10px',
+    borderRadius: 20,
+    fontSize: 10,
+    fontWeight: 500,
+  },
+  invDocTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#1e3a5f',
+    textTransform: 'uppercase',
+    letterSpacing: '0.14em',
+    borderBottom: '2px solid #0d7377',
+    paddingBottom: 6,
+    marginBottom: 10,
+  },
+  invMetaGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: 10,
+    marginBottom: 14,
+    fontSize: 10,
+  },
+  invMetaK: {
+    display: 'block',
+    color: '#94a3b8',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginBottom: 2,
+  },
+  invMetaV: { display: 'block', color: '#1e293b', fontWeight: 600 },
+  invTableWrap: {
+    border: '1px solid #e2e8f0',
+    borderRadius: 10,
+    overflow: 'auto',
+    marginBottom: 14,
+    maxWidth: '100%',
+  },
+  invSummaryBox: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 16,
+    padding: '14px 16px',
+    borderRadius: 10,
+    background: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    marginBottom: 12,
+  },
+  invSummaryLeft: { flex: '1 1 200px' },
+  invSummaryLine: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 16,
+    fontSize: 12,
+    color: '#475569',
+  },
+  invRateNote: { margin: '8px 0 0', fontSize: 10, color: '#b45309' },
+  invSummaryRight: { textAlign: 'right', flex: '0 1 auto' },
+  invGrandLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.1em',
+  },
+  invGrandAmount: {
+    fontSize: 22,
+    fontWeight: 800,
+    color: '#0d7377',
+    fontVariantNumeric: 'tabular-nums',
+    marginTop: 4,
+  },
+  invPctBelow: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#1e3a5f',
+  },
+  invFooter: {
+    fontSize: 9,
+    color: '#64748b',
+    textAlign: 'center',
+    paddingTop: 8,
+    borderTop: '1px dashed #e2e8f0',
   },
 };

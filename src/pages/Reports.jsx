@@ -1,5 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import OrderBarcode from '../components/OrderBarcode.jsx';
+
+/** USB scanners type alnum + Enter — lookup order by bill barcode (orders.access_code). */
+async function fetchOrderByAccessCode(raw) {
+  const q = (raw || '').trim().toUpperCase();
+  if (q.length < 8 || q.length > 14 || !/^[A-Z2-9]+$/.test(q) || !window.db) return null;
+  return window.db.get(
+    `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by
+     FROM orders o JOIN patients p ON o.patient_id = p.id
+     WHERE UPPER(TRIM(COALESCE(o.access_code, ''))) = ?`,
+    [q]
+  );
+}
 
 function toLocalDateStr(d) {
   const y = d.getFullYear();
@@ -46,7 +59,7 @@ export default function Reports() {
   const today = toLocalDateStr(new Date());
   const [orderFilter, setOrderFilter] = useState({ dateFrom: today, dateTo: today });
 
-  const margins = { top: 192, left: 28, right: 28, bottom: 48 };
+  const margins = { top: 12, left: 28, right: 28, bottom: 12 }; /* Page margins (1.5" top, 0.5" bottom) set via @page in CSS */
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
@@ -75,25 +88,26 @@ export default function Reports() {
       sql += ' ORDER BY o.created_at DESC LIMIT 200';
       window.db.all(sql, params.length ? params : []).then((rows) => {
         setOrders(rows || []);
-        if (orderId) {
-          const id = parseInt(orderId, 10);
-          if (!isNaN(id)) {
-            const ord = (rows || []).find((r) => r.id === id);
-            if (ord) setSelectedOrder(ord);
-          }
-        }
+        // Do not setSelectedOrder from ?order= here — date refetch would override barcode pick.
+        // Deep link is handled in the effect below when selectedOrder is still null.
       }).catch(console.error);
     }
   }, [orderId, orderFilter.dateFrom, orderFilter.dateTo]);
 
   useEffect(() => {
-    if (orderId && window.db && !selectedOrder) {
-      window.db.get(
-        `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by 
-         FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?`,
-        [parseInt(orderId)]
-      ).then((ord) => ord && setSelectedOrder(ord)).catch(() => {});
-    }
+    const t = setTimeout(() => searchInputRef.current?.focus?.(), 400);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!orderId || !window.db || selectedOrder) return;
+    const id = parseInt(orderId, 10);
+    if (isNaN(id)) return;
+    window.db.get(
+      `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by 
+       FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?`,
+      [id]
+    ).then((ord) => ord && setSelectedOrder(ord)).catch(() => {});
   }, [orderId, selectedOrder]);
 
   useEffect(() => {
@@ -243,17 +257,28 @@ export default function Reports() {
     const list = orders.filter((o) => {
       if (!search || !search.trim()) return true;
       const q = search.trim().toLowerCase();
+      const qRaw = search.trim();
+      if (/^\d+$/.test(qRaw) && String(o.id) === qRaw) return true;
       return (
         (o.patient_name && o.patient_name.toLowerCase().includes(q)) ||
         (o.pt_id && o.pt_id.toLowerCase().includes(q)) ||
-        (o.phone && o.phone.includes(search.trim())) ||
-        (o.referred_by && o.referred_by.toLowerCase().includes(q))
+        (o.phone && o.phone.includes(qRaw)) ||
+        (o.referred_by && o.referred_by.toLowerCase().includes(q)) ||
+        (o.access_code && o.access_code.toLowerCase().includes(q))
       );
     });
-    if (selectedOrder && !list.some((o) => o.id === selectedOrder.id)) {
-      return [selectedOrder, ...list];
+    const pinId = selectedOrder?.id;
+    const sorted = pinId
+      ? [...list].sort((a, b) => {
+          if (a.id === pinId) return -1;
+          if (b.id === pinId) return 1;
+          return 0;
+        })
+      : list;
+    if (selectedOrder && !sorted.some((o) => o.id === selectedOrder.id)) {
+      return [selectedOrder, ...sorted];
     }
-    return list;
+    return sorted;
   })();
 
   return (
@@ -262,7 +287,9 @@ export default function Reports() {
         <div style={styles.pageHeaderIcon}>📄</div>
         <div>
           <h1 style={styles.title}>Reports</h1>
-          <p style={styles.subtitle}>Search by patient name, mobile, or Ref. by — Enter selects first match. Ctrl+P to print.</p>
+          <p style={styles.subtitle}>
+            Search <strong>order #</strong>, name, mobile, Ref. by, or <strong>scan bill barcode</strong> (focus here; Enter opens). Selected report stays at top of the list. Ctrl+P to print.
+          </p>
         </div>
       </div>
 
@@ -328,23 +355,59 @@ export default function Reports() {
             />
           </div>
           <div style={{ ...styles.filterCol, flex: 1 }}>
-            <label style={styles.label}>Search (Enter = first match)</label>
+            <label style={styles.label}>Search or barcode scan</label>
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Patient name, mobile, or Ref. by..."
+              autoComplete="off"
+              placeholder="Order #, name, mobile, referrer, or scan barcode…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                void (async () => {
+                  const qRaw = search.trim();
+                  const byCode = await fetchOrderByAccessCode(qRaw);
+                  if (byCode) {
+                    let od = '';
+                    if (byCode.order_date) {
+                      const s = String(byCode.order_date);
+                      od = s.length >= 10 ? s.slice(0, 10) : s;
+                    }
+                    if (!od) od = toLocalDateStr(new Date());
+                    setOrderFilter((f) => {
+                      const curFrom = f.dateFrom || od;
+                      const curTo = f.dateTo || od;
+                      return {
+                        dateFrom: curFrom <= od ? curFrom : od,
+                        dateTo: curTo >= od ? curTo : od,
+                      };
+                    });
+                    setSelectedOrder(byCode);
+                    setSearch('');
+                    navigate('/reports', { replace: true });
+                    setPrintFeedback(`Loaded order #${byCode.id} from barcode`);
+                    setTimeout(() => setPrintFeedback(''), 3500);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setTimeout(() => searchInputRef.current?.focus?.(), 100);
+                    return;
+                  }
+                  const qEnter = search.trim();
+                  const qLower = qEnter.toLowerCase();
                   const list = orders.filter((o) => {
-                    if (!search?.trim()) return true;
-                    const q = search.trim().toLowerCase();
-                    return (o.patient_name?.toLowerCase().includes(q)) || (o.pt_id?.toLowerCase().includes(q)) || (o.phone?.includes(search.trim())) || (o.referred_by?.toLowerCase().includes(q));
+                    if (!qEnter) return true;
+                    if (/^\d+$/.test(qEnter) && String(o.id) === qEnter) return true;
+                    return (
+                      (o.patient_name?.toLowerCase().includes(qLower))
+                      || (o.pt_id?.toLowerCase().includes(qLower))
+                      || (o.phone?.includes(qEnter))
+                      || (o.referred_by?.toLowerCase().includes(qLower))
+                      || (o.access_code?.toLowerCase().includes(qLower))
+                    );
                   });
                   if (list.length > 0) setSelectedOrder(list[0]);
-                }
+                })();
               }}
               style={styles.searchInput}
             />
@@ -365,7 +428,7 @@ export default function Reports() {
               <option value="">— Choose order —</option>
               {filteredOrders.map((o) => (
                 <option key={o.id} value={o.id}>
-                  #{o.id} — {o.pt_id} — {o.patient_name}
+                  #{o.id}{o.access_code ? ` [${o.access_code}]` : ''} — {o.pt_id} — {o.patient_name}
                 </option>
               ))}
             </select>
@@ -396,7 +459,7 @@ export default function Reports() {
           {!hasResults && (
             <div style={styles.reportCard} className="no-print">
               <p style={styles.hint}>No results entered yet for this order. Enter results first.</p>
-              <button style={styles.actionBtn} onClick={() => navigate(`/result-entry?order=${reportData.id}`)}>Go to Result Entry</button>
+              <button type="button" style={styles.actionBtn} onClick={() => navigate(`/result-entry?order=${reportData.id}`)}>Go to Result Entry</button>
             </div>
           )}
           <div style={styles.reportCardWrap} className="report-card-wrap">
@@ -440,6 +503,12 @@ export default function Reports() {
                     <span style={styles.patientLabel}>Address</span>
                     <span style={styles.patientValue}>{reportData.address || '—'}</span>
                   </div>
+                  {reportData.access_code && (
+                    <div style={styles.reportBarcodeSection} className="report-barcode-section">
+                      <span style={styles.patientLabel}>Bill barcode</span>
+                      <OrderBarcode value={reportData.access_code} height={36} fontSize={10} />
+                    </div>
+                  )}
                   <div style={styles.reportDate}>Report Date: {formatDate(new Date())}</div>
                 </div>
                 <div style={styles.departmentTitle}>{sectionName}</div>
@@ -488,11 +557,11 @@ export default function Reports() {
               ))}
             </select>
             {typeof window.electronPrintPreview === 'function' ? (
-              <button style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn" title="Opens report in new window — use Ctrl+P there to print">
+              <button type="button" style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn" title="Opens report in new window — use Ctrl+P there to print">
                 🖨 View & Print
               </button>
             ) : (
-              <button style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn">
+              <button type="button" style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn">
                 🖨 Print Report
               </button>
             )}
@@ -507,13 +576,13 @@ export default function Reports() {
       {!selectedOrder && orders.length > 0 && (
         <div className="no-print" style={styles.hintWrap}>
           <p style={styles.hint}>Select an order above to view and print.</p>
-          <button style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
+          <button type="button" style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
         </div>
       )}
       {orders.length === 0 && (
         <div className="no-print" style={styles.hintWrap}>
           <p style={styles.hint}>No orders in this date range.</p>
-          <button style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
+          <button type="button" style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
         </div>
       )}
     </div>
@@ -615,6 +684,15 @@ const styles = {
   patientLabel: { fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px' },
   patientValue: { fontSize: 11, fontWeight: 500, color: '#334155' },
   patientAddress: { display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 6, borderTop: '1px dashed #e2e8f0' },
+  reportBarcodeSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    alignItems: 'center',
+    paddingTop: 8,
+    marginTop: 6,
+    borderTop: '1px dashed #e2e8f0',
+  },
   reportDate: { fontSize: 11, fontWeight: 600, color: '#0d7377', marginTop: 6, paddingTop: 4 },
   departmentTitle: { fontSize: 14, fontWeight: 700, marginTop: 10, marginBottom: 10, color: '#0d7377', borderBottom: '2px solid #0d7377', paddingBottom: 6, textAlign: 'center', letterSpacing: '0.5px', textTransform: 'uppercase' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },

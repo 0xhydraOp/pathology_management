@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { formatOrderDateMediumIN } from '../utils/dateDisplay';
+import { showToast } from '../utils/toastBus';
 
 function toLocalDateStr(d) {
   const y = d.getFullYear();
@@ -105,7 +107,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       }
     } catch (e) {
       console.error(e);
-      alert('Error saving.');
+      showToast('Error saving.', 'error');
     } finally {
       setSaving(false);
     }
@@ -116,7 +118,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       <div style={styles.container}>
         <h1 style={styles.title}>Batch Entry</h1>
         <p style={styles.subtitle}>No pending orders. Register patients and add tests first.</p>
-        <button style={styles.btnSecondary} onClick={onClose}>Back</button>
+        <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
       </div>
     );
   }
@@ -125,7 +127,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       <div style={styles.container}>
         <h1 style={styles.title}>Batch Entry</h1>
         <p style={styles.subtitle}>No numeric test parameters found. Add parameters in Settings first.</p>
-        <button style={styles.btnSecondary} onClick={onClose}>Back</button>
+        <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
       </div>
     );
   }
@@ -135,7 +137,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       <div style={styles.container}>
         <h1 style={styles.title}>Batch Entry</h1>
         <p style={styles.subtitle}>No pending orders have the selected test. Try another test or add orders first.</p>
-        <button style={styles.btnSecondary} onClick={onClose}>Back</button>
+        <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
       </div>
     );
   }
@@ -169,13 +171,13 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
               style={styles.input}
               autoFocus
             />
-            <button style={styles.btnPrimary} onClick={saveCurrentAndNext} disabled={saving}>
+            <button type="button" style={styles.btnPrimary} onClick={saveCurrentAndNext} disabled={saving}>
               {saving ? 'Saving...' : 'Save & Next'}
             </button>
           </div>
         </div>
       )}
-      <button style={styles.btnSecondary} onClick={onClose}>Cancel / Done</button>
+      <button type="button" style={styles.btnSecondary} onClick={onClose}>Cancel / Done</button>
     </div>
   );
 }
@@ -458,11 +460,11 @@ export default function ResultEntrySimple() {
       const numVal = parseFloat(value);
       if (!isNaN(numVal)) {
         if (test.min_allowed_value != null && numVal < test.min_allowed_value) {
-          alert(`${test.name}: Value must be >= ${test.min_allowed_value}`);
+          showToast(`${test.name}: Value must be ≥ ${test.min_allowed_value}`, 'warning');
           return;
         }
         if (test.max_allowed_value != null && numVal > test.max_allowed_value) {
-          alert(`${test.name}: Value must be <= ${test.max_allowed_value}`);
+          showToast(`${test.name}: Value must be ≤ ${test.max_allowed_value}`, 'warning');
           return;
         }
       }
@@ -576,7 +578,7 @@ export default function ResultEntrySimple() {
       }
     } catch (e) {
       console.error(e);
-      alert('Error saving. Please try again.');
+      showToast('Error saving. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -683,6 +685,7 @@ export default function ResultEntrySimple() {
                 style={styles.pendingSearchInput}
               />
               <button
+                type="button"
                 style={styles.refreshBtn}
                 onClick={loadPendingOrders}
                 disabled={pendingRefreshLoading}
@@ -701,9 +704,9 @@ export default function ResultEntrySimple() {
                   : 'No matches for your filter. Try a different search.'}
               </div>
               {pendingOrders.length === 0 ? (
-                <button style={styles.emptyActionBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+                <button type="button" style={styles.emptyActionBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
               ) : (
-                <button style={styles.emptyActionBtn} onClick={() => setPendingSearch('')}>Clear filter</button>
+                <button type="button" style={styles.emptyActionBtn} onClick={() => setPendingSearch('')}>Clear filter</button>
               )}
             </div>
           ) : (
@@ -721,10 +724,7 @@ export default function ResultEntrySimple() {
                   <span style={styles.pendingPtId}>{o.patient_id || '—'}</span>
                   <span style={styles.pendingRef}>{o.referred_by || '—'}</span>
                   <span style={styles.pendingDate}>
-                    {o.order_date ? (() => {
-                      const d = new Date(o.order_date);
-                      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-                    })() : '—'}
+                    {formatOrderDateMediumIN(o.order_date)}
                   </span>
                   <span style={styles.pendingStatus}>{o.status}</span>
                 </div>
@@ -773,7 +773,7 @@ export default function ResultEntrySimple() {
                   }}
                   onClick={() => setSelectedOrder(o)}
                 >
-                  Order #{o.id} — {o.order_date || '—'} ({o.status})
+                  Order #{o.id} — {formatOrderDateMediumIN(o.order_date)} ({o.status})
                 </div>
               ))}
               {orders.length === 0 && <div style={styles.empty}>No orders for this patient</div>}
@@ -786,7 +786,7 @@ export default function ResultEntrySimple() {
         )}
 
         <div style={styles.batchModeRow}>
-          <button style={styles.batchModeBtn} onClick={() => setBatchMode(true)}>
+          <button type="button" style={styles.batchModeBtn} onClick={() => setBatchMode(true)}>
             ⚡ Batch entry — enter one test for multiple patients
           </button>
         </div>
@@ -857,8 +857,8 @@ export default function ResultEntrySimple() {
             <p>{criticalPending.test?.name}: {criticalPending.value}</p>
             <p style={{ fontSize: 12, color: '#666' }}>Please confirm this result is correct.</p>
             <div style={styles.modalActions}>
-              <button style={styles.btnConfirm} onClick={confirmCritical}>Confirm result</button>
-              <button style={styles.btnCancel} onClick={() => setCriticalPending(null)}>Edit</button>
+              <button type="button" style={styles.btnConfirm} onClick={confirmCritical}>Confirm result</button>
+              <button type="button" style={styles.btnCancel} onClick={() => setCriticalPending(null)}>Edit</button>
             </div>
           </div>
         </div>
@@ -877,8 +877,8 @@ export default function ResultEntrySimple() {
               ))}
             </ul>
             <div style={styles.modalActions}>
-              <button style={styles.btnPrimary} onClick={confirmValidationProceed}>Save anyway</button>
-              <button style={styles.btnCancel} onClick={() => setShowValidationSummary(false)}>Edit</button>
+              <button type="button" style={styles.btnPrimary} onClick={confirmValidationProceed}>Save anyway</button>
+              <button type="button" style={styles.btnCancel} onClick={() => setShowValidationSummary(false)}>Edit</button>
             </div>
           </div>
         </div>
@@ -957,16 +957,16 @@ export default function ResultEntrySimple() {
       </div>
 
       <div style={styles.actions}>
-        <button tabIndex={100} style={styles.btnPrimary} onClick={handleSaveClick} disabled={saving}>
+        <button type="button" tabIndex={100} style={styles.btnPrimary} onClick={handleSaveClick} disabled={saving}>
           {saving ? 'Saving...' : 'Save & Print Report'}
         </button>
-        <button style={styles.btnSaveOnly} onClick={() => handleSaveOnlyClick(false)} disabled={saving} title="Save without printing, stay on current order">
+        <button type="button" style={styles.btnSaveOnly} onClick={() => handleSaveOnlyClick(false)} disabled={saving} title="Save without printing, stay on current order">
           Save only
         </button>
-        <button style={styles.btnNext} onClick={() => handleSaveOnlyClick(true)} disabled={saving} title="Save and open next pending order">
+        <button type="button" style={styles.btnNext} onClick={() => handleSaveOnlyClick(true)} disabled={saving} title="Save and open next pending order">
           Next pending →
         </button>
-        <button style={styles.btnSecondary} onClick={goBack}>
+        <button type="button" style={styles.btnSecondary} onClick={goBack}>
           Back to Select Patient
         </button>
       </div>

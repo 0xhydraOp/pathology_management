@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { showToast } from '../utils/toastBus';
 
 function toLocalDateStr(d) {
   const y = d.getFullYear();
@@ -50,9 +51,15 @@ export default function NewRegistration() {
           const validIds = new Set(parameters.map((p) => p.id));
           const validTests = (parsed.tests || []).filter((id) => validIds.has(id));
           setForm((prev) => ({ ...prev, ...parsed, tests: validTests }));
+        } else {
+          setForm((prev) => ({ ...prev, referred_by: 'Self' }));
         }
+      } else {
+        setForm((prev) => ({ ...prev, referred_by: 'Self' }));
       }
-    } catch (_) {}
+    } catch (_) {
+      setForm((prev) => ({ ...prev, referred_by: 'Self' }));
+    }
   }, [formVisible, parameters]);
 
   useEffect(() => {
@@ -64,23 +71,27 @@ export default function NewRegistration() {
 
   const referredByRef = useRef(null);
   useEffect(() => {
-    if ((form.referred_by?.length ?? 0) < 2 || !window.db) {
+    const q = (form.referred_by ?? '').trim();
+    if (q.length < 1 || !window.db) {
       setReferrerSuggestions([]);
       referredByRef.current = null;
       return;
     }
-    const q = form.referred_by;
     referredByRef.current = q;
     const id = setTimeout(() => {
       window.db.all(
-        `SELECT DISTINCT referred_by FROM patients WHERE referred_by LIKE ? AND referred_by != '' LIMIT 10`,
-        [`%${q}%`]
+        `SELECT name FROM (
+          SELECT DISTINCT referred_by as name FROM patients WHERE referred_by LIKE ? AND referred_by != ''
+          UNION
+          SELECT referrer_name as name FROM referrer_commission_pct WHERE referrer_name LIKE ?
+        ) ORDER BY name LIMIT 15`,
+        [`%${q}%`, `%${q}%`]
       ).then((rows) => {
-        if (referredByRef.current === q) setReferrerSuggestions((rows || []).map((r) => r.referred_by));
+        if (referredByRef.current === q) setReferrerSuggestions((rows || []).map((r) => r.name));
       }).catch(() => {
         if (referredByRef.current === q) setReferrerSuggestions([]);
       });
-    }, 300);
+    }, 200);
     return () => {
       clearTimeout(id);
       referredByRef.current = null;
@@ -99,7 +110,7 @@ export default function NewRegistration() {
     e.preventDefault();
     if (!form.name.trim() || !window.db) return;
     if (form.tests.length === 0) {
-      alert('Please select at least one test.');
+      showToast('Please select at least one test.', 'warning');
       return;
     }
     setSaving(true);
@@ -147,7 +158,7 @@ export default function NewRegistration() {
       }, 600);
     } catch (err) {
       console.error(err);
-      alert('Error saving. Please try again.');
+      showToast('Error saving. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -254,15 +265,36 @@ export default function NewRegistration() {
           </div>
           <div style={styles.field}>
             <label>Referred by</label>
-            <input
-              tabIndex={6}
-              value={form.referred_by ?? ''}
-              onChange={(e) => setForm({ ...form, referred_by: e.target.value })}
-              style={styles.input}
-              list="referrers"
-              placeholder="Doctor / Clinic name (type to see suggestions)"
-            />
+            <div style={styles.referredByWrap}>
+              <input
+                tabIndex={6}
+                value={form.referred_by ?? ''}
+                onChange={(e) => setForm({ ...form, referred_by: e.target.value })}
+                style={{ ...styles.input, ...styles.referredByInput }}
+                list="referrers"
+                placeholder="Type 1–2 letters to search, or click Self for walk-in"
+              />
+              <button
+                type="button"
+                tabIndex={7}
+                onClick={() => setForm((prev) => ({ ...prev, referred_by: prev.referred_by === 'Self' ? '' : 'Self' }))}
+                style={{ ...styles.selfBtn, ...(form.referred_by === 'Self' ? styles.selfBtnActive : {}) }}
+                title="Walk-in patient (toggle to clear)"
+              >
+                Self
+              </button>
+              <button
+                type="button"
+                tabIndex={8}
+                onClick={() => setForm({ ...form, referred_by: '' })}
+                style={styles.clearBtn}
+                title="Clear referrer"
+              >
+                Clear
+              </button>
+            </div>
             <datalist id="referrers">
+              <option value="Self" />
               {referrerSuggestions.map((r) => (
                 <option key={r} value={r} />
               ))}
@@ -272,7 +304,7 @@ export default function NewRegistration() {
 
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Tests to be done</h3>
-          <p style={styles.testHint}>Tick each test required. Includes Surgery tests (hysterectomy, fissurectomy, appendix, normal delivery, gallbladder, hernia) for Indian rural labs.</p>
+          <p style={styles.testHint}>Tick each test required. Tests are grouped by department (same sections as in Test Prices / reports).</p>
           <div style={styles.testGrid}>
             {orderedSections.map((sectionName) => {
               const sectionParams = testsBySection[sectionName];
@@ -299,13 +331,13 @@ export default function NewRegistration() {
 
         {saveFeedback && <p style={{ color: '#0d7377', marginBottom: 12, fontSize: 14 }}>{saveFeedback}</p>}
         <div style={styles.actions}>
-          <button tabIndex={7} type="submit" style={styles.btnPrimary} disabled={saving}>
+          <button tabIndex={9} type="submit" style={styles.btnPrimary} disabled={saving}>
             {saving ? 'Saving...' : 'Save & Go to Result Entry'}
           </button>
-          <button type="button" onClick={() => setFormVisible(false)} style={styles.btnSecondary}>
+          <button type="button" tabIndex={10} onClick={() => setFormVisible(false)} style={styles.btnSecondary}>
             Close form
           </button>
-          <button type="button" onClick={() => navigate('/')} style={styles.btnSecondary}>
+          <button type="button" tabIndex={11} onClick={() => navigate('/')} style={styles.btnSecondary}>
             Cancel
           </button>
         </div>
@@ -338,6 +370,11 @@ const styles = {
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 },
   field: { marginBottom: 16 },
   input: { width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 },
+  referredByWrap: { display: 'flex', gap: 6, alignItems: 'center' },
+  referredByInput: { flex: 1, minWidth: 0 },
+  selfBtn: { padding: '10px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
+  selfBtnActive: { background: '#0d7377', color: '#fff', borderColor: '#0d7377' },
+  clearBtn: { padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', color: '#64748b' },
   testHint: { fontSize: 13, color: '#666', marginBottom: 16 },
   testGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 },
   testGroup: { background: '#f8f9fa', padding: 16, borderRadius: 8, border: '1px solid #eee' },

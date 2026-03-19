@@ -148,6 +148,8 @@ const styles = {
     fontSize: 15,
     marginTop: 4,
     transition: 'border-color 0.2s, box-shadow 0.2s',
+    color: '#1e293b',
+    backgroundColor: '#ffffff',
   },
   errorWrap: { marginBottom: 4 },
   error: {

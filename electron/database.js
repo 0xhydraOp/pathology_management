@@ -54,7 +54,81 @@ class DatabaseManager {
       'ALTER TABLE lab ADD COLUMN commission_default_percent REAL',
     ];
     alters.forEach((sql) => { try { this.db.run(sql); } catch (_) {} });
-    try { this.run('UPDATE lab SET commission_default_percent = 40 WHERE id = 1 AND commission_default_percent IS NULL'); } catch (_) {}
+    try { this.run('UPDATE lab SET commission_default_percent = 45 WHERE id = 1 AND commission_default_percent IS NULL'); } catch (_) {}
+    try {
+      this.db.run(`CREATE TABLE IF NOT EXISTS referrer_commission_pct (
+        referrer_name TEXT PRIMARY KEY,
+        commission_percent REAL NOT NULL DEFAULT 45,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
+    } catch (_) {}
+    try {
+      this.db.run('ALTER TABLE orders ADD COLUMN access_code TEXT');
+    } catch (_) {}
+    try {
+      this.db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_access_code ON orders(access_code)');
+    } catch (_) {}
+    this.backfillOrderAccessCodes();
+    this.migrateParameterNames();
+  }
+
+  /** Unique barcode / scan value per order (bill). Uppercase A–Z and 2–9 only — scanner-friendly. */
+  generateUniqueOrderAccessCode() {
+    const C = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let attempt = 0; attempt < 100; attempt++) {
+      let code = '';
+      for (let i = 0; i < 10; i++) code += C[crypto.randomInt(0, C.length)];
+      const clash = this.get('SELECT 1 AS x FROM orders WHERE access_code = ?', [code]);
+      if (!clash) return code;
+    }
+    throw new Error('Could not generate unique access_code');
+  }
+
+  ensureOrderAccessCode(orderId) {
+    const row = this.get('SELECT id, access_code FROM orders WHERE id = ?', [orderId]);
+    if (!row) return;
+    const cur = row.access_code != null ? String(row.access_code).trim() : '';
+    if (cur.length > 0) return;
+    try {
+      const code = this.generateUniqueOrderAccessCode();
+      this.run('UPDATE orders SET access_code = ? WHERE id = ?', [code, orderId]);
+    } catch (e) {
+      console.error('ensureOrderAccessCode failed:', orderId, e.message);
+    }
+  }
+
+  backfillOrderAccessCodes() {
+    try {
+      const need = this.get(
+        `SELECT 1 AS x FROM orders WHERE access_code IS NULL OR TRIM(COALESCE(access_code, '')) = '' LIMIT 1`
+      );
+      if (!need) return;
+      const rows = this.all(
+        'SELECT id FROM orders WHERE access_code IS NULL OR TRIM(COALESCE(access_code, \'\')) = \'\''
+      );
+      (rows || []).forEach((r) => this.ensureOrderAccessCode(r.id));
+      this.save();
+    } catch (_) {}
+  }
+
+  migrateParameterNames() {
+    const projectRoot = path.join(__dirname, '..');
+    const paramsPath = path.join(projectRoot, 'pathology_parameters.json');
+    if (!fs.existsSync(paramsPath)) return;
+    try {
+      const paramsData = JSON.parse(fs.readFileSync(paramsPath, 'utf8'));
+      const parameters = paramsData.parameters || [];
+      const codeToName = {};
+      parameters.forEach((p) => { codeToName[p.code] = p.name; });
+      const rows = this.all('SELECT id, code FROM parameters');
+      (rows || []).forEach((r) => {
+        const name = codeToName[r.code];
+        if (name) {
+          try { this.run('UPDATE parameters SET name = ? WHERE id = ?', [name, r.id], true); } catch (_) {}
+        }
+      });
+      this.save();
+    } catch (_) {}
   }
 
   createTables() {
@@ -560,8 +634,11 @@ class DatabaseManager {
   updateOrderCommission(orderId) {
     const order = this.get('SELECT o.total_amount, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?', [orderId]);
     if (!order || !order.referred_by || (order.referred_by || '').trim() === '') return;
+    const refName = order.referred_by.trim();
+    if (refName.toLowerCase() === 'self') return;
+    const refPct = this.get('SELECT commission_percent FROM referrer_commission_pct WHERE referrer_name = ?', [refName]);
     const lab = this.get('SELECT commission_default_percent FROM lab WHERE id = 1');
-    const pct = parseFloat(lab?.commission_default_percent) ?? 40;
+    const pct = refPct != null ? parseFloat(refPct.commission_percent) : (parseFloat(lab?.commission_default_percent) ?? 45);
     const amount = parseFloat(order.total_amount) || 0;
     const commission = Math.round((amount * pct / 100) * 100) / 100;
     this.run('DELETE FROM order_commission_log WHERE order_id = ?', [orderId]);
@@ -574,6 +651,7 @@ class DatabaseManager {
   computeOrderBillAndCommission(orderId) {
     this.computeOrderBill(orderId);
     this.updateOrderCommission(orderId);
+    this.ensureOrderAccessCode(orderId);
   }
 
   clearAllPatients() {
