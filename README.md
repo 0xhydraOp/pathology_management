@@ -53,6 +53,21 @@ npm run electron:dev
 
 **Login:** admin / admin123
 
+## Windows ZIP in repo (Git LFS)
+
+The packaged **`lfs-releases/*-win.zip`** is tracked with **[Git LFS](https://git-lfs.github.com/)** (too large for normal Git on GitHub).
+
+**Clone with the real ZIP:**
+
+```bash
+git lfs install
+git clone https://github.com/0xhydraOp/pathology_management.git
+cd pathology_management
+git lfs pull
+```
+
+Or download the ZIP from the repo browser on GitHub (GitHub serves LFS files in the UI when LFS is set up).
+
 ## Build Windows installer + ZIP
 
 ```powershell
