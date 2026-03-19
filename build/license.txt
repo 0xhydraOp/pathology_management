@@ -22,9 +22,10 @@ You may not:
 - Remove any copyright or proprietary notices
 
 5. DATA & PRIVACY
-- Patient data is stored locally on your computer
+- Patient data is stored locally on your computer (database, backups, and exports under your Windows app data folder)
 - You are responsible for maintaining data security and compliance with applicable laws
 - Regular backups are recommended
+- Uninstalling the application via Windows may remove that app data folder; export or back up your data first if you need to keep it
 
 6. DISCLAIMER
 The software is provided "as is" without warranty. The developer is not liable for any loss or damage arising from use of this software.

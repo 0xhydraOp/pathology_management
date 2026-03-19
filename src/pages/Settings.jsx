@@ -111,6 +111,40 @@ export default function Settings() {
     }
   };
 
+  const handleBackupToPc = async () => {
+    if (window.db?.backupChooseLocation) {
+      try {
+        const r = await window.db.backupChooseLocation();
+        if (r?.canceled) return;
+        if (r?.ok && r.path) setBackupMessage(`Backup saved on your PC: ${r.path}`);
+        else setBackupMessage(r?.error ? `Error: ${r.error}` : 'Backup failed');
+      } catch (e) {
+        setBackupMessage('Error: ' + e.message);
+      }
+    } else {
+      setBackupMessage('Choose-location backup needs the desktop app.');
+    }
+  };
+
+  const handleBackupEncryptedToPc = async () => {
+    if (window.db?.backupEncryptedChooseLocation) {
+      try {
+        const r = await window.db.backupEncryptedChooseLocation(encryptPassword || undefined);
+        if (r?.canceled) return;
+        if (r?.ok && r.path) {
+          setBackupMessage(`Encrypted backup saved on your PC: ${r.path}`);
+          setEncryptPassword('');
+        } else {
+          setBackupMessage(r?.error ? `Error: ${r.error}` : 'Backup failed');
+        }
+      } catch (e) {
+        setBackupMessage('Error: ' + e.message);
+      }
+    } else {
+      setBackupMessage('Choose-location backup needs the desktop app.');
+    }
+  };
+
   const handleExportExcel = async () => {
     if (window.db?.exportOrdersExcel) {
       try {
@@ -125,7 +159,7 @@ export default function Settings() {
   const handleReloadCatalog = async () => {
     if (window.db) {
       try {
-        await window.db.seed();
+        await window.db.reloadCatalogue();
         setCatalogueMessage('Saved');
         setTimeout(() => setCatalogueMessage(''), 2500);
       } catch (e) {
@@ -187,7 +221,7 @@ export default function Settings() {
           </div>
           <div style={styles.formRow}>
             <label style={styles.label}>Staff list (comma-separated)</label>
-            <input tabIndex={3} value={labConfig.staff_list} onChange={(e) => setLabConfig({ ...labConfig, staff_list: e.target.value })} style={styles.input} placeholder="Admin, Ramesh, Sita" />
+            <input tabIndex={3} value={labConfig.staff_list} onChange={(e) => setLabConfig({ ...labConfig, staff_list: e.target.value })} style={styles.input} placeholder="Staff names, comma-separated" />
           </div>
           <div style={styles.formRow}>
             <label style={styles.label}>Clinical correlation (footer text)</label>
@@ -218,7 +252,10 @@ export default function Settings() {
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>Backup</h3>
           </div>
-          <p style={styles.desc}>Default location: %APPDATA%/MondalDiagnosticCentre/backups/</p>
+          <p style={styles.desc}>
+            Quick backup saves under the app data folder. You can also save a copy anywhere on this PC (Desktop, Documents, USB drive).
+          </p>
+          <p style={{ ...styles.desc, fontSize: 13, color: '#555' }}>Quick backups use the <code style={{ fontSize: 12 }}>backups</code> folder under the path shown in Support (same place as your database).</p>
           {lastBackupDate ? (
             <p style={{ ...styles.desc, marginBottom: 4 }}>
               Last backup: {new Date(lastBackupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -234,10 +271,12 @@ export default function Settings() {
             <p style={{ ...styles.desc, marginBottom: 8, fontSize: 13 }}>Database size: {(dbSize / 1024 / 1024).toFixed(2)} MB</p>
           )}
           <div style={styles.btnGroup}>
-            <button type="button" style={styles.btn} onClick={handleBackup} disabled={!window.db} className="settings-btn">Create Backup Now</button>
+            <button type="button" style={styles.btn} onClick={handleBackup} disabled={!window.db} className="settings-btn">Backup to app folder</button>
+            <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupToPc} disabled={!window.db?.backupChooseLocation} className="settings-btn">Save to PC…</button>
             <div style={styles.encryptRow}>
               <input type="password" value={encryptPassword} onChange={(e) => setEncryptPassword(e.target.value)} placeholder="Password for encrypted backup" style={{ ...styles.input, maxWidth: 220 }} />
-              <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncrypted} disabled={!window.db?.backupEncrypted} className="settings-btn">Encrypted Backup</button>
+              <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncrypted} disabled={!window.db?.backupEncrypted} className="settings-btn">Encrypted (app folder)</button>
+              <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncryptedToPc} disabled={!window.db?.backupEncryptedChooseLocation} className="settings-btn">Encrypted to PC…</button>
             </div>
           </div>
           {backupMessage && <p style={styles.message}>{backupMessage}</p>}
@@ -250,7 +289,7 @@ export default function Settings() {
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>Excel Export</h3>
           </div>
-          <p style={styles.desc}>Export orders to Excel. Saved to %APPDATA%/MondalDiagnosticCentre/exports/</p>
+          <p style={styles.desc}>Export orders to Excel. Files are saved under the <code style={{ fontSize: 12 }}>exports</code> folder in your app data path (see Support).</p>
           <div style={styles.dateRow}>
             <input tabIndex={5} type="date" value={exportDateFrom} onChange={(e) => setExportDateFrom(e.target.value)} style={styles.input} placeholder="From" />
             <span style={styles.dateSep}>→</span>

@@ -293,7 +293,7 @@ async function doPrintPreview() {
 app.whenReady().then(async () => {
   createSplashWindow();
 
-  db = new Database();
+  db = new Database(app.getPath('userData'));
   await db.init();
 
   const safeDb = (fn) => (...args) => { try { return fn(...args); } catch (e) { console.error('DB error:', e); throw e; } };
@@ -302,7 +302,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('db:get', (_, sql, params = []) => safeDb(db.get.bind(db))(sql, params));
   ipcMain.handle('db:all', (_, sql, params = []) => safeDb(db.all.bind(db))(sql, params));
   ipcMain.handle('db:init', () => db.init());
-  ipcMain.handle('db:seed', () => db.seedFromJson());
+  ipcMain.handle('db:reloadCatalogue', () => db.loadCatalogueFromJson());
   ipcMain.handle('db:nextPatientId', () => {
     const DatabaseManager = require('./database');
     return DatabaseManager.getNextPatientId(db);
@@ -310,6 +310,40 @@ app.whenReady().then(async () => {
   ipcMain.handle('db:logPrint', (_, orderId, printedBy) => db.logPrint(orderId, printedBy));
   ipcMain.handle('db:backup', () => db.backup());
   ipcMain.handle('db:backupEncrypted', (_, password) => db.backupEncrypted(password));
+  ipcMain.handle('db:backupChooseLocation', async () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const defaultName = `lab_backup_${timestamp}.db`;
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : BrowserWindow.getFocusedWindow();
+    const { canceled, filePath } = await dialog.showSaveDialog(win || undefined, {
+      title: 'Save backup on your PC',
+      defaultPath: path.join(app.getPath('desktop'), defaultName),
+      filters: [{ name: 'SQLite backup', extensions: ['db'] }],
+    });
+    if (canceled || !filePath) return { ok: false, canceled: true };
+    try {
+      const savedPath = db.backupToPath(filePath);
+      return { ok: true, path: savedPath };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
+  });
+  ipcMain.handle('db:backupEncryptedChooseLocation', async (_, password) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const defaultName = `lab_backup_${timestamp}.db.enc`;
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : BrowserWindow.getFocusedWindow();
+    const { canceled, filePath } = await dialog.showSaveDialog(win || undefined, {
+      title: 'Save encrypted backup on your PC',
+      defaultPath: path.join(app.getPath('desktop'), defaultName),
+      filters: [{ name: 'Encrypted backup', extensions: ['enc'] }],
+    });
+    if (canceled || !filePath) return { ok: false, canceled: true };
+    try {
+      const savedPath = db.backupEncryptedToPath(filePath, password);
+      return { ok: true, path: savedPath };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
+  });
   ipcMain.handle('db:verifyUser', (_, username, password) => db.verifyUser(username, password));
   ipcMain.handle('db:getLabConfig', () => db.get('SELECT name, address, phone, email, registration_no, pathologist_name, default_printed_by, staff_list, clinical_correlation_text FROM lab WHERE id = 1'));
   ipcMain.handle('db:setLabConfig', (_, cfg) => {

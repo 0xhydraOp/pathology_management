@@ -55,9 +55,17 @@ async function main() {
     const lab = db.get('SELECT name FROM lab WHERE id = 1');
     if (!lab) throw new Error('Lab config missing');
     const paramCount = db.get('SELECT COUNT(*) as c FROM parameters');
-    if (!paramCount || paramCount.c < 1) throw new Error('Parameters not seeded');
+    if (!paramCount || paramCount.c < 1) throw new Error('Parameters catalogue not loaded');
     const userCount = db.get('SELECT COUNT(*) as c FROM users');
     if (!userCount || userCount.c < 1) throw new Error('No users in DB');
+  });
+
+  run('Electron packager includes catalogue JSON files', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const files = pkg.build?.files || [];
+    ['pathology_parameters.json', 'rate_chart.json', 'test_profiles.json'].forEach((f) => {
+      if (!files.includes(f)) throw new Error(`package.json build.files must include ${f} (required for catalogue in installed builds)`);
+    });
   });
 
   run('Pathology parameters JSON exists', () => {

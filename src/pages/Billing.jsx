@@ -35,7 +35,7 @@ export default function Billing() {
   const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
   const [unpaidFirst, setUnpaidFirst] = useState(true);
   const [recalcMessage, setRecalcMessage] = useState('');
-  const [labConfig, setLabConfig] = useState({ name: 'MONDAL DIAGNOSTIC CENTRE', email: 'mdtousifrz198@gmail.com', phone: '+91 9153762151', default_printed_by: 'Admin' });
+  const [labConfig, setLabConfig] = useState({ name: 'MONDAL DIAGNOSTIC CENTRE', email: '', phone: '', default_printed_by: 'Admin' });
   const [invoicePrintHint, setInvoicePrintHint] = useState('');
   const invoiceOrderIdRef = useRef(null);
 
@@ -252,8 +252,8 @@ export default function Billing() {
   const handlePaymentToggle = async (order) => {
     if (!window.db || updating || !order) return;
     const orderId = order.id;
-    const currentStatus = order.payment_status;
-    const next = currentStatus === 'paid' ? 'unpaid' : 'paid';
+    const isPaid = String(order.payment_status || '').toLowerCase() === 'paid';
+    const next = isPaid ? 'unpaid' : 'paid';
     const label = order.patient_name || order.patient_id || `Order #${orderId}`;
     const amount = parseFloat(order.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
     const ok = window.confirm(

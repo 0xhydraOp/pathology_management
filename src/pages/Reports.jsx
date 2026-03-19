@@ -113,18 +113,35 @@ export default function Reports() {
   useEffect(() => {
     if (shouldPrint && reportData && (reportData.results?.length ?? 0) > 0 && !autoPrintFiredRef.current) {
       autoPrintFiredRef.current = true;
+      const orderIdForReport = reportData.id;
+      const copies = printCopies;
+      const defaultBy = labConfig.default_printed_by || 'Admin';
       const timer = setTimeout(() => {
-        if (typeof window.electronPrintPreview === 'function') {
-          window.electronPrintPreview();
-        } else if (typeof window.electronPrint === 'function') {
-          window.electronPrint(printCopies);
-        } else {
-          window.print();
-        }
+        void (async () => {
+          if (window.db?.logPrint && orderIdForReport) {
+            try {
+              let printedBy = defaultBy;
+              try {
+                const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
+                printedBy = u.displayName || u.username || defaultBy;
+              } catch (_) { /* use defaultBy */ }
+              await window.db.logPrint(orderIdForReport, printedBy);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          if (typeof window.electronPrintPreview === 'function') {
+            await window.electronPrintPreview();
+          } else if (typeof window.electronPrint === 'function') {
+            await window.electronPrint(copies);
+          } else {
+            window.print();
+          }
+        })();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [reportData, shouldPrint, printCopies]);
+  }, [reportData, shouldPrint, printCopies, labConfig.default_printed_by]);
 
   const selectedOrderIdRef = useRef(null);
   useEffect(() => {

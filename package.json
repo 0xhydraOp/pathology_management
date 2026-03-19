@@ -1,6 +1,6 @@
 {
   "name": "mondal-diagnostic-centre",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Pathology Lab Management System - MONDAL DIAGNOSTIC CENTRE",
   "main": "electron/main.js",
   "scripts": {
@@ -43,7 +43,10 @@
       "dist/**/*",
       "electron/**/*",
       "build/icon.ico",
-      "build/license.txt"
+      "build/license.txt",
+      "pathology_parameters.json",
+      "rate_chart.json",
+      "test_profiles.json"
     ],
     "win": {
       "target": [
@@ -70,7 +73,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "license": "build/license.txt",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": true
     },
     "icon": "build/icon.ico"
   }

@@ -36,7 +36,7 @@ npm run electron:dev
 
 **Important:** Use `electron:dev`, not `npm run dev`. The app needs Electron for the database — running only Vite (dev) shows a blank/broken screen.
 
-**Login:** admin / admin123
+**Login:** `admin` / `admin123` — bootstrap account only; no bundled patient/order data.
 
 ---
 

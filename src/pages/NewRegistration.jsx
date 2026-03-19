@@ -12,6 +12,7 @@ function toLocalDateStr(d) {
 export default function NewRegistration() {
   const navigate = useNavigate();
   const [parameters, setParameters] = useState([]);
+  const [parametersLoading, setParametersLoading] = useState(true);
   const [referrerSuggestions, setReferrerSuggestions] = useState([]);
   const [formVisible, setFormVisible] = useState(false);
   const [form, setForm] = useState({
@@ -20,18 +21,32 @@ export default function NewRegistration() {
     sex: 'male',
     phone: '',
     address: '',
-    referred_by: '',
+    referred_by: 'Self',
     tests: [],
   });
   const [saving, setSaving] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState('');
   const STORAGE_KEY = 'mondal_new_registration_draft';
 
+  const emptyRegistrationForm = () => ({
+    name: '',
+    age: '',
+    sex: 'male',
+    phone: '',
+    address: '',
+    referred_by: 'Self',
+    tests: [],
+  });
+
   useEffect(() => {
     if (window.db) {
-      window.db.all('SELECT id, code, name, section, display_order, type FROM parameters ORDER BY section, display_order')
+      window.db
+        .all('SELECT id, code, name, section, display_order, type FROM parameters ORDER BY section, display_order')
         .then((rows) => setParameters(rows || []))
-        .catch(console.error);
+        .catch(console.error)
+        .finally(() => setParametersLoading(false));
+    } else {
+      setParametersLoading(false);
     }
   }, []);
 
@@ -43,29 +58,48 @@ export default function NewRegistration() {
     }
     if (hasRestoredDraftRef.current || parameters.length === 0) return;
     hasRestoredDraftRef.current = true;
+    /** Always open with no tests ticked; draft only restores patient/referrer fields (not test selection). */
+    const base = emptyRegistrationForm();
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.tests)) {
-          const validIds = new Set(parameters.map((p) => p.id));
-          const validTests = (parsed.tests || []).filter((id) => validIds.has(id));
-          setForm((prev) => ({ ...prev, ...parsed, tests: validTests }));
-        } else {
-          setForm((prev) => ({ ...prev, referred_by: 'Self' }));
+        if (parsed && typeof parsed === 'object') {
+          const ref = parsed.referred_by != null ? String(parsed.referred_by).trim() : '';
+          setForm({
+            ...base,
+            name: typeof parsed.name === 'string' ? parsed.name : '',
+            age: parsed.age != null && parsed.age !== '' ? String(parsed.age) : '',
+            sex: parsed.sex === 'female' ? 'female' : 'male',
+            phone: typeof parsed.phone === 'string' ? parsed.phone : '',
+            address: typeof parsed.address === 'string' ? parsed.address : '',
+            referred_by: ref !== '' ? parsed.referred_by : 'Self',
+            tests: [],
+          });
+          return;
         }
-      } else {
-        setForm((prev) => ({ ...prev, referred_by: 'Self' }));
       }
+      setForm(base);
     } catch (_) {
-      setForm((prev) => ({ ...prev, referred_by: 'Self' }));
+      setForm(base);
     }
   }, [formVisible, parameters]);
 
   useEffect(() => {
-    if (!formVisible || (!form.name && !(form.referred_by ?? '').trim() && form.tests.length === 0)) return;
+    if (!formVisible) return;
+    const ref = (form.referred_by ?? '').trim();
+    const meaningfulRef = ref && ref.toLowerCase() !== 'self';
+    if (!form.name && !meaningfulRef && !form.phone && !form.address && form.tests.length === 0) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+      const draft = {
+        name: form.name,
+        age: form.age,
+        sex: form.sex,
+        phone: form.phone,
+        address: form.address,
+        referred_by: form.referred_by,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
     } catch (_) {}
   }, [form, formVisible]);
 
@@ -129,6 +163,10 @@ export default function NewRegistration() {
         ]
       );
       const pid = patientRes?.lastInsertRowid ?? (await window.db.get('SELECT id FROM patients WHERE patient_id = ?', [patientId]))?.id;
+      if (!pid) {
+        showToast('Could not save patient record. Please try again.', 'error');
+        return;
+      }
 
       const orderDate = toLocalDateStr(new Date());
       const orderRes = await window.db.run(
@@ -136,6 +174,10 @@ export default function NewRegistration() {
         [pid, form.referred_by || null, orderDate]
       );
       const orderId = orderRes?.lastInsertRowid ?? (await window.db.get('SELECT id FROM orders WHERE patient_id = ? ORDER BY id DESC LIMIT 1', [pid]))?.id;
+      if (!orderId) {
+        showToast('Could not create bill for this patient. Please try again.', 'error');
+        return;
+      }
 
       for (let i = 0; i < form.tests.length; i++) {
         await window.db.run(`INSERT INTO order_tests (order_id, parameter_id, display_order) VALUES (?, ?, ?)`, [
@@ -147,7 +189,7 @@ export default function NewRegistration() {
 
       await window.db.computeOrderBillAndCommission(orderId);
 
-      setForm({ name: '', age: '', sex: 'male', phone: '', address: '', referred_by: '', tests: [] });
+      setForm(emptyRegistrationForm());
       try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
       setSaveFeedback('Saved');
       const validOrderId = orderId && !isNaN(parseInt(orderId, 10));
@@ -197,7 +239,7 @@ export default function NewRegistration() {
           <span style={styles.registerText}>Register new patient</span>
           <span style={styles.registerHint}>Click or double-click to open form</span>
         </div>
-        <button style={styles.addPatientBtn} onClick={() => setFormVisible(true)}>+ Add patient</button>
+        <button type="button" style={styles.addPatientBtn} onClick={() => setFormVisible(true)}>+ Add patient</button>
       </div>
     );
   }
@@ -305,6 +347,16 @@ export default function NewRegistration() {
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Tests to be done</h3>
           <p style={styles.testHint}>Tick each test required. Tests are grouped by department (same sections as in Test Prices / reports).</p>
+          {!parametersLoading && parameters.length === 0 && (
+            <div style={styles.catalogueWarning}>
+              <strong>No tests in the catalogue.</strong> This usually happens if the app was installed from a build that did not bundle catalogue JSON, or the catalogue was never loaded.
+              <div style={{ marginTop: 10 }}>
+                Go to <button type="button" style={styles.catalogueLinkBtn} onClick={() => navigate('/settings')}>Settings</button>
+                {' '}and click <strong>Reload Catalogue</strong>. If that does not help, update the app or reinstall from a build that includes <code style={styles.codeTiny}>pathology_parameters.json</code>.
+              </div>
+            </div>
+          )}
+          {parametersLoading && <p style={styles.testHint}>Loading test list…</p>}
           <div style={styles.testGrid}>
             {orderedSections.map((sectionName) => {
               const sectionParams = testsBySection[sectionName];
@@ -384,4 +436,25 @@ const styles = {
   actions: { display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 },
   btnPrimary: { background: '#0d7377', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 600, fontSize: 15 },
   btnSecondary: { background: '#eee', border: 'none', padding: '12px 24px', borderRadius: 8, fontSize: 15 },
+  catalogueWarning: {
+    background: '#fff7ed',
+    border: '1px solid #fdba74',
+    color: '#9a3412',
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  catalogueLinkBtn: {
+    background: '#0d7377',
+    color: '#fff',
+    border: 'none',
+    padding: '6px 14px',
+    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  codeTiny: { fontSize: 12, background: '#fee2e2', padding: '2px 6px', borderRadius: 4 },
 };

@@ -1,5 +1,6 @@
 /**
- * Clear all patients, orders, and results from the database.
+ * Wipe all transactional lab data (patients, orders, results, etc.).
+ * Does not remove users or the investigation catalogue. For admin / support only.
  * Run: node scripts/clear-all-data.js
  */
 const path = require('path');

@@ -546,16 +546,14 @@ export default function ResultEntrySimple() {
       const filled = tests.filter((t) => {
         const r = results[t.id];
         const d = getResultDisplay(t);
-        return t.type === 'derived' ? d.display !== '—' : (r?.value != null || r?.text != null);
+        if (t.type === 'derived') return d.display !== '—';
+        if (t.type === 'numeric') return r?.value != null && r.value !== '';
+        if (t.type === 'text') return r?.text != null && String(r.text).trim() !== '';
+        return (r?.value != null && r.value !== '') || (r?.text != null && String(r.text).trim() !== '');
       }).length;
       const status = filled >= tests.length ? 'complete' : filled > 0 ? 'partial' : 'pending';
       await window.db.run('UPDATE orders SET status = ? WHERE id = ?', [status, order.id]);
-      let printedBy = 'Admin';
-      try {
-        const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
-        printedBy = u?.displayName || u?.username || printedBy;
-      } catch (_) {}
-      await window.db.logPrint(order.id, printedBy);
+      /* report_print_log: recorded in Reports.jsx (manual Print + ?print=1 auto-print) so each print action logs once. */
       setHasUnsavedChanges(false);
       if (doPrint) {
         navigate(`/reports?order=${order.id}&print=1`);

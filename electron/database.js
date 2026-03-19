@@ -11,16 +11,52 @@ function hashPassword(pw) {
 }
 
 class DatabaseManager {
-  constructor() {
-    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
-    const dbDir = path.join(userData, 'MondalDiagnosticCentre');
-    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-    this.dbPath = path.join(dbDir, 'lab.db');
+  /**
+   * @param {string|null} electronUserDataPath - From Electron: `app.getPath('userData')`. One folder for DB,
+   *   backups, exports — matches Windows installer uninstall ("remove app data"). If null (CLI/tests), uses legacy path.
+   */
+  constructor(electronUserDataPath = null) {
+    if (electronUserDataPath) {
+      this.dataRoot = path.normalize(electronUserDataPath);
+    } else {
+      const roaming = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
+      this.dataRoot = path.join(roaming, 'MondalDiagnosticCentre');
+    }
+    if (!fs.existsSync(this.dataRoot)) fs.mkdirSync(this.dataRoot, { recursive: true });
+    this.dbPath = path.join(this.dataRoot, 'lab.db');
     this.db = null;
     this.SQL = null;
   }
 
+  /** Pre-v1.0.2 location: %APPDATA%\\MondalDiagnosticCentre */
+  static legacyAppDataDir() {
+    const roaming = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
+    return path.join(roaming, 'MondalDiagnosticCentre');
+  }
+
+  _backupDir() {
+    return path.join(this.dataRoot, 'backups');
+  }
+
+  _exportDir() {
+    return path.join(this.dataRoot, 'exports');
+  }
+
+  /** Copy lab.db from old folder if this install uses Electron userData and DB file not present yet. */
+  migrateFromLegacyIfNeeded() {
+    if (fs.existsSync(this.dbPath)) return;
+    const legacyDb = path.join(DatabaseManager.legacyAppDataDir(), 'lab.db');
+    if (!fs.existsSync(legacyDb)) return;
+    try {
+      fs.copyFileSync(legacyDb, this.dbPath);
+      console.log('[DB] Migrated lab.db from legacy folder into app userData.');
+    } catch (e) {
+      console.error('[DB] Legacy migration failed:', e.message);
+    }
+  }
+
   async init() {
+    this.migrateFromLegacyIfNeeded();
     this.SQL = await initSqlJs();
     if (fs.existsSync(this.dbPath)) {
       const buf = fs.readFileSync(this.dbPath);
@@ -32,7 +68,7 @@ class DatabaseManager {
     this.createTables();
     this.migrate();
     const count = this.get('SELECT COUNT(*) as c FROM parameters');
-    if (count && count.c === 0) this.seedFromJson();
+    if (count && count.c === 0) this.loadCatalogueFromJson();
     this.save();
   }
 
@@ -344,7 +380,8 @@ class DatabaseManager {
     return hash === user.password_hash ? { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.username } : null;
   }
 
-  seedFromJson() {
+  /** Load investigation catalogue / rates / profiles from bundled JSON (not patient or order data). */
+  loadCatalogueFromJson() {
     const projectRoot = path.join(__dirname, '..');
     const paramsPath = path.join(projectRoot, 'pathology_parameters.json');
     const profilesPath = path.join(projectRoot, 'test_profiles.json');
@@ -425,40 +462,47 @@ class DatabaseManager {
       }
     }
 
+    /** Profiles must match current parameter ids; never leave old rows after a catalogue reload. */
+    const clearTestProfiles = () => {
+      this.run('DELETE FROM profile_parameters', [], batch);
+      this.run('DELETE FROM test_profiles', [], batch);
+    };
+
     if (fs.existsSync(profilesPath)) {
-      let profilesData;
+      let profilesData = null;
       try {
         profilesData = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
       } catch (e) {
         console.error('Failed to load test_profiles.json:', e.message);
-        return;
       }
-      const profiles = profilesData.profiles || [];
-      this.run('DELETE FROM profile_parameters', [], batch);
-      this.run('DELETE FROM test_profiles', [], batch);
-
-      let profileId = 1;
-      for (const pf of profiles) {
-        this.run(
-          `INSERT INTO test_profiles (id, name, section, display_order) VALUES (?, ?, ?, ?)`,
-          [profileId, pf.name, pf.section || '', pf.display_order || profileId],
-          batch
-        );
-        const tests = pf.tests || [];
-        const codeToId = {};
-        const allParams = this.all('SELECT id, code FROM parameters');
-        (allParams || []).forEach((x) => (codeToId[x.code] = x.id));
-        tests.forEach((code, idx) => {
-          if (codeToId[code]) {
-            this.run(
-              `INSERT INTO profile_parameters (profile_id, parameter_id, display_order) VALUES (?, ?, ?)`,
-              [profileId, codeToId[code], idx + 1],
-              batch
-            );
-          }
-        });
-        profileId++;
+      const profiles = profilesData && Array.isArray(profilesData.profiles) ? profilesData.profiles : null;
+      clearTestProfiles();
+      if (profiles) {
+        let profileId = 1;
+        for (const pf of profiles) {
+          this.run(
+            `INSERT INTO test_profiles (id, name, section, display_order) VALUES (?, ?, ?, ?)`,
+            [profileId, pf.name, pf.section || '', pf.display_order || profileId],
+            batch
+          );
+          const tests = pf.tests || [];
+          const codeToId = {};
+          const allParams = this.all('SELECT id, code FROM parameters');
+          (allParams || []).forEach((x) => (codeToId[x.code] = x.id));
+          tests.forEach((code, idx) => {
+            if (codeToId[code]) {
+              this.run(
+                `INSERT INTO profile_parameters (profile_id, parameter_id, display_order) VALUES (?, ?, ?)`,
+                [profileId, codeToId[code], idx + 1],
+                batch
+              );
+            }
+          });
+          profileId++;
+        }
       }
+    } else {
+      clearTestProfiles();
     }
     this.save();
   }
@@ -515,13 +559,24 @@ class DatabaseManager {
   }
 
   backup() {
-    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
-    const backupDir = path.join(userData, 'MondalDiagnosticCentre', 'backups');
+    const backupDir = this._backupDir();
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const backupPath = path.join(backupDir, `lab_backup_${timestamp}.db`);
+    this.save();
     fs.copyFileSync(this.dbPath, backupPath);
     return backupPath;
+  }
+
+  /** Flush in-memory DB to disk, then copy to a user-chosen path (Desktop, USB, etc.). */
+  backupToPath(destPath) {
+    this.save();
+    let dest = path.normalize(destPath.trim());
+    if (!dest.toLowerCase().endsWith('.db')) dest += '.db';
+    const dir = path.dirname(dest);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(this.dbPath, dest);
+    return dest;
   }
 
   getDatabaseSize() {
@@ -534,8 +589,7 @@ class DatabaseManager {
   }
 
   getLastBackupDate() {
-    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
-    const backupDir = path.join(userData, 'MondalDiagnosticCentre', 'backups');
+    const backupDir = this._backupDir();
     if (!fs.existsSync(backupDir)) return null;
     const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.db'));
     if (files.length === 0) return null;
@@ -553,11 +607,11 @@ class DatabaseManager {
   }
 
   backupEncrypted(password) {
-    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
-    const backupDir = path.join(userData, 'MondalDiagnosticCentre', 'backups');
+    const backupDir = this._backupDir();
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const backupPath = path.join(backupDir, `lab_backup_${timestamp}.db.enc`);
+    this.save();
     const key = crypto.scryptSync(password || 'mondal-default', SALT, 32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
@@ -567,10 +621,28 @@ class DatabaseManager {
     return backupPath;
   }
 
+  /** Encrypted backup to a user-chosen path. */
+  backupEncryptedToPath(destPath, password) {
+    this.save();
+    let dest = path.normalize(destPath.trim());
+    const lower = dest.toLowerCase();
+    if (!lower.endsWith('.enc')) {
+      dest = lower.endsWith('.db') ? `${dest}.enc` : `${dest}.db.enc`;
+    }
+    const dir = path.dirname(dest);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const key = crypto.scryptSync(password || 'mondal-default', SALT, 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const data = fs.readFileSync(this.dbPath);
+    const encrypted = Buffer.concat([iv, cipher.update(data), cipher.final()]);
+    fs.writeFileSync(dest, encrypted);
+    return dest;
+  }
+
   exportOrdersExcel(params = {}) {
     const XLSX = require('xlsx');
-    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
-    const exportDir = path.join(userData, 'MondalDiagnosticCentre', 'exports');
+    const exportDir = this._exportDir();
     if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const outPath = path.join(exportDir, `orders_export_${timestamp}.xlsx`);
@@ -592,8 +664,7 @@ class DatabaseManager {
 
   exportReferralsExcel(params = {}) {
     const XLSX = require('xlsx');
-    const userData = process.env.APPDATA || path.join(process.env.USERPROFILE || process.env.HOME || os.homedir(), '.config');
-    const exportDir = path.join(userData, 'MondalDiagnosticCentre', 'exports');
+    const exportDir = this._exportDir();
     if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const outPath = path.join(exportDir, `referrals_export_${timestamp}.xlsx`);
@@ -601,6 +672,7 @@ class DatabaseManager {
     let sql = `SELECT p.referred_by as Referrer, COUNT(DISTINCT p.id) as PatientCount
                FROM patients p JOIN orders o ON o.patient_id = p.id
                WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
+               AND LOWER(TRIM(p.referred_by)) != 'self'
                AND date(o.order_date) >= ? AND date(o.order_date) <= ?
                GROUP BY p.referred_by ORDER BY PatientCount DESC`;
     const args = [params.dateFrom || '1970-01-01', params.dateTo || '2099-12-31'];
@@ -649,9 +721,11 @@ class DatabaseManager {
   }
 
   computeOrderBillAndCommission(orderId) {
-    this.computeOrderBill(orderId);
-    this.updateOrderCommission(orderId);
-    this.ensureOrderAccessCode(orderId);
+    const id = orderId != null && orderId !== '' ? Number(orderId) : NaN;
+    if (!Number.isFinite(id) || id <= 0) return;
+    this.computeOrderBill(id);
+    this.updateOrderCommission(id);
+    this.ensureOrderAccessCode(id);
   }
 
   clearAllPatients() {

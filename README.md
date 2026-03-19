@@ -51,7 +51,7 @@ npm install
 npm run electron:dev
 ```
 
-**Login:** admin / admin123
+**Login:** `admin` / `admin123` — initial account only; **no sample patients or orders** are included. Use a strong password in production.
 
 ## Windows ZIP in repo (Git LFS)
 
@@ -92,9 +92,12 @@ node scripts/create-release.js
 
 This creates tag **`v<version>`** (from `package.json`) and uploads the **Setup .exe** and **.zip** assets. If the release already exists, it re-uploads assets (`--clobber`).
 
-## Backup
+## Backup & data folder (Windows)
 
-- Default: `%APPDATA%/MondalDiagnosticCentre/backups/`
+- The installer puts the app under **Program Files** (or a folder you choose). Your **database, backups, and exports** live in **Electron user data** (typically `%APPDATA%\<app name>\`: subfolders `backups`, `exports`, and file `lab.db`). Open **Settings → Support** to see the exact path.
+- **NSIS uninstall** can remove that app data folder when you uninstall (so back up first if you need to keep data).
+- Older builds (before v1.0.2) used `%APPDATA%\MondalDiagnosticCentre\` — on first run the app **copies `lab.db`** from there if the new location has no database yet. You may delete the old folder manually after verifying the app.
+- **Save to PC…** in **Settings → Backup** still lets you copy backups anywhere (Desktop, USB, etc.).
 
 ## License
 

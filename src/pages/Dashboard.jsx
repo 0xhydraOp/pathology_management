@@ -82,6 +82,7 @@ export default function Dashboard() {
           `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
            FROM patients p JOIN orders o ON o.patient_id = p.id
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
+           AND LOWER(TRIM(p.referred_by)) != 'self'
            AND date(o.order_date) >= ? AND date(o.order_date) <= ?
            GROUP BY p.referred_by ORDER BY count DESC LIMIT 10`,
           [start, end]

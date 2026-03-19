@@ -53,7 +53,7 @@ Download **${setup || 'the Setup .exe'}** and run it — NSIS installer with sho
 **${zip || 'the .zip'}** is an archive of the packaged app (extract anywhere and run the .exe). Use the **Setup** for a proper installation.
 
 ### First run
-The database is empty until first use. No demo patient data is included.
+The local database stores only your lab’s real work — no sample patients or orders ship with the app.
 
 ### Login (initial)
 - Username: **admin**

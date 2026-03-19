@@ -21,4 +21,4 @@ You can also run the workflow manually: **Actions** → *Release Windows build* 
 4. Confirm **`release/`** contains the `.exe` and `-win.zip`.
 5. `gh auth login` then `node scripts/create-release.js`.
 
-Dummy bulk seeding was removed; production DB is created empty on first run under `%APPDATA%`.
+No sample patients or orders ship with the app; the DB is created under `%APPDATA%` with catalogue JSON only.

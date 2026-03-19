@@ -1274,7 +1274,7 @@ Align software output with pre-printed pad:
 
 - **Simplified workflow:** New Registration (patient + ref. by + tests in one form); Enter Results & Print (select patient → enter values → print)
 - **Tech stack:** Electron + React + Vite; sql.js (pure JS SQLite — no native build tools required)
-- **User management:** Users table, hashed passwords (PBKDF2), default admin/admin123
+- **User management:** Users table, hashed passwords (PBKDF2); first-run **admin** account only for sign-in (no sample patients/orders)
 - **Lab config:** Pathologist name (Read by), default Printed by, staff list — configurable in Settings
 - **Report print log:** Print history UI on Reports page (who printed what, when)
 - **Data validation:** min_allowed_value, max_allowed_value on result entry (parameters table)
@@ -1297,7 +1297,7 @@ Align software output with pre-printed pad:
 - **Result Entry:** Search/filter for tests when many tests (>6); debounced patient search (300ms)
 - **New Registration:** Debounced referrer suggestions (300ms)
 - **Lazy loading:** Reports, Referrals, Settings loaded with React.lazy()
-- **Batch DB saves:** Seed uses batch mode; single save at end of bulk operations
+- **Batch DB saves:** Catalogue reload (`loadCatalogueFromJson`) uses batch SQLite operations; single save at end
 - **Print system:** Lab config (name, clinical_correlation_text) merged correctly for reports; auto-print fires once; main window used for print (not focused window)
 - **Code cleanup:** Removed unused pages (Orders.jsx, Patients.jsx, ResultEntry.jsx)
 
