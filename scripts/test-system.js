@@ -5,6 +5,7 @@
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const root = path.join(__dirname, '..');
 let passed = 0;
@@ -128,6 +129,63 @@ async function main() {
     }
     if (!content.includes('getHashRoutePath') || !content.includes("getHashRoutePath() === '/reports'")) {
       throw new Error('Layout should use getHashRoutePath() for Electron print trigger');
+    }
+  });
+
+  run('labRules.cjs (referrer normalization)', () => {
+    const { normalizeReferrerName, SQL_EXCLUDE_WALK_IN_REFERRALS } = require(path.join(root, 'electron/labRules.cjs'));
+    if (normalizeReferrerName('  walk  in  ') !== 'Self') throw new Error('walk-in should normalize to Self');
+    if (normalizeReferrerName('') !== null) throw new Error('empty should be null');
+    if (normalizeReferrerName('  Dr. A  ') !== 'Dr. A') throw new Error('trim/collapse spaces for names');
+    if (!SQL_EXCLUDE_WALK_IN_REFERRALS.includes('NOT IN')) throw new Error('SQL fragment should use NOT IN');
+  });
+
+  run('src/utils/labRules.js present', () => {
+    const p = path.join(root, 'src/utils/labRules.js');
+    if (!fs.existsSync(p)) throw new Error('src/utils/labRules.js missing');
+    const c = fs.readFileSync(p, 'utf8');
+    if (!c.includes('normalizeReferrerName')) throw new Error('labRules.js should export normalizeReferrerName');
+  });
+
+  run('uiFontScale util present', () => {
+    const p = path.join(root, 'src/utils/uiFontScale.js');
+    if (!fs.existsSync(p)) throw new Error('src/utils/uiFontScale.js missing');
+    const c = fs.readFileSync(p, 'utf8');
+    if (!c.includes('lab_ui_font_scale')) throw new Error('uiFontScale should use lab_ui_font_scale key');
+  });
+
+  await runAsync('Temp DB: patient + order_tests + computeOrderBillAndCommission', async () => {
+    const DatabaseManager = require(path.join(root, 'electron/database.js'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-smoke-'));
+    const dbm = new DatabaseManager(tmp);
+    try {
+      await dbm.init();
+      const extId = DatabaseManager.getNextPatientId(dbm);
+      dbm.run(
+        'INSERT INTO patients (patient_id, name, age, sex, phone, address, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [extId, 'Smoke Patient', null, 'male', null, null, 'Self']
+      );
+      const prow = dbm.get('SELECT id FROM patients WHERE patient_id = ?', [extId]);
+      if (!prow?.id) throw new Error('patient row missing');
+      const d = new Date();
+      const orderDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const ores = dbm.run(
+        'INSERT INTO orders (patient_id, referring_doctor, order_date, status) VALUES (?, ?, ?, ?)',
+        [prow.id, 'Self', orderDate, 'pending']
+      );
+      const oid = ores.lastInsertRowid;
+      const par = dbm.get('SELECT id FROM parameters LIMIT 1');
+      if (!par?.id) throw new Error('no parameters in catalogue');
+      dbm.run('INSERT INTO order_tests (order_id, parameter_id, display_order) VALUES (?, ?, ?)', [oid, par.id, 1]);
+      dbm.computeOrderBillAndCommission(oid);
+      const ord = dbm.get('SELECT total_amount, access_code FROM orders WHERE id = ?', [oid]);
+      if (ord == null || ord.total_amount == null) throw new Error('order total_amount not set after compute');
+      if (ord.access_code == null || String(ord.access_code).trim() === '') throw new Error('access_code not set after compute');
+    } finally {
+      try {
+        dbm.close();
+      } catch (_) { /* ignore */ }
+      fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
 

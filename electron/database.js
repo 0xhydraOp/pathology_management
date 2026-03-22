@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
+const { SQL_EXCLUDE_WALK_IN_REFERRALS, normalizeReferrerName } = require('./labRules.cjs');
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const SALT = 'mondal-lab-2026';
@@ -672,7 +673,7 @@ class DatabaseManager {
     let sql = `SELECT p.referred_by as Referrer, COUNT(DISTINCT p.id) as PatientCount
                FROM patients p JOIN orders o ON o.patient_id = p.id
                WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-               AND LOWER(TRIM(p.referred_by)) != 'self'
+               ${SQL_EXCLUDE_WALK_IN_REFERRALS}
                AND date(o.order_date) >= ? AND date(o.order_date) <= ?
                GROUP BY p.referred_by ORDER BY PatientCount DESC`;
     const args = [params.dateFrom || '1970-01-01', params.dateTo || '2099-12-31'];
@@ -705,9 +706,9 @@ class DatabaseManager {
 
   updateOrderCommission(orderId) {
     const order = this.get('SELECT o.total_amount, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?', [orderId]);
-    if (!order || !order.referred_by || (order.referred_by || '').trim() === '') return;
-    const refName = order.referred_by.trim();
-    if (refName.toLowerCase() === 'self') return;
+    if (!order) return;
+    const refName = normalizeReferrerName(order.referred_by);
+    if (!refName || refName === 'Self') return;
     const refPct = this.get('SELECT commission_percent FROM referrer_commission_pct WHERE referrer_name = ?', [refName]);
     const lab = this.get('SELECT commission_default_percent FROM lab WHERE id = 1');
     const pct = refPct != null ? parseFloat(refPct.commission_percent) : (parseFloat(lab?.commission_default_percent) ?? 45);
@@ -716,7 +717,7 @@ class DatabaseManager {
     this.run('DELETE FROM order_commission_log WHERE order_id = ?', [orderId]);
     this.run(
       'INSERT INTO order_commission_log (order_id, referrer_name, order_amount, commission_amount, commission_percent) VALUES (?, ?, ?, ?, ?)',
-      [orderId, order.referred_by.trim(), amount, commission, pct]
+      [orderId, refName, amount, commission, pct]
     );
   }
 
@@ -728,8 +729,10 @@ class DatabaseManager {
     this.ensureOrderAccessCode(id);
   }
 
+  /** Remove all patients, orders, results, print/commission logs, and patient ID sequence. Keeps users, lab config, catalogue, rates, referrer commission rules. */
   clearAllPatients() {
     const batch = true;
+    this.run('DELETE FROM audit_log', [], batch);
     this.run('DELETE FROM order_commission_log', [], batch);
     this.run('DELETE FROM report_print_log', [], batch);
     this.run('DELETE FROM order_results', [], batch);

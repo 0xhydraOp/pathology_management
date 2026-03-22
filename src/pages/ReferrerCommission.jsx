@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { SQL_EXCLUDE_WALK_IN_REFERRALS } from '../utils/labRules';
 
 const DEFAULT_COMMISSION = 45;
 
@@ -22,7 +23,7 @@ export default function ReferrerCommission() {
         window.db.all(
           `SELECT DISTINCT p.referred_by as name FROM patients p
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           AND LOWER(TRIM(p.referred_by)) != 'self'
+           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
            ORDER BY p.referred_by`
         ),
         window.db.all('SELECT referrer_name, commission_percent FROM referrer_commission_pct'),

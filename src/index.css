@@ -44,7 +44,7 @@ input, select, textarea {
 @media print {
   .no-print,
   .no-print * { display: none !important; }
-  /* Billing invoice — single sheet flow, no global 1.5in top (uses @page bill-invoice) */
+  /* Billing invoice — single sheet flow, no global report @page top gap (uses @page bill-invoice) */
   .billing-invoice-overlay {
     position: static !important;
     inset: auto !important;
@@ -194,6 +194,8 @@ input, select, textarea {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     font-family: Georgia, 'Times New Roman', serif !important;
+    /* Top gap for pad comes from @page margin only — avoid doubling screen paddingTop */
+    padding-top: 0 !important;
   }
   .report-header-no-break { page-break-inside: avoid !important; }
   .patient-card-print {
@@ -201,8 +203,10 @@ input, select, textarea {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     page-break-inside: avoid !important;
+    padding: 4px 6px !important;
+    margin-bottom: 4px !important;
   }
-  .patient-card-print .patient-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .patient-card-print .patient-card-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 2px 6px !important; }
   .calibration-print-grid { display: block !important; }
   .report-print-only { display: block !important; }
   .report-page-break { page-break-after: always !important; }
@@ -215,7 +219,7 @@ input, select, textarea {
 
 @page {
   size: A4;
-  margin: 1.5in 0 0.5in 0; /* Top: 1.5" blank for pre-printed lab pad header; Bottom: 0.5" for border */
+  margin: 2in 0 0.5in 0; /* Top: 2" blank for pre-printed lab pad header; Bottom: 0.5" for border */
 }
 
 /* Referrer payment invoice only — full A4 content area (Chromium / Electron) */
@@ -466,4 +470,18 @@ input, select, textarea {
 }
 .reports-page .report-card-wrap .report-card:hover {
   box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+}
+
+/* Settings: text size for Result entry + Reports (see uiFontScale.js) */
+:root[data-ui-font-scale="sm"] .result-entry-page {
+  font-size: 12px;
+}
+:root[data-ui-font-scale="lg"] .result-entry-page {
+  font-size: 16px;
+}
+:root[data-ui-font-scale="sm"] .reports-page {
+  font-size: 12px;
+}
+:root[data-ui-font-scale="lg"] .reports-page {
+  font-size: 16px;
 }

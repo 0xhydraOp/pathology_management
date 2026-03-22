@@ -1,5 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
+import { applyUiFontScale } from './utils/uiFontScale';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NewRegistration from './pages/NewRegistration';
@@ -39,6 +40,10 @@ function App() {
 
   useEffect(() => {
     setIsLoggedIn(sessionStorage.getItem('lab_auth') === '1');
+  }, []);
+
+  useEffect(() => {
+    applyUiFontScale();
   }, []);
 
   const handleLogin = () => setIsLoggedIn(true);

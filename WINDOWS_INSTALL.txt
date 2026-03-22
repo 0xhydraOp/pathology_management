@@ -1,0 +1,46 @@
+================================================================================
+  MONDAL DIAGNOSTIC CENTRE — Windows install guide
+================================================================================
+
+TWO DIFFERENT DOWNLOADS (do not confuse them)
+
+1) SETUP / INSTALLER (recommended)
+   • File name looks like:  MONDAL DIAGNOSTIC CENTRE Setup 1.0.2.exe
+     (or similar, ending in .exe — it is NOT inside the .zip)
+   • Run this file on the new PC.
+   • It installs the app, creates Desktop + Start Menu shortcuts, and adds
+     an entry in Settings → Apps (uninstall).
+   • You get this from the same folder as the zip after building, or from
+     GitHub Releases as the separate .exe asset (not the .zip).
+
+2) ZIP FILE (portable / optional)
+   • File name looks like:  MONDAL DIAGNOSTIC CENTRE-1.0.2-win.zip
+   • This is ONLY a compressed folder. There is NO setup.exe inside it.
+   • After extract: double-click the main .exe in that folder to run.
+   • Shortcuts are NOT created — that is normal for a portable zip.
+   • Use this if you cannot run the installer; for a “normal” PC install,
+     use the Setup .exe instead.
+
+================================================================================
+If you only have the ZIP
+================================================================================
+  • Shortcuts will not appear — use the Setup .exe for that.
+  • Ask whoever built the app to send you BOTH files from the release\
+    folder after:  npm run electron:build
+    Or download the Setup .exe from GitHub Releases (not only the zip).
+
+================================================================================
+Build machine (developer)
+================================================================================
+  After:  npm run electron:build
+
+  Check folder:  release\
+
+  You should see BOTH:
+    - *.exe  → NSIS installer (Setup)
+    - *.zip  → portable archive
+
+  If the Setup .exe is missing, the NSIS step failed — run the build on
+  Windows and check the terminal for errors (antivirus may block NSIS).
+
+================================================================================

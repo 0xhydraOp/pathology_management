@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { formatOrderDateMediumIN } from '../utils/dateDisplay';
 import { showToast } from '../utils/toastBus';
+import { keyboardActivateHandler } from '../utils/keyboardClick';
 
 function toLocalDateStr(d) {
   const y = d.getFullYear();
@@ -115,7 +116,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
 
   if (ordersLoaded && allOrders.length === 0) {
     return (
-      <div style={styles.container}>
+      <div style={styles.container} className="result-entry-page">
         <h1 style={styles.title}>Batch Entry</h1>
         <p style={styles.subtitle}>No pending orders. Register patients and add tests first.</p>
         <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
@@ -124,7 +125,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
   }
   if (paramsLoaded && params.length === 0) {
     return (
-      <div style={styles.container}>
+      <div style={styles.container} className="result-entry-page">
         <h1 style={styles.title}>Batch Entry</h1>
         <p style={styles.subtitle}>No numeric test parameters found. Add parameters in Settings first.</p>
         <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
@@ -134,7 +135,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
   if (!selectedParam) return <div style={styles.loading}>Loading...</div>;
   if (orders.length === 0) {
     return (
-      <div style={styles.container}>
+      <div style={styles.container} className="result-entry-page">
         <h1 style={styles.title}>Batch Entry</h1>
         <p style={styles.subtitle}>No pending orders have the selected test. Try another test or add orders first.</p>
         <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
@@ -143,7 +144,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
   }
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="result-entry-page">
       <h1 style={styles.title}>Batch Entry — {selectedParam.name}</h1>
       <p style={styles.subtitle}>Enter {selectedParam.name} for each patient. Press Enter to save and move to next.</p>
       <div style={styles.batchToolbar}>
@@ -657,7 +658,7 @@ export default function ResultEntrySimple() {
   // Step 1: Select patient
   if (step === 'select' && !order) {
     return (
-      <div style={styles.container}>
+      <div style={styles.container} className="result-entry-page">
         <h1 style={styles.title}>Enter Results & Print</h1>
         <p style={styles.subtitle}>Select a patient whose results need to be entered, or search for a patient below.</p>
 
@@ -712,9 +713,12 @@ export default function ResultEntrySimple() {
               {filteredPending.map((o) => (
                 <div
                   key={o.id}
+                  role="button"
+                  tabIndex={0}
                   className="result-entry-pending-item"
                   style={styles.pendingItem}
                   onClick={() => loadOrderDetails(o.id)}
+                  onKeyDown={keyboardActivateHandler(() => loadOrderDetails(o.id))}
                   title="Click to enter results"
                 >
                   <span style={styles.pendingId}>#{o.id}</span>
@@ -745,11 +749,14 @@ export default function ResultEntrySimple() {
             {patients.map((p) => (
               <div
                 key={p.id}
+                role="button"
+                tabIndex={0}
                 style={{
                   ...styles.patientItem,
                   ...(selectedPatient?.id === p.id ? styles.patientItemSelected : {}),
                 }}
                 onClick={() => setSelectedPatient(p)}
+                onKeyDown={keyboardActivateHandler(() => setSelectedPatient(p))}
               >
                 <strong>{p.patient_id}</strong> — {p.name} {p.age ? `(${p.age} Y)` : ''} | {p.referred_by || '—'}
               </div>
@@ -765,11 +772,14 @@ export default function ResultEntrySimple() {
               {orders.map((o) => (
                 <div
                   key={o.id}
+                  role="button"
+                  tabIndex={0}
                   style={{
                     ...styles.orderItem,
                     ...(selectedOrder?.id === o.id ? styles.orderItemSelected : {}),
                   }}
                   onClick={() => setSelectedOrder(o)}
+                  onKeyDown={keyboardActivateHandler(() => setSelectedOrder(o))}
                 >
                   Order #{o.id} — {formatOrderDateMediumIN(o.order_date)} ({o.status})
                 </div>
@@ -833,10 +843,10 @@ export default function ResultEntrySimple() {
     : testsBySection;
 
   // Step 2: Enter results
-  if (!order) return <div style={styles.loading}>Loading...</div>;
+  if (!order) return <div style={styles.loading} className="result-entry-page">Loading...</div>;
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="result-entry-page">
       <h1 style={styles.title}>Enter Results — {patient?.patient_name}</h1>
       <div style={styles.progressBar}>
         <span style={styles.progressText}>{filledCount} / {tests.length} tests entered</span>
@@ -910,8 +920,13 @@ export default function ResultEntrySimple() {
               return (
                 <React.Fragment key={sectionName}>
                   <tr
+                    role="button"
+                    tabIndex={0}
                     style={styles.sectionHeader}
                     onClick={() => setSectionCollapsed((s) => ({ ...s, [sectionName]: !s[sectionName] }))}
+                    onKeyDown={keyboardActivateHandler(() =>
+                      setSectionCollapsed((s) => ({ ...s, [sectionName]: !s[sectionName] }))
+                    )}
                   >
                     <td colSpan={5} style={{ cursor: 'pointer', fontWeight: 600 }}>
                       {isCollapsed ? '▶' : '▼'} {sectionName}

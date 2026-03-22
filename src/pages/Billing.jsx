@@ -49,6 +49,10 @@ export default function Billing() {
         setTimeout(() => setInvoicePrintHint(''), 5000);
         return;
       }
+      setInvoicePrintHint(
+        result?.error ? `Preview failed — opening print dialog instead.` : 'Preview unavailable — opening print dialog…'
+      );
+      setTimeout(() => setInvoicePrintHint(''), 4500);
     }
     if (typeof window.electronPrint === 'function') {
       await window.electronPrint(1);
@@ -478,8 +482,27 @@ export default function Billing() {
         <div style={styles.tableWrap}>
           {sortedOrders.length === 0 ? (
             <div style={styles.empty}>
-              No orders in this range
-              <button style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
+              <div style={styles.emptyTitle}>{orders.length === 0 ? 'No bills in this period' : 'No bills match your filters'}</div>
+              <p style={styles.emptyHint}>
+                {orders.length === 0
+                  ? 'Try a wider date range (Week / Month / Year) or register a new patient.'
+                  : 'Clear the search box, set Payment to All, or widen the date range.'}
+              </p>
+              <div style={styles.emptyActions}>
+                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
+                {orders.length > 0 && (
+                  <button
+                    type="button"
+                    style={{ ...styles.emptyBtn, ...styles.emptyBtnSecondary }}
+                    onClick={() => {
+                      setSearch('');
+                      setPaymentFilter('all');
+                    }}
+                  >
+                    Clear search & payment filter
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <table style={styles.table}>
@@ -543,8 +566,27 @@ export default function Billing() {
         <div style={styles.cardGrid}>
           {sortedOrders.length === 0 ? (
             <div style={styles.empty}>
-              No orders in this range
-              <button style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
+              <div style={styles.emptyTitle}>{orders.length === 0 ? 'No bills in this period' : 'No bills match your filters'}</div>
+              <p style={styles.emptyHint}>
+                {orders.length === 0
+                  ? 'Try a wider date range (Week / Month / Year) or register a new patient.'
+                  : 'Clear the search box, set Payment to All, or widen the date range.'}
+              </p>
+              <div style={styles.emptyActions}>
+                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
+                {orders.length > 0 && (
+                  <button
+                    type="button"
+                    style={{ ...styles.emptyBtn, ...styles.emptyBtnSecondary }}
+                    onClick={() => {
+                      setSearch('');
+                      setPaymentFilter('all');
+                    }}
+                  >
+                    Clear search & payment filter
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             sortedOrders.map((o) => {
@@ -874,7 +916,11 @@ const styles = {
   trUnpaid: { cursor: 'pointer', background: '#fffdf8' },
   toggleBtn: { padding: '4px 10px', borderRadius: 6, border: '1px solid #0d7377', background: '#fff', color: '#0d7377', fontSize: 11, fontWeight: 600, cursor: 'pointer' },
   empty: { padding: 48, textAlign: 'center', color: '#666', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', gridColumn: '1 / -1', background: '#fff', borderRadius: 12, border: '1px solid #eee' },
+  emptyTitle: { fontSize: 16, fontWeight: 700, color: '#334155', margin: 0 },
+  emptyHint: { margin: 0, maxWidth: 420, lineHeight: 1.5, fontSize: 14, color: '#64748b' },
+  emptyActions: { display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginTop: 4 },
   emptyBtn: { padding: '8px 18px', borderRadius: 8, border: '1px solid #0d7377', background: '#fff', color: '#0d7377', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  emptyBtnSecondary: { borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' },
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   invoiceModal: {
     background: '#fff',

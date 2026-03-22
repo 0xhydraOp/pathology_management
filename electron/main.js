@@ -242,30 +242,35 @@ function doPrint(copies = 1) {
       printBackground: true,
       copies: Math.max(1, parseInt(copies, 10) || 1),
     });
+  } else {
+    console.warn('[print] No BrowserWindow available — print skipped');
   }
 }
 
 async function doPrintPreview() {
   const win = mainWindow || BrowserWindow.getFocusedWindow();
   if (!win || !win.webContents) return { ok: false, error: 'No window' };
+  let pdfPath;
+  let pdfWin;
   try {
+    // Margins are in inches (Electron 33+ docs: webContents.printToPDF).
     const pdfData = await win.webContents.printToPDF({
       printBackground: true,
       preferCSSPageSize: true,
       pageSize: 'A4',
-      margins: { top: 0.25, bottom: 0.25, left: 0.25, right: 0.25 }, // inches
+      margins: { top: 0.25, bottom: 0.25, left: 0.25, right: 0.25 },
     });
-    const tmpDir = os.tmpdir();
-    const pdfPath = path.join(tmpDir, `mondal-report-preview-${Date.now()}.pdf`);
+    pdfPath = path.join(os.tmpdir(), `mondal-report-preview-${Date.now()}.pdf`);
     fs.writeFileSync(pdfPath, pdfData);
     const prevState = loadPreviewState();
     const pw = prevState?.width ?? 900;
     const ph = prevState?.height ?? 700;
-    const pdfWin = new BrowserWindow({
+    pdfWin = new BrowserWindow({
       width: pw,
       height: ph,
       minWidth: 500,
       minHeight: 400,
+      show: false,
       title: 'Print Preview - MONDAL DIAGNOSTIC CENTRE (Ctrl+P to print)',
       icon: getIconPath(),
       webPreferences: {
@@ -276,17 +281,53 @@ async function doPrintPreview() {
     });
     previewWindow = pdfWin;
     if (!prevState) pdfWin.center();
-    pdfWin.loadURL(pathToFileURL(pdfPath).href);
     pdfWin.on('close', () => {
       savePreviewState(pdfWin);
     });
     pdfWin.on('closed', () => {
       previewWindow = null;
-      try { fs.unlinkSync(pdfPath); } catch (_) {}
+      try {
+        if (pdfPath) fs.unlinkSync(pdfPath);
+      } catch (_) {}
     });
+
+    const fileUrl = pathToFileURL(pdfPath).href;
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const t = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Print preview timed out loading PDF'));
+      }, 25000);
+      const done = (fn) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(t);
+        fn();
+      };
+      pdfWin.webContents.once('did-finish-load', () => done(() => resolve()));
+      pdfWin.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+        done(() => reject(new Error(errorDescription || `Preview failed to load (code ${errorCode})`)));
+      });
+      pdfWin.loadURL(fileUrl).catch((e) => done(() => reject(e)));
+    });
+
+    pdfWin.show();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    console.warn('[printPreview]', err);
+    if (pdfWin && !pdfWin.isDestroyed()) {
+      previewWindow = null;
+      try {
+        pdfWin.destroy();
+      } catch (_) {}
+      // Temp file removed in pdfWin "closed" handler
+    } else if (pdfPath) {
+      try {
+        fs.unlinkSync(pdfPath);
+      } catch (_) {}
+    }
+    return { ok: false, error: String(err?.message || err) };
   }
 }
 
@@ -357,6 +398,15 @@ app.whenReady().then(async () => {
   ipcMain.handle('db:getDatabaseSize', () => db.getDatabaseSize());
   ipcMain.handle('db:getLastBackupDate', () => db.getLastBackupDate());
   ipcMain.handle('db:computeOrderBillAndCommission', (_, orderId) => db.computeOrderBillAndCommission(orderId));
+  ipcMain.handle('db:clearAllPatientData', () => {
+    try {
+      db.clearAllPatients();
+      return { ok: true };
+    } catch (e) {
+      console.error('clearAllPatientData:', e);
+      return { ok: false, error: String(e.message || e) };
+    }
+  });
   ipcMain.handle('app:print', (_, copies) => doPrint(copies || 1));
   ipcMain.handle('app:printPreview', () => doPrintPreview());
   ipcMain.handle('app:setTitle', (_, title) => {

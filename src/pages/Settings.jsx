@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getUiFontScale, setUiFontScale } from '../utils/uiFontScale';
 
 export default function Settings() {
   const [configMessage, setConfigMessage] = useState('');
@@ -24,6 +25,9 @@ export default function Settings() {
   const [appVersion, setAppVersion] = useState(null);
   const [userDataPath, setUserDataPath] = useState(null);
   const [supportRefreshing, setSupportRefreshing] = useState(false);
+  const [uiFontScale, setUiFontScaleState] = useState(() => getUiFontScale());
+  const [wipePatientMessage, setWipePatientMessage] = useState('');
+  const [wipePatientBusy, setWipePatientBusy] = useState(false);
 
   const refreshSupportStats = async () => {
     setSupportRefreshing(true);
@@ -72,6 +76,12 @@ export default function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional reload when backup/export completes
   }, [backupMessage]);
 
+  useEffect(() => {
+    if (window.electronApp?.getVersion) {
+      window.electronApp.getVersion().then((v) => v && setAppVersion(v)).catch(() => {});
+    }
+  }, []);
+
   const handleSaveLabConfig = async () => {
     if (window.db?.setLabConfig) {
       try {
@@ -95,6 +105,39 @@ export default function Settings() {
       }
     } else {
       setBackupMessage('Database not available (run in Electron).');
+    }
+  };
+
+  const handleClearAllPatientData = async () => {
+    if (!window.db?.clearAllPatientData) {
+      setWipePatientMessage('Only available in the desktop app (Electron).');
+      return;
+    }
+    const warn =
+      'This will PERMANENTLY delete ALL patients, orders, test results, print history, and commission logs on this computer.\n\n' +
+      'Lab settings, users, test catalogue, and rates will be kept.\n\n' +
+      'Back up first if you need any of this data. Continue?';
+    if (!window.confirm(warn)) return;
+    const typed = window.prompt('Type DELETE in capitals to confirm:');
+    if (typed !== 'DELETE') {
+      setWipePatientMessage(typed == null ? 'Cancelled.' : 'Cancelled — type exactly DELETE to confirm.');
+      setTimeout(() => setWipePatientMessage(''), 5000);
+      return;
+    }
+    setWipePatientBusy(true);
+    setWipePatientMessage('');
+    try {
+      const r = await window.db.clearAllPatientData();
+      if (r?.ok) {
+        setWipePatientMessage('All patient and order data has been removed. Refresh other open screens if needed.');
+        refreshSupportStats();
+      } else {
+        setWipePatientMessage(`Error: ${r?.error || 'Unknown'}`);
+      }
+    } catch (e) {
+      setWipePatientMessage(`Error: ${e.message || e}`);
+    } finally {
+      setWipePatientBusy(false);
     }
   };
 
@@ -178,7 +221,12 @@ export default function Settings() {
         </div>
         <div style={styles.headerContent}>
           <h1 style={styles.title}>Settings</h1>
-          <p style={styles.subtitle}>Configure your lab and manage data</p>
+          <p style={styles.subtitle}>
+            Configure your lab and manage data
+            {appVersion ? (
+              <span style={styles.versionBadge}> · App v{appVersion}</span>
+            ) : null}
+          </p>
         </div>
       </div>
 
@@ -231,6 +279,39 @@ export default function Settings() {
           {configMessage && <p style={{ ...styles.message, color: configMessage.startsWith('Error') ? '#c00' : '#0d7377' }}>{configMessage}</p>}
         </div>
 
+        <div style={{ ...styles.section, ...styles.sectionDisplay }} className="settings-section">
+          <div style={{ ...styles.sectionIconBadge, ...styles.badgeTeal }}>
+            <span style={styles.sectionIcon}>Aa</span>
+          </div>
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>Display</h3>
+          </div>
+          <p style={styles.desc}>Larger or smaller text on <strong>Result entry</strong> and <strong>Reports</strong> (saved on this device).</p>
+          <div style={styles.fontScaleRow} role="group" aria-label="Text size">
+            {[
+              { id: 'sm', label: 'Smaller' },
+              { id: 'default', label: 'Default' },
+              { id: 'lg', label: 'Larger' },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                style={{
+                  ...styles.fontScaleBtn,
+                  ...(uiFontScale === opt.id ? styles.fontScaleBtnActive : {}),
+                }}
+                aria-pressed={uiFontScale === opt.id}
+                onClick={() => {
+                  setUiFontScale(opt.id);
+                  setUiFontScaleState(opt.id);
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div style={{ ...styles.section, ...styles.sectionCatalogue }} className="settings-section">
           <div style={{ ...styles.sectionIconBadge, ...styles.badgePurple }}>
             <span style={styles.sectionIcon}>📋</span>
@@ -280,6 +361,36 @@ export default function Settings() {
             </div>
           </div>
           {backupMessage && <p style={styles.message}>{backupMessage}</p>}
+        </div>
+
+        <div style={{ ...styles.section, ...styles.sectionDanger }} className="settings-section">
+          <div style={{ ...styles.sectionIconBadge, ...styles.badgeDanger }}>
+            <span style={styles.sectionIcon}>⚠</span>
+          </div>
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>Remove all patient data</h3>
+          </div>
+          <p style={styles.desc}>
+            Deletes every <strong>patient</strong>, <strong>order</strong>, <strong>result</strong>, print log entry, and commission log row.
+            Resets patient ID numbering (next registration starts from PT01 for the current month).
+          </p>
+          <p style={{ ...styles.desc, color: '#991b1b', fontWeight: 600 }}>
+            Does not delete: login users, lab profile, investigation catalogue, test rates, or referrer commission settings.
+          </p>
+          <button
+            type="button"
+            style={{ ...styles.btn, ...styles.btnDanger }}
+            onClick={handleClearAllPatientData}
+            disabled={!window.db?.clearAllPatientData || wipePatientBusy}
+            className="settings-btn"
+          >
+            {wipePatientBusy ? 'Removing…' : 'Delete all patients & orders…'}
+          </button>
+          {wipePatientMessage && (
+            <p style={{ ...styles.message, color: wipePatientMessage.startsWith('Error') ? '#c00' : '#0d7377', marginTop: 12 }}>
+              {wipePatientMessage}
+            </p>
+          )}
         </div>
 
         <div style={{ ...styles.section, ...styles.sectionExport }} className="settings-section">
@@ -381,10 +492,12 @@ const styles = {
     transition: 'transform 0.25s ease, box-shadow 0.25s ease',
   },
   sectionLab: { borderLeft: '5px solid #0d7377', background: 'linear-gradient(to bottom, #fff 0%, #f8fcfc 100%)' },
+  sectionDisplay: { borderLeft: '5px solid #0891b2', background: 'linear-gradient(to bottom, #fff 0%, #f0fdfa 100%)' },
   sectionCatalogue: { borderLeft: '5px solid #6c5ce7', background: 'linear-gradient(to bottom, #fff 0%, #f8f6ff 100%)' },
   sectionBackup: { borderLeft: '5px solid #00b894', background: 'linear-gradient(to bottom, #fff 0%, #f0fdf9 100%)' },
   sectionExport: { borderLeft: '5px solid #e17055', background: 'linear-gradient(to bottom, #fff 0%, #fff8f6 100%)' },
   sectionSupport: { borderLeft: '5px solid #64748b', background: 'linear-gradient(to bottom, #fff 0%, #f8fafc 100%)' },
+  sectionDanger: { borderLeft: '5px solid #b91c1c', background: 'linear-gradient(to bottom, #fff 0%, #fef2f2 100%)' },
   sectionIconBadge: {
     width: 48,
     height: 48,
@@ -400,6 +513,26 @@ const styles = {
   badgeGreen: { background: 'linear-gradient(135deg, #00b894 0%, #55efc4 100%)', boxShadow: '0 4px 12px rgba(0,184,148,0.3)' },
   badgeCoral: { background: 'linear-gradient(135deg, #e17055 0%, #fab1a0 100%)', boxShadow: '0 4px 12px rgba(225,112,85,0.3)' },
   badgeSlate: { background: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)', boxShadow: '0 4px 12px rgba(100,116,139,0.3)' },
+  badgeTeal: { background: 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)', boxShadow: '0 4px 12px rgba(8,145,178,0.35)' },
+  badgeDanger: { background: 'linear-gradient(135deg, #b91c1c 0%, #ef4444 100%)', boxShadow: '0 4px 12px rgba(185,28,28,0.35)' },
+  fontScaleRow: { display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  fontScaleBtn: {
+    padding: '10px 18px',
+    borderRadius: 10,
+    border: '2px solid #e2e8f0',
+    background: '#fff',
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  fontScaleBtnActive: {
+    borderColor: '#0d7377',
+    background: '#f0fdfa',
+    color: '#0d7377',
+    boxShadow: '0 0 0 1px rgba(13,115,119,0.2)',
+  },
+  versionBadge: { fontWeight: 700, opacity: 1 },
   supportGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 },
   supportLabel: { fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
   supportValue: { margin: '6px 0 0', fontSize: 14, color: '#1e293b', fontWeight: 600 },
@@ -418,6 +551,10 @@ const styles = {
   input: { width: '100%', maxWidth: 400, padding: '12px 16px', borderRadius: 10, border: '2px solid #e8ecef', fontSize: 14, transition: 'border-color 0.2s, box-shadow 0.2s' },
   btn: { background: 'linear-gradient(180deg, #0d7377 0%, #0a5c5f 100%)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, boxShadow: '0 4px 14px rgba(13,115,119,0.35)', transition: 'transform 0.15s, box-shadow 0.15s' },
   btnSecondary: { background: 'linear-gradient(180deg, #14a3a8 0%, #0d7377 100%)' },
+  btnDanger: {
+    background: 'linear-gradient(180deg, #dc2626 0%, #991b1b 100%)',
+    boxShadow: '0 4px 14px rgba(185,28,28,0.35)',
+  },
   btnGroup: { display: 'flex', flexDirection: 'column', gap: 12 },
   encryptRow: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
   dateRow: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 },

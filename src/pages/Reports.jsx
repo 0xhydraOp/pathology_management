@@ -48,6 +48,7 @@ export default function Reports() {
   const orderId = searchParams.get('order');
   const shouldPrint = searchParams.get('print') === '1';
   const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [reportData, setReportData] = useState(null);
   const [labConfig, setLabConfig] = useState({ name: 'MONDAL DIAGNOSTIC CENTRE', address: '', phone: '', email: '', pathologist_name: 'Pathologist', default_printed_by: 'Admin', clinical_correlation_text: 'Please correlate clinically' });
@@ -59,7 +60,8 @@ export default function Reports() {
   const today = toLocalDateStr(new Date());
   const [orderFilter, setOrderFilter] = useState({ dateFrom: today, dateTo: today });
 
-  const margins = { top: 12, left: 28, right: 28, bottom: 12 }; /* Page margins (1.5" top, 0.5" bottom) set via @page in CSS */
+  /* Top matches @page in index.css (2in) so on-screen report aligns with pre-printed pad */
+  const margins = { top: '2in', left: 28, right: 28, bottom: 12 };
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
@@ -79,19 +81,26 @@ export default function Reports() {
   }, []);
 
   useEffect(() => {
-    if (window.db) {
-      let sql = `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by 
-         FROM orders o JOIN patients p ON o.patient_id = p.id WHERE 1=1`;
-      const params = [];
-      if (orderFilter.dateFrom) { sql += ' AND date(o.order_date) >= ?'; params.push(orderFilter.dateFrom); }
-      if (orderFilter.dateTo) { sql += ' AND date(o.order_date) <= ?'; params.push(orderFilter.dateTo); }
-      sql += ' ORDER BY o.created_at DESC LIMIT 200';
-      window.db.all(sql, params.length ? params : []).then((rows) => {
-        setOrders(rows || []);
-        // Do not setSelectedOrder from ?order= here — date refetch would override barcode pick.
-        // Deep link is handled in the effect below when selectedOrder is still null.
-      }).catch(console.error);
+    if (!window.db) {
+      setOrdersLoading(false);
+      return;
     }
+    setOrdersLoading(true);
+    let sql = `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by 
+         FROM orders o JOIN patients p ON o.patient_id = p.id WHERE 1=1`;
+    const params = [];
+    if (orderFilter.dateFrom) { sql += ' AND date(o.order_date) >= ?'; params.push(orderFilter.dateFrom); }
+    if (orderFilter.dateTo) { sql += ' AND date(o.order_date) <= ?'; params.push(orderFilter.dateTo); }
+    sql += ' ORDER BY o.created_at DESC LIMIT 200';
+    window.db.all(sql, params.length ? params : []).then((rows) => {
+      setOrders(rows || []);
+      setOrdersLoading(false);
+      // Do not setSelectedOrder from ?order= here — date refetch would override barcode pick.
+      // Deep link is handled in the effect below when selectedOrder is still null.
+    }).catch((e) => {
+      console.error(e);
+      setOrdersLoading(false);
+    });
   }, [orderId, orderFilter.dateFrom, orderFilter.dateTo]);
 
   useEffect(() => {
@@ -131,11 +140,17 @@ export default function Reports() {
             }
           }
           if (typeof window.electronPrintPreview === 'function') {
-            await window.electronPrintPreview();
-          } else if (typeof window.electronPrint === 'function') {
+            const previewResult = await window.electronPrintPreview();
+            if (previewResult?.ok) return;
+            console.warn('[auto-print] PDF preview failed, falling back:', previewResult?.error || 'unknown');
+          }
+          if (typeof window.electronPrint === 'function') {
             await window.electronPrint(copies);
-          } else {
+            return;
+          }
+          for (let i = 0; i < copies; i++) {
             window.print();
+            if (i < copies - 1) await new Promise((r) => setTimeout(r, 800));
           }
         })();
       }, 500);
@@ -230,19 +245,6 @@ export default function Reports() {
       setTimeout(() => setPrintFeedback(''), 2500);
     }
   }, [reportData, printCopies, labConfig.default_printed_by]);
-
-  const handlePrintPreview = useCallback(async () => {
-    if (!reportData || (reportData.results?.length ?? 0) === 0) return;
-    if (typeof window.electronPrintPreview === 'function') {
-      const result = await window.electronPrintPreview();
-      if (!result?.ok) {
-        setPrintFeedback(result?.error || 'Preview failed');
-        setTimeout(() => setPrintFeedback(''), 3000);
-      }
-    } else {
-      window.print();
-    }
-  }, [reportData]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -450,6 +452,22 @@ export default function Reports() {
               ))}
             </select>
             {orders.length > 0 && <span style={styles.resultCount}>{filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}</span>}
+            {!ordersLoading && orders.length > 0 && filteredOrders.length === 0 && (
+              <div style={styles.inlineEmpty} className="no-print">
+                <p style={styles.inlineEmptyText}>
+                  <strong>No orders match your search.</strong> Clear the search box, widen the date range, or scan the bill barcode again.
+                </p>
+                <button type="button" style={styles.inlineEmptyBtn} onClick={() => setSearch('')}>Clear search</button>
+              </div>
+            )}
+            {!ordersLoading && orders.length === 0 && (
+              <div style={styles.inlineEmpty} className="no-print">
+                <p style={styles.inlineEmptyText}>
+                  <strong>No orders in this date range.</strong> Choose <em>Last 7 days</em> / <em>This month</em> above, or register a patient first.
+                </p>
+                <button type="button" style={styles.inlineEmptyBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -517,13 +535,13 @@ export default function Reports() {
                     </div>
                   </div>
                   <div style={styles.patientAddress}>
-                    <span style={styles.patientLabel}>Address</span>
-                    <span style={styles.patientValue}>{reportData.address || '—'}</span>
+                    <span style={styles.patientAddressLabel}>Address</span>
+                    <span style={styles.patientAddressValue}>{reportData.address || '—'}</span>
                   </div>
                   {reportData.access_code && (
                     <div style={styles.reportBarcodeSection} className="report-barcode-section">
                       <span style={styles.patientLabel}>Bill barcode</span>
-                      <OrderBarcode value={reportData.access_code} height={36} fontSize={10} />
+                      <OrderBarcode value={reportData.access_code} height={26} fontSize={8} />
                     </div>
                   )}
                   <div style={styles.reportDate}>Report Date: {formatDate(new Date())}</div>
@@ -590,15 +608,9 @@ export default function Reports() {
       })()}
 
       {!reportData && selectedOrder && <p style={styles.loading} className="no-print">Loading...</p>}
-      {!selectedOrder && orders.length > 0 && (
+      {!ordersLoading && !selectedOrder && orders.length > 0 && filteredOrders.length > 0 && (
         <div className="no-print" style={styles.hintWrap}>
           <p style={styles.hint}>Select an order above to view and print.</p>
-          <button type="button" style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
-        </div>
-      )}
-      {orders.length === 0 && (
-        <div className="no-print" style={styles.hintWrap}>
-          <p style={styles.hint}>No orders in this date range.</p>
           <button type="button" style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
         </div>
       )}
@@ -642,8 +654,8 @@ const styles = {
   reportCardWrap: { display: 'flex', flexDirection: 'column', gap: 24, marginBottom: 24 },
   reportCard: {
     background: '#fff',
-    padding: 24,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 10,
     boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
     border: '1px solid #e8ecef',
   },
@@ -684,34 +696,45 @@ const styles = {
   input: { width: '100%', minWidth: 140, padding: '12px 14px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, transition: 'border-color 0.2s' },
   searchInput: { width: '100%', minWidth: 180, padding: '12px 14px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, transition: 'border-color 0.2s' },
   select: { width: '100%', padding: '12px 14px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, transition: 'border-color 0.2s' },
-  reportHeader: { marginTop: 0, marginBottom: 12, paddingBottom: 8 },
+  reportHeader: { marginTop: 0, marginBottom: 8, paddingBottom: 4 },
   patientCard: {
     background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
     border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    padding: '8px 12px',
-    marginBottom: 10,
-    borderLeft: '3px solid #0d7377',
+    borderRadius: 6,
+    padding: '5px 8px',
+    marginBottom: 6,
+    borderLeft: '2px solid #0d7377',
   },
-  patientCardMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 4, marginBottom: 6 },
-  patientName: { fontSize: 14, fontWeight: 700, color: '#1e293b', letterSpacing: '0.2px' },
-  patientId: { fontSize: 10, fontWeight: 600, color: '#0d7377', backgroundColor: 'rgba(13,115,119,0.12)', padding: '2px 6px', borderRadius: 4 },
-  patientCardGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px 16px', marginBottom: 6 },
-  patientItem: { display: 'flex', flexDirection: 'column', gap: 0 },
-  patientLabel: { fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px' },
-  patientValue: { fontSize: 11, fontWeight: 500, color: '#334155' },
-  patientAddress: { display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 6, borderTop: '1px dashed #e2e8f0' },
+  patientCardMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '2px 8px', marginBottom: 4 },
+  patientName: { fontSize: 12, fontWeight: 700, color: '#1e293b', letterSpacing: '0.15px', lineHeight: 1.2 },
+  patientId: { fontSize: 9, fontWeight: 600, color: '#0d7377', backgroundColor: 'rgba(13,115,119,0.1)', padding: '1px 5px', borderRadius: 3, lineHeight: 1.2 },
+  patientCardGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '2px 8px', marginBottom: 3 },
+  patientItem: { display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 },
+  patientLabel: { fontSize: 7, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.2px', lineHeight: 1.2 },
+  patientValue: { fontSize: 10, fontWeight: 500, color: '#334155', lineHeight: 1.25 },
+  patientAddress: {
+    display: 'flex',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: '4px 6px',
+    paddingTop: 3,
+    marginTop: 2,
+    borderTop: '1px solid #e8ecef',
+  },
+  patientAddressLabel: { fontSize: 7, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.2px', flexShrink: 0 },
+  patientAddressValue: { fontSize: 10, fontWeight: 500, color: '#334155', lineHeight: 1.25, flex: '1 1 120px', minWidth: 0 },
   reportBarcodeSection: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 2,
     alignItems: 'center',
-    paddingTop: 8,
-    marginTop: 6,
-    borderTop: '1px dashed #e2e8f0',
+    paddingTop: 4,
+    marginTop: 3,
+    borderTop: '1px solid #e8ecef',
   },
-  reportDate: { fontSize: 11, fontWeight: 600, color: '#0d7377', marginTop: 6, paddingTop: 4 },
-  departmentTitle: { fontSize: 14, fontWeight: 700, marginTop: 10, marginBottom: 10, color: '#0d7377', borderBottom: '2px solid #0d7377', paddingBottom: 6, textAlign: 'center', letterSpacing: '0.5px', textTransform: 'uppercase' },
+  reportDate: { fontSize: 9, fontWeight: 600, color: '#0d7377', marginTop: 3, paddingTop: 2, lineHeight: 1.2 },
+  departmentTitle: { fontSize: 13, fontWeight: 700, marginTop: 6, marginBottom: 8, color: '#0d7377', borderBottom: '2px solid #0d7377', paddingBottom: 4, textAlign: 'center', letterSpacing: '0.4px', textTransform: 'uppercase' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th: { textAlign: 'left', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: 600, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' },
   td: { padding: '8px 12px', borderBottom: '1px solid #f1f5f9' },
@@ -726,6 +749,19 @@ const styles = {
   printFeedback: { color: '#0d7377', fontWeight: 600, fontSize: 14 },
   shortcutHint: { fontSize: 12, color: '#94a3b8', marginLeft: 8 },
   resultCount: { fontSize: 12, color: '#64748b', marginLeft: 12 },
+  inlineEmpty: {
+    marginTop: 12,
+    padding: '14px 16px',
+    background: '#f8fafc',
+    borderRadius: 10,
+    border: '1px solid #e2e8f0',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  inlineEmptyText: { margin: 0, fontSize: 13, color: '#475569', lineHeight: 1.5 },
+  inlineEmptyBtn: { padding: '8px 16px', borderRadius: 8, border: '1px solid #0d7377', background: '#fff', color: '#0d7377', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   loading: { color: '#64748b', padding: 20 },
   hint: { color: '#94a3b8', fontSize: 14, marginBottom: 12 },
   hintWrap: { padding: 20 },

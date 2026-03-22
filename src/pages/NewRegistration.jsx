@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { showToast } from '../utils/toastBus';
+import { normalizeReferrerName } from '../utils/labRules';
+import { keyboardActivateHandler } from '../utils/keyboardClick';
 
 function toLocalDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** Age in years; supports 0 (newborn). Empty → null. Invalid → null. */
+function parseOptionalAge(raw) {
+  if (raw === '' || raw == null) return null;
+  const n = parseInt(String(raw).trim(), 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 export default function NewRegistration() {
@@ -66,6 +75,7 @@ export default function NewRegistration() {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
           const ref = parsed.referred_by != null ? String(parsed.referred_by).trim() : '';
+          const refNorm = ref !== '' ? normalizeReferrerName(parsed.referred_by) : null;
           setForm({
             ...base,
             name: typeof parsed.name === 'string' ? parsed.name : '',
@@ -73,7 +83,7 @@ export default function NewRegistration() {
             sex: parsed.sex === 'female' ? 'female' : 'male',
             phone: typeof parsed.phone === 'string' ? parsed.phone : '',
             address: typeof parsed.address === 'string' ? parsed.address : '',
-            referred_by: ref !== '' ? parsed.referred_by : 'Self',
+            referred_by: refNorm != null ? refNorm : 'Self',
             tests: [],
           });
           return;
@@ -149,17 +159,18 @@ export default function NewRegistration() {
     }
     setSaving(true);
     try {
+      const refStored = normalizeReferrerName(form.referred_by);
       const patientId = await window.db.nextPatientId();
       const patientRes = await window.db.run(
         `INSERT INTO patients (patient_id, name, age, sex, phone, address, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           patientId,
           form.name.trim(),
-          form.age ? parseInt(form.age) : null,
+          parseOptionalAge(form.age),
           form.sex,
           form.phone || null,
           form.address || null,
-          form.referred_by || null,
+          refStored,
         ]
       );
       const pid = patientRes?.lastInsertRowid ?? (await window.db.get('SELECT id FROM patients WHERE patient_id = ?', [patientId]))?.id;
@@ -171,7 +182,7 @@ export default function NewRegistration() {
       const orderDate = toLocalDateStr(new Date());
       const orderRes = await window.db.run(
         `INSERT INTO orders (patient_id, referring_doctor, order_date, status) VALUES (?, ?, ?, 'pending')`,
-        [pid, form.referred_by || null, orderDate]
+        [pid, refStored, orderDate]
       );
       const orderId = orderRes?.lastInsertRowid ?? (await window.db.get('SELECT id FROM orders WHERE patient_id = ? ORDER BY id DESC LIMIT 1', [pid]))?.id;
       if (!orderId) {
@@ -230,9 +241,12 @@ export default function NewRegistration() {
         <p style={styles.subtitle}>Double-click below to open the registration form.</p>
         <div
           className="new-register-card"
+          role="button"
+          tabIndex={0}
           style={styles.registerCard}
           onDoubleClick={() => setFormVisible(true)}
           onClick={() => setFormVisible(true)}
+          onKeyDown={keyboardActivateHandler(() => setFormVisible(true))}
           title="Click to register new patient"
         >
           <span style={styles.registerIcon}>⊕</span>

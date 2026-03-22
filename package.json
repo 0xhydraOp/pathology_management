@@ -11,7 +11,7 @@
     "build:icon": "node scripts/build-icon.mjs",
     "test": "node scripts/test-system.js",
     "release": "node scripts/create-release.js",
-    "electron:build": "npm run build:icon && vite build && electron-builder",
+    "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/copy-windows-install-notes.js",
     "start": "electron ."
   },
   "dependencies": {
@@ -48,6 +48,12 @@
       "rate_chart.json",
       "test_profiles.json"
     ],
+    "extraFiles": [
+      {
+        "from": "WINDOWS_INSTALL.txt",
+        "to": "READ_ME_FIRST_Windows_Install.txt"
+      }
+    ],
     "win": {
       "target": [
         {
@@ -65,13 +71,17 @@
     "forceCodeSigning": false,
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
+      "shortcutName": "MONDAL DIAGNOSTIC CENTRE",
+      "menuCategory": "MONDAL DIAGNOSTIC CENTRE",
+      "runAfterFinish": true,
       "license": "build/license.txt",
       "deleteAppDataOnUninstall": true
     },

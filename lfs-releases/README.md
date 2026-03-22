@@ -15,5 +15,7 @@ Without `git lfs pull`, you only get tiny pointer files for the ZIP.
 
 ## Prefer installer
 
-For a normal install, use **GitHub Releases** (NSIS `.exe`):  
+The **`-win.zip` in this folder does not contain `setup.exe`.** It is a portable extract-and-run package (no Start Menu / Desktop shortcuts).
+
+For a normal install on another PC, use the **separate NSIS installer** from **GitHub Releases** (the `.exe` asset, not only the zip):  
 https://github.com/0xhydraOp/pathology_management/releases/latest

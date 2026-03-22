@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('db', {
   getDatabaseSize: () => ipcRenderer.invoke('db:getDatabaseSize'),
   getLastBackupDate: () => ipcRenderer.invoke('db:getLastBackupDate'),
   computeOrderBillAndCommission: (orderId) => ipcRenderer.invoke('db:computeOrderBillAndCommission', orderId),
+  clearAllPatientData: () => ipcRenderer.invoke('db:clearAllPatientData'),
 });
 
 contextBridge.exposeInMainWorld('electronPrint', (copies) =>

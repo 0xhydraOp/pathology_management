@@ -88,11 +88,18 @@ export default function Layout({ children, onLogout }) {
   const [clock, setClock] = useState(formatDateTime());
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [labName, setLabName] = useState('MONDAL DIAGNOSTIC CENTRE');
+  const [appVersion, setAppVersion] = useState(null);
   const dbReady = typeof window !== 'undefined' && !!window.db;
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
       window.db.getLabConfig().then((c) => c?.name && setLabName(c.name)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (window.electronApp?.getVersion) {
+      window.electronApp.getVersion().then((v) => v && setAppVersion(v)).catch(() => {});
     }
   }, []);
 
@@ -179,6 +186,9 @@ export default function Layout({ children, onLogout }) {
             <Outlet />
           </div>
           <footer style={styles.footer} className="no-print">
+            {appVersion ? (
+              <span style={styles.footerVersion}>v{appVersion}</span>
+            ) : null}
             Developed by <strong>Robiul Islam Molla</strong> · <a href="mailto:iamrobiul94@gmail.com" style={styles.footerLink}>iamrobiul94@gmail.com</a> · <a href="tel:+917029655755" style={styles.footerLink}>+91 7029655755</a>
           </footer>
         </main>
@@ -292,6 +302,20 @@ const styles = {
     borderTop: '1px solid #e2e8f0',
     background: '#fff',
     flexShrink: 0,
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px 12px',
+  },
+  footerVersion: {
+    fontWeight: 700,
+    color: '#0d7377',
+    fontSize: 12,
+    padding: '2px 8px',
+    borderRadius: 6,
+    background: '#f0fdfa',
+    border: '1px solid #99f6e4',
   },
   footerLink: {
     color: '#0d7377',

@@ -76,8 +76,11 @@ npm run electron:build
 
 Artifacts (gitignored) are written to **`release/`**:
 
-- **`MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`** — NSIS installer (recommended; shortcuts + uninstaller)
-- **`MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`** — packaged folder as ZIP (optional)
+- **`MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`** — NSIS installer (**use this on a new PC**). Creates Desktop + Start Menu shortcuts and uninstaller. **This file is separate from the zip — it is not inside the zip.**
+- **`MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`** — portable folder only (extract → run `.exe`). **No setup.exe inside; no shortcuts** — that is expected.
+- **`WINDOWS_INSTALL.txt`** — copied into `release/` after build; give this to users who are unsure which file to run.
+
+If another PC “just runs” from a zip with no shortcuts, send them the **Setup .exe** from your `release/` folder (or upload both assets to GitHub Releases).
 
 The web UI is built to **`dist/`** first; Electron bundles that into the app.
 

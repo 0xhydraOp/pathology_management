@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SQL_EXCLUDE_WALK_IN_REFERRALS } from '../utils/labRules';
 import { formatOrderDateShortIN } from '../utils/dateDisplay';
+import { keyboardActivateHandler } from '../utils/keyboardClick';
 
 const PERIODS = [
   { id: 'today', label: 'Today' },
@@ -52,6 +54,7 @@ export default function Dashboard() {
   const [topReferrers, setTopReferrers] = useState([]);
   const [pendingOrders, setPendingOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const loadDataRequestRef = useRef(0);
 
   const loadData = useCallback(async () => {
@@ -61,6 +64,7 @@ export default function Dashboard() {
     }
     const reqId = ++loadDataRequestRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const [start, end] = getDateRange(period);
       const todayRange = getDateRange('today');
@@ -82,7 +86,7 @@ export default function Dashboard() {
           `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
            FROM patients p JOIN orders o ON o.patient_id = p.id
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           AND LOWER(TRIM(p.referred_by)) != 'self'
+           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
            AND date(o.order_date) >= ? AND date(o.order_date) <= ?
            GROUP BY p.referred_by ORDER BY count DESC LIMIT 10`,
           [start, end]
@@ -102,8 +106,12 @@ export default function Dashboard() {
       setPendingCount(pending?.c ?? 0);
       setTopReferrers(referrers || []);
       setPendingOrders(pendingList || []);
+      setLoadError(null);
     } catch (e) {
-      if (reqId === loadDataRequestRef.current) console.error(e);
+      if (reqId === loadDataRequestRef.current) {
+        console.error(e);
+        setLoadError('Could not load dashboard data. Check the database or restart the app.');
+      }
     } finally {
       if (reqId === loadDataRequestRef.current) setLoading(false);
     }
@@ -152,18 +160,30 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-        <button style={styles.refreshBtn} onClick={loadData} disabled={loading}>
+        <button type="button" style={styles.refreshBtn} onClick={loadData} disabled={loading}>
           ↻ Refresh
         </button>
       </div>
+
+      {loadError && (
+        <div style={styles.errorBanner} role="alert">
+          {loadError}
+          <button type="button" style={styles.errorRetry} onClick={() => loadData()}>
+            Retry
+          </button>
+        </div>
+      )}
 
       <div style={styles.quickActions}>
         {quickActions.map((action) => (
           <div
             key={action.path}
+            role="button"
+            tabIndex={0}
             className={`dashboard-card-hover ${action.primary ? 'dashboard-card-primary' : ''}`}
             style={{ ...styles.actionCard, ...(action.primary ? styles.actionCardPrimary : {}) }}
             onClick={() => navigate(action.path)}
+            onKeyDown={keyboardActivateHandler(() => navigate(action.path))}
           >
             <div style={styles.actionIcon}>{action.icon}</div>
             <div style={styles.actionContent}>
@@ -178,7 +198,14 @@ export default function Dashboard() {
       <p style={styles.shortcutHint}>Ctrl+N New Reg · Ctrl+E Results · Ctrl+P Reports</p>
 
       <div style={styles.statsSection}>
-        <div className="dashboard-card-hover" style={styles.statCard} onClick={() => navigate('/new-registration')}>
+        <div
+          className="dashboard-card-hover"
+          role="button"
+          tabIndex={0}
+          style={styles.statCard}
+          onClick={() => navigate('/new-registration')}
+          onKeyDown={keyboardActivateHandler(() => navigate('/new-registration'))}
+        >
           <div style={styles.statIcon}>👥</div>
           <div style={styles.statContent}>
             <div style={styles.statValue}>
@@ -188,7 +215,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="dashboard-card-hover" style={styles.statCard} onClick={() => navigate('/new-registration')}>
+        <div
+          className="dashboard-card-hover"
+          role="button"
+          tabIndex={0}
+          style={styles.statCard}
+          onClick={() => navigate('/new-registration')}
+          onKeyDown={keyboardActivateHandler(() => navigate('/new-registration'))}
+        >
           <div style={styles.statIcon}>📅</div>
           <div style={styles.statContent}>
             <div style={styles.statValue}>
@@ -198,7 +232,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="dashboard-card-hover" style={styles.statCard} onClick={() => navigate('/result-entry')}>
+        <div
+          className="dashboard-card-hover"
+          role="button"
+          tabIndex={0}
+          style={styles.statCard}
+          onClick={() => navigate('/result-entry')}
+          onKeyDown={keyboardActivateHandler(() => navigate('/result-entry'))}
+        >
           <div style={styles.statIcon}>⏳</div>
           <div style={styles.statContent}>
             <div style={{ ...styles.statValue, color: pendingCount > 0 ? '#c45c26' : '#0d7377' }}>
@@ -213,7 +254,7 @@ export default function Dashboard() {
         <div style={styles.pendingCard}>
           <div style={styles.pendingHeader}>
             <span style={styles.pendingTitle}>Orders awaiting results</span>
-            <button style={styles.viewAllBtn} onClick={() => navigate('/result-entry')}>
+            <button type="button" style={styles.viewAllBtn} onClick={() => navigate('/result-entry')}>
               Enter results →
             </button>
           </div>
@@ -221,16 +262,19 @@ export default function Dashboard() {
             {pendingOrders.length === 0 && !loading && (
               <div style={styles.emptyWrap}>
                 <div style={styles.empty}>No pending orders</div>
-                <button style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
               </div>
             )}
             {pendingOrders.map((o) => (
               <div
                 key={o.id}
+                role="button"
+                tabIndex={0}
                 className="dashboard-referrer-row"
                 style={styles.pendingRow}
                 title="Click to enter results"
                 onClick={() => navigate(`/result-entry?order=${o.id}`)}
+                onKeyDown={keyboardActivateHandler(() => navigate(`/result-entry?order=${o.id}`))}
               >
                 <span style={styles.pendingId}>#{o.id}</span>
                 <span style={styles.pendingName}>{o.name || '—'}</span>
@@ -245,7 +289,7 @@ export default function Dashboard() {
         <div style={styles.referrersCard}>
           <div style={styles.referrersHeader}>
             <span style={styles.referrersTitle}>Top Referrers</span>
-            <button style={styles.viewAllBtn} onClick={() => navigate('/referrals')}>
+            <button type="button" style={styles.viewAllBtn} onClick={() => navigate('/referrals')}>
               View all →
             </button>
           </div>
@@ -264,15 +308,18 @@ export default function Dashboard() {
             {!loading && topReferrers.length === 0 && (
               <div style={styles.emptyWrap}>
                 <div style={styles.empty}>No referral data</div>
-                <button style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
               </div>
             )}
             {!loading && topReferrers.slice(0, 5).map((r, i) => (
               <div
                 key={`${r.name || ''}-${i}`}
+                role="button"
+                tabIndex={0}
                 className="dashboard-referrer-row"
                 style={styles.referrerRow}
                 onClick={() => navigate('/referrals')}
+                onKeyDown={keyboardActivateHandler(() => navigate('/referrals'))}
               >
                 <span style={styles.refRank}>{i + 1}</span>
                 <span style={styles.refName}>{r.name || '—'}</span>
@@ -292,9 +339,12 @@ export default function Dashboard() {
           {shortcuts.map((s) => (
             <div
               key={s.path}
+              role="button"
+              tabIndex={0}
               className="dashboard-card-hover"
               style={styles.shortcutCard}
               onClick={() => navigate(s.path)}
+              onKeyDown={keyboardActivateHandler(() => navigate(s.path))}
             >
               <span style={styles.shortcutLabel}>{s.label}</span>
               <span style={styles.shortcutDesc}>{s.desc}</span>
@@ -316,6 +366,29 @@ const styles = {
   periodBtn: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: '#555' },
   periodBtnActive: { background: '#0d7377', color: '#fff', borderColor: '#0d7377' },
   refreshBtn: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 14, cursor: 'pointer', color: '#555' },
+  errorBanner: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 16px',
+    marginBottom: 16,
+    background: '#fff3cd',
+    border: '1px solid #ffc107',
+    borderRadius: 10,
+    color: '#856404',
+    fontSize: 14,
+  },
+  errorRetry: {
+    padding: '6px 14px',
+    borderRadius: 8,
+    border: '1px solid #856404',
+    background: '#fff',
+    color: '#856404',
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontSize: 13,
+  },
   quickActions: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 12 },
   shortcutHint: { fontSize: 12, color: '#999', marginBottom: 24 },
   actionCard: { background: '#fff', borderRadius: 14, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #eee', display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' },

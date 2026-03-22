@@ -1,6 +1,6 @@
 # Pathological Lab Management System — Project Specification
 
-**Document version:** 1.9  
+**Document version:** 2.0  
 **App release:** 1.0.2  
 **Date:** March 18, 2026  
 **Last updated:** March 18, 2026  
@@ -43,7 +43,7 @@ A **universal, offline-first** desktop application for pathology laboratories in
 - **Lab profile:** Name, address, phone, email, registration number (if any)
 - **Logo:** Upload lab logo for reports
 - **Printer:** Select default printer; default paper A4
-- **Pad layout:** A4 paper with pre-printed header (lab branding on pad); software leaves **1.5 inch top gap** then prints patient details, test department, and results only; no software-printed letterhead
+- **Pad layout:** A4 paper with pre-printed header (lab branding on pad); software leaves **2 inch top gap** then prints patient details, test department, and results only; no software-printed letterhead
 - **Print calibration:** Grid print, visual margin adjustment, save alignment (see Section 10.4)
 - **Pathologist:** Name(s), qualification (for "Read by" on report)
 - **Clinical correlation line:** Customizable footer text (default: "Please correlate clinically")
@@ -55,6 +55,7 @@ A **universal, offline-first** desktop application for pathology laboratories in
 - **Patient registration fields:** Name, Age (YY format — years, e.g. 45 Y), Sex, Referred by (referring doctor), Address (dedicated address box)
 - **Referred by — autocomplete:** When user types a referrer name, it is automatically saved. Next time, typing first few letters shows matching referrers from previously entered names; user selects from dropdown (Enter to select). No duplicate entry needed for same referrer.
 - **Walk-in / Self:** Default referrer can be **Self**; commission logic treats **Self** as non-referrer (no commission row). Referrer **dashboards and aggregates** (Dashboard top referrers, Referrals summaries, Excel referral export) **exclude** `Self` so counts align with commission.
+- **Referrer name normalization:** Main and renderer share rules (`electron/labRules.cjs` + `src/utils/labRules.js`) so **display names are trimmed** and **walk-in variants** (e.g. Self, Walk-in) are treated consistently in SQL filters and commission calculations.
 - **New Registration draft:** Optional autosave of **demographics and referred_by only** to browser storage — **tests to be done are never restored** from draft (always start unticked when opening the form).
 - **Patient ID:** Auto-generated, format `PT{seq}-{MON}-{YEAR}` (e.g. PT01-MAR-2026)
   - Sequence resets every month (new month starts from PT01)
@@ -97,12 +98,12 @@ A **universal, offline-first** desktop application for pathology laboratories in
 
 - **Print audit (`report_print_log`):** A row is written when the user **actually initiates a print/preview** from the **Reports** screen — including **auto-print** after **Save & Print** from Result Entry (`?print=1`). Saving results **without** print does **not** log a print. Manual **Print** / **Ctrl+P** on Reports also logs once per action.
 - **Print option:** Print button/option available in the app (e.g. from report preview or order list)
-- **Print Preview (Windows):** Electron uses `printToPDF()` to generate PDF; opens in new window for preview before printing (avoids "print preview not supported" in system dialog)
+- **Print Preview (Windows / Electron):** Main process uses `webContents.printToPDF()` (A4, `printBackground`, `preferCSSPageSize`, **margins in inches** per Electron API — e.g. 0.25" each side). PDF is written to a temp file and opened in a **dedicated preview `BrowserWindow`** (`show: false` until **`did-finish-load`**). If generation, timeout (~25s), or load fails, IPC returns `{ ok: false, error }` so the renderer can **fall back** to direct print (`electronPrint`) or `window.print()`. **Reports** auto-print (`?print=1`) uses the same fallback chain. **Billing** and **Referrals** (invoice) show a short hint when preview fails, then fall back. **Ctrl+P** in the preview window prints that PDF; in the main app it triggers the usual print flow.
 - **Report watermark option:** Optional watermark for draft reports; e.g. "DRAFT REPORT" printed diagonally across the page; user can enable when printing draft
 - **Printout design:** Clean, easy to read — not messy (see Section 5.4)
 - **Report layout:**
   - **From pad:** Lab name, address, logo, pathologist signature (all pre-printed on pad)
-  - **From software:** 1.5 inch top gap; then:
+  - **From software:** 2 inch top gap; then:
     - **Patient details:** Name, Patient ID, Age, Sex, Phone, Referred by, Address (card layout)
     - **Department/section title** (e.g. Hematology, Biochemistry)
     - Investigation results with units
@@ -187,6 +188,13 @@ A **universal, offline-first** desktop application for pathology laboratories in
 - **Always on top:** Toggle in header (Pin button) for lab desk workflow
 - **Splash screen:** Brief loading screen while database initializes
 - **Global shortcut:** Ctrl+P triggers print (main window) or prints PDF (preview window)
+
+### 4.6.3 Accessibility, display & support
+
+- **Keyboard parity:** Key screens (Dashboard cards/rows, New Registration landing card, Result Entry rows/sections) expose **`role="button"`** and **`tabIndex={0}`** where appropriate; **Enter** and **Space** activate the same action as a click (`src/utils/keyboardClick.js`).
+- **UI font scale:** **Settings → Display** adjusts a global UI scale factor; applied at the app root with print/report layouts tuned in CSS where needed (`src/utils/uiFontScale.js`).
+- **App version:** Shown in **Settings** (subtitle) and **Layout** footer for support and release tracking.
+- **Dashboard resilience:** If database stats fail to load, a **visible error banner** with **Retry** is shown instead of failing silently.
 
 ### 4.7 Referral / Commission Tracking
 
@@ -279,7 +287,7 @@ Map machine output parameters to system investigations for result import from la
 ### 5.1 Pad Layout (Pre-printed)
 
 - **Paper:** A4
-- **Header:** Pre-printed on pad (lab logo, name, address); software leaves **1.5 inch top gap** then prints content
+- **Header:** Pre-printed on pad (lab logo, name, address); software leaves **2 inch top gap** then prints content
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -289,7 +297,7 @@ Map machine output parameters to system investigations for result import from la
 │                         Phone | Email                    │
 │  Reg. No: ___________    (if applicable)                 │
 ├─────────────────────────────────────────────────────────┤
-│  [1.5" gap] [Printable area - patient, department, results]│
+│  [2" gap]   [Printable area - patient, department, results]  │
 │                                                          │
 │                                                          │
 │                                                          │
@@ -429,8 +437,9 @@ LDL               110 mg/dL
 
 ### 6.3 Deployment
 
-- **Stack:** **electron-builder** on **Windows x64**; `npm run electron:build` → icon build, Vite production bundle, pack.
-- **Offline installer:** NSIS **Setup .exe** (`allowToChangeInstallationDirectory`, Start Menu + Desktop shortcuts, license `build/license.txt`); **no code signing** by default (SmartScreen may prompt on first run).
+- **Stack:** **electron-builder** on **Windows x64**; `npm run electron:build` → icon build, Vite production bundle, pack, then **`scripts/copy-windows-install-notes.js`** copies install notes into `release/`.
+- **Offline installer (NSIS):** **Setup .exe** — user-chosen install directory, **Start Menu + Desktop shortcuts** (configured in `package.json` → `build.nsis`), license `build/license.txt`; **no code signing** by default (SmartScreen may prompt on first run). This is the **recommended** install for shortcuts and uninstaller.
+- **Portable ZIP:** **`MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`** — extract and run; **no** `setup.exe` inside the zip; **no** automatic shortcuts. Bundled **`READ_ME_FIRST_Windows_Install.txt`** (from `WINDOWS_INSTALL.txt` / `extraFiles`) explains ZIP vs installer.
 - **Build outputs:** `release/MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`, `release/MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`, `release/win-unpacked/` (folder app).
 - **Bundled catalogue files** (must ship inside installer): `pathology_parameters.json`, `rate_chart.json`, `test_profiles.json` (declared in `package.json` → `build.files`).
 - **Single-instance lock:** Second launch focuses existing window (one DB writer).
@@ -856,7 +865,7 @@ CREATE TABLE lab (
 );
 ```
 
-*Note: `margin_*` in mm or points; `margin_top` default ~38 (1.5 inch) for pad top gap.*
+*Note: `margin_*` in mm or points; `margin_top` default ~51 (2 inch) for pad top gap; print CSS uses `@page` 2in top.*
 
 ### 9.2 Patients
 
@@ -1186,8 +1195,8 @@ MachineImportMapping (machine_parameter → system investigation)
 ### 10.1 Pad-Based Printing
 
 - **Pad:** A4 paper with pre-printed header (lab logo, name, address)
-- Software leaves **1.5 inch top gap**; prints only patient details, department, results, minimal footer
-- Default margin_top = 1.5 inch (38 mm) for pad top gap; configurable for alignment
+- Software leaves **2 inch top gap**; prints only patient details, department, results, minimal footer
+- Default margin_top ≈ 2 inch (51 mm) for pad top gap in lab config; print output uses CSS `@page` top margin 2in
 - Support for multiple pad designs (template selection)
 
 ### 10.2 Supported Printers
@@ -1200,6 +1209,7 @@ MachineImportMapping (machine_parameter → system investigation)
 ### 10.3 Print Flow
 
 - **Print option:** Always available in the app (e.g. Print button on report preview, order list, or report view)
+- **Invoices:** Billing and Referrer **Payment invoice** support the same **Print Preview → print** pattern as Reports, with **fallback** if PDF preview fails.
 1. User selects order(s) → Preview report (shows live date/time)
 2. User selects **Printed by** (staff name from list)
 3. Ensure correct pad is loaded
@@ -1275,6 +1285,7 @@ Align software output with pre-printed pad:
 
 ### Phase 3 — Polish (4–6 weeks)
 
+- [x] Print preview reliability (PDF load wait, IPC errors, renderer fallbacks; Reports / Billing / Referrals) — *March 2026*
 - [ ] Barcode support
 - [ ] Print calibration (grid, visual margin adjustment, save alignment) — *standalone UI removed; margin columns exist in lab table*
 - [ ] Report watermark option (DRAFT REPORT, diagonally; for draft prints)
@@ -1333,6 +1344,15 @@ Align software output with pre-printed pad:
 - **Referrals — card view:** Referrers displayed as clickable cards; each card shows performance (Today, This Week, This Month, Last Month); click → patient list; double-click → performance report modal
 - **Reports — period cards:** Today, Yesterday, This Week, Last Month as clickable cards (replacing button row)
 - **Bug fixes:** Order date uses local time (not UTC); form.referred_by null handling; Referrals load error banner with Retry; AGRATIO derived-from-derived (GLOB) resolution; Dashboard reqId/loadDataRequestRef; Referrals modal overlap; draft restore validates parameter IDs
+
+### Implemented (March 2026 — reliability, print, distribution)
+
+- **Shared lab rules:** `electron/labRules.cjs` and `src/utils/labRules.js` — **normalize referrer names**, shared **SQL fragment** to exclude walk-in/self from referral aggregates; **database** commission and referral queries aligned.
+- **Print preview hardening:** Temp PDF preview window waits for successful load; **timeout and load errors** return failure to renderer; **cleanup** of temp file and window on error; **`console.warn`** when print is invoked with no window.
+- **Print fallbacks:** Reports (**including `?print=1`**), Billing, Referrals — **electronPrintPreview** failure → **electronPrint** / **`window.print()`** as applicable; user-facing **hints** on invoice flows when preview fails.
+- **New Registration:** Optional **age `0`** stored correctly (not coerced to null).
+- **Billing / Reports UX:** Clearer **empty states** when there is no data to show.
+- **Verification:** `scripts/test-system.js` extended (e.g. lab rules, font scale, temp DB smoke including `computeOrderBillAndCommission`); run via **`npm test`**.
 
 ### Phase 4 — Optional
 
@@ -1433,7 +1453,7 @@ Please correlate clinically.
 - **CBC:** Complete Blood Count
 - **LFT:** Liver Function Test
 - **KFT/RFT:** Kidney Function Test
-- **Pad:** A4 pre-printed stationery with lab branding; software leaves 1.5 inch top gap, then prints patient details, department, results
+- **Pad:** A4 pre-printed stationery with lab branding; software leaves 2 inch top gap, then prints patient details, department, results
 - **Print calibration:** Grid print, visual margin adjustment, save alignment — align software output with pad
 - **Machine import profiles:** Map machine_parameter (e.g. HB, PLT) → system_parameter (e.g. Haemoglobin, Platelet Count) for result import
 - **Report watermark:** Optional "DRAFT REPORT" (or custom text) printed diagonally for draft reports
@@ -1456,4 +1476,3 @@ Please correlate clinically.
 ---
 
 *End of Project Specification*
-513

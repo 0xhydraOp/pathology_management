@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SQL_EXCLUDE_WALK_IN_REFERRALS } from '../utils/labRules';
 
 const money = (n) => (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -112,7 +113,7 @@ export default function Referrals() {
          FROM patients p
          JOIN orders o ON o.patient_id = p.id
          WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-         AND LOWER(TRIM(p.referred_by)) != 'self'
+         ${SQL_EXCLUDE_WALK_IN_REFERRALS}
          AND date(o.order_date) >= ? AND date(o.order_date) <= ?
          GROUP BY p.referred_by ORDER BY count DESC`,
         [start, end]
@@ -129,7 +130,7 @@ export default function Referrals() {
           `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
            FROM patients p JOIN orders o ON o.patient_id = p.id
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           AND LOWER(TRIM(p.referred_by)) != 'self'
+           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
            AND date(o.order_date) = ?
            GROUP BY p.referred_by`,
           [todayStr]
@@ -138,7 +139,7 @@ export default function Referrals() {
           `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
            FROM patients p JOIN orders o ON o.patient_id = p.id
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           AND LOWER(TRIM(p.referred_by)) != 'self'
+           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
            AND date(o.order_date) >= ? AND date(o.order_date) <= ?
            GROUP BY p.referred_by`,
           [weekStart, weekEnd]
@@ -147,7 +148,7 @@ export default function Referrals() {
           `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
            FROM patients p JOIN orders o ON o.patient_id = p.id
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           AND LOWER(TRIM(p.referred_by)) != 'self'
+           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
            AND date(o.order_date) >= ? AND date(o.order_date) <= ?
            GROUP BY p.referred_by`,
           [monthStart, monthEnd]
@@ -156,7 +157,7 @@ export default function Referrals() {
           `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
            FROM patients p JOIN orders o ON o.patient_id = p.id
            WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           AND LOWER(TRIM(p.referred_by)) != 'self'
+           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
            AND date(o.order_date) >= ? AND date(o.order_date) <= ?
            GROUP BY p.referred_by`,
           [lastMonthStart, lastMonthEnd]
@@ -347,6 +348,10 @@ export default function Referrals() {
         setTimeout(() => setInvoicePrintHint(''), 4000);
         return;
       }
+      setInvoicePrintHint(
+        result?.error ? `Preview failed (${result.error}). Trying system print…` : 'Preview unavailable — trying system print…'
+      );
+      setTimeout(() => setInvoicePrintHint(''), 4000);
     }
     if (typeof window.electronPrint === 'function') {
       await window.electronPrint(1);
