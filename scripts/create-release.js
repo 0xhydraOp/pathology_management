@@ -1,5 +1,5 @@
 /**
- * Create or update GitHub release with Windows installer (NSIS) + ZIP.
+ * Create or update GitHub release with Windows installer (NSIS) + install ZIP.
  *
  * Prerequisites:
  *   1. gh auth login
@@ -49,8 +49,8 @@ const notes = `## ${product} v${version}
 ### Recommended install (Windows)
 Download **${setup || 'the Setup .exe'}** and run it — NSIS installer with shortcuts, Start Menu entry, and uninstaller.
 
-### ZIP (optional)
-**${zip || 'the .zip'}** is an archive of the packaged app (extract anywhere and run the .exe). Use the **Setup** for a proper installation.
+### ZIP (install package, not portable)
+**${zip || 'the .zip'}** contains the **same Setup .exe** plus \`READ_ME_FIRST_Windows_Install.txt\`. Extract the ZIP, then run **MONDAL DIAGNOSTIC CENTRE Setup … .exe** inside — it is **not** a portable “extract and run app” folder.
 
 ### First run
 The local database stores only your lab’s real work — no sample patients or orders ship with the app.

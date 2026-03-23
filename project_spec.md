@@ -264,7 +264,7 @@ Map machine output parameters to system investigations for result import from la
   - **Backup to app folder** — copies `lab.db` into `backups/` under user data (with flush before copy).
   - **Save to PC…** — Windows file dialog (default **Desktop**); user picks path for `.db` (USB, Documents, etc.).
   - **Encrypted backup** — same choice of **app folder** or **Encrypted to PC…**
-- **Windows uninstall (NSIS):** With **`deleteAppDataOnUninstall: true`**, uninstaller can remove the **user data** folder (database + backups + exports). **Back up before uninstall** if data must be kept. Portable **ZIP** build has no uninstaller — delete folders manually.
+- **Windows uninstall (NSIS):** With **`deleteAppDataOnUninstall: true`**, uninstaller can remove the **user data** folder (database + backups + exports). **Back up before uninstall** if data must be kept. The **distributable ZIP** is an installer package (Setup inside); there is no separate portable zip build.
 - **Export to Excel:** Orders and referrals to `.xlsx` from Settings / Referrals; see §4.10.1.
 - **Offline:** No cloud dependency
 - Optional future: Daily auto-backup
@@ -438,9 +438,9 @@ LDL               110 mg/dL
 ### 6.3 Deployment
 
 - **Stack:** **electron-builder** on **Windows x64**; `npm run electron:build` → icon build, Vite production bundle, pack, then **`scripts/copy-windows-install-notes.js`** copies install notes into `release/`.
-- **Offline installer (NSIS):** **Setup .exe** — user-chosen install directory, **Start Menu + Desktop shortcuts** (configured in `package.json` → `build.nsis`), license `build/license.txt`; **no code signing** by default (SmartScreen may prompt on first run). This is the **recommended** install for shortcuts and uninstaller.
-- **Portable ZIP:** **`MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`** — extract and run; **no** `setup.exe` inside the zip; **no** automatic shortcuts. Bundled **`READ_ME_FIRST_Windows_Install.txt`** (from `WINDOWS_INSTALL.txt` / `extraFiles`) explains ZIP vs installer.
-- **Build outputs:** `release/MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`, `release/MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`, `release/win-unpacked/` (folder app).
+- **Offline installer (NSIS):** **Setup .exe** — **per-machine** default (typically under **Program Files**; user may pick another drive/folder in the wizard), **UAC elevation** as needed, **Desktop + Start Menu shortcuts** (`createDesktopShortcut: "always"`, `createStartMenuShortcut`, plus **`build/installer.nsh`** `customInstall` as a backup), license `build/license.txt`; **no code signing** by default (SmartScreen may prompt on first run). This is the **recommended** install.
+- **Install package ZIP:** **`MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip`** — contains **the NSIS Setup .exe** + **`READ_ME_FIRST_Windows_Install.txt`** (from `WINDOWS_INSTALL.txt`). Extract, then run **Setup** — **not** a portable app folder. Built by `scripts/package-install-zip.js` after `electron-builder` (electron-builder **zip** target disabled).
+- **Build outputs:** `release/MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`, `release/MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip`, `release/win-unpacked/` (intermediate), loose `READ_ME_FIRST_Windows_Install.txt` in `release/`.
 - **Bundled catalogue files** (must ship inside installer): `pathology_parameters.json`, `rate_chart.json`, `test_profiles.json` (declared in `package.json` → `build.files`).
 - **Single-instance lock:** Second launch focuses existing window (one DB writer).
 - **Target OS:** Windows **10+**, **64-bit** (installer arch `x64`; ARM64 not in current build config)
@@ -1273,7 +1273,7 @@ Align software output with pre-printed pad:
 
 ### Phase 2 — Enhancement (4–6 weeks)
 
-- [x] Offline installer (NSIS .exe, ZIP, portable; no internet required)
+- [x] Offline installer (NSIS .exe + install-package ZIP; no internet required)
 - [ ] Full 100-investigation catalogue
 - [x] Age/sex-specific ranges
 - [ ] Investigation editor (removed in v1.7; reload catalogue from Settings)
@@ -1333,7 +1333,7 @@ Align software output with pre-printed pad:
 - **Preload / IPC:** `backupChooseLocation`, `backupEncryptedChooseLocation`; `db:reloadCatalogue` for catalogue JSON reload
 - **Logic:** `computeOrderBillAndCommission` ignores invalid order IDs; New Registration validates patient/order IDs before `order_tests`; referrer aggregates exclude **Self** (Dashboard, Referrals, Referrer Commission list, referrals Excel); Billing payment toggle normalizes **`paid`** case-insensitively
 - **Result entry:** Order status “filled” counts respect **numeric** vs **text** (empty text not counted); print log only via **Reports** (manual + auto-print)
-- **Housekeeping:** `project_spec` / docs aligned; `npm run electron:build` produces **Setup 1.0.2.exe** and **1.0.2 ZIP**
+- **Housekeeping:** `project_spec` / docs aligned; `npm run electron:build` produces **Setup .exe** and **Windows-Install-Package.zip** (Setup + readme inside)
 
 ### Implemented (v1.7)
 

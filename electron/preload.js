@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+﻿const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronApp', {
   setTitle: (title) => ipcRenderer.invoke('app:setTitle', title),
@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('electronPrint', (copies) =>
   ipcRenderer.invoke('app:print', copies || 1)
 );
 
-contextBridge.exposeInMainWorld('electronPrintPreview', () =>
-  ipcRenderer.invoke('app:printPreview')
+contextBridge.exposeInMainWorld('electronPrintPreview', (copies) =>
+  ipcRenderer.invoke('app:printPreview', copies || 1)
 );
+
+

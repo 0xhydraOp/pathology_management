@@ -55,6 +55,7 @@ export default function Reports() {
   const [printCopies, setPrintCopies] = useState(1);
   const [search, setSearch] = useState('');
   const [printFeedback, setPrintFeedback] = useState('');
+  const [printMeta, setPrintMeta] = useState(null);
   const searchInputRef = useRef(null);
   const autoPrintFiredRef = useRef(false);
   const today = toLocalDateStr(new Date());
@@ -62,6 +63,11 @@ export default function Reports() {
 
   /* Top matches @page in index.css (2in) so on-screen report aligns with pre-printed pad */
   const margins = { top: '2in', left: 28, right: 28, bottom: 12 };
+
+  const waitForPrintRender = useCallback(async (meta) => {
+    setPrintMeta(meta);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }, []);
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
@@ -127,20 +133,27 @@ export default function Reports() {
       const defaultBy = labConfig.default_printed_by || 'Admin';
       const timer = setTimeout(() => {
         void (async () => {
-          if (window.db?.logPrint && orderIdForReport) {
-            try {
-              let printedBy = defaultBy;
+          const meta = {
+            printedAt: new Date().toISOString(),
+            printedBy: (() => {
               try {
                 const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
-                printedBy = u.displayName || u.username || defaultBy;
-              } catch (_) { /* use defaultBy */ }
-              await window.db.logPrint(orderIdForReport, printedBy);
+                return u.displayName || u.username || defaultBy;
+              } catch (_) {
+                return defaultBy;
+              }
+            })(),
+          };
+          await waitForPrintRender(meta);
+          if (window.db?.logPrint && orderIdForReport) {
+            try {
+              await window.db.logPrint(orderIdForReport, meta.printedBy);
             } catch (e) {
               console.error(e);
             }
           }
           if (typeof window.electronPrintPreview === 'function') {
-            const previewResult = await window.electronPrintPreview();
+            const previewResult = await window.electronPrintPreview(copies);
             if (previewResult?.ok) return;
             console.warn('[auto-print] PDF preview failed, falling back:', previewResult?.error || 'unknown');
           }
@@ -156,7 +169,7 @@ export default function Reports() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [reportData, shouldPrint, printCopies, labConfig.default_printed_by]);
+  }, [reportData, shouldPrint, printCopies, labConfig.default_printed_by, waitForPrintRender]);
 
   const selectedOrderIdRef = useRef(null);
   useEffect(() => {
@@ -193,7 +206,7 @@ export default function Reports() {
         const rr = rangeMap[r.parameter_id];
         const lo = rr?.low_value;
         const hi = rr?.high_value;
-        const refRange = (lo != null || hi != null) ? `(${lo ?? '—'} – ${hi ?? '—'})` : '';
+        const refRange = (lo != null || hi != null) ? `(${lo ?? '\u2014'} \u2013 ${hi ?? '\u2014'})` : '';
         return { ...r, refRange };
       });
       setReportData({ ...selectedOrder, results: resultsWithRange });
@@ -203,6 +216,7 @@ export default function Reports() {
   }, [selectedOrder]);
 
   const getPrintedBy = () => {
+    if (printMeta?.printedBy) return printMeta.printedBy;
     try {
       const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
       return u.displayName || u.username || labConfig.default_printed_by || 'Admin';
@@ -217,6 +231,10 @@ export default function Reports() {
         return u.displayName || u.username || labConfig.default_printed_by || 'Admin';
       } catch { return labConfig.default_printed_by || 'Admin'; }
     })();
+    await waitForPrintRender({
+      printedAt: new Date().toISOString(),
+      printedBy,
+    });
     if (window.db) {
       try {
         await window.db.logPrint(reportData.id, printedBy);
@@ -225,7 +243,7 @@ export default function Reports() {
       }
     }
     if (typeof window.electronPrintPreview === 'function') {
-      const result = await window.electronPrintPreview();
+      const result = await window.electronPrintPreview(printCopies);
       if (result?.ok) {
         setPrintFeedback('Report opened in preview — use Ctrl+P in that window to print');
       } else {
@@ -244,18 +262,8 @@ export default function Reports() {
       setPrintFeedback('Printed');
       setTimeout(() => setPrintFeedback(''), 2500);
     }
-  }, [reportData, printCopies, labConfig.default_printed_by]);
+  }, [reportData, printCopies, labConfig.default_printed_by, waitForPrintRender]);
 
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-        e.preventDefault();
-        if (reportData && (reportData.results?.length ?? 0) > 0) handlePrint();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [reportData, handlePrint]);
 
   useEffect(() => {
     const onPrintTrigger = () => {
@@ -266,11 +274,13 @@ export default function Reports() {
   }, [reportData, handlePrint]);
 
   const formatDate = (d) => {
-    if (!d) return '—';
+    if (!d) return '\u2014';
     const x = new Date(d);
-    if (isNaN(x.getTime())) return '—';
+    if (isNaN(x.getTime())) return '\u2014';
     return `${String(x.getDate()).padStart(2, '0')}-${String(x.getMonth() + 1).padStart(2, '0')}-${x.getFullYear()} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`;
   };
+
+  const reportPrintedAt = printMeta?.printedAt ? new Date(printMeta.printedAt) : new Date();
 
   const filteredOrders = (() => {
     const list = orders.filter((o) => {
@@ -303,7 +313,7 @@ export default function Reports() {
   return (
     <div style={styles.container} className="reports-print-container reports-page">
       <div style={styles.pageHeader} className="no-print">
-        <div style={styles.pageHeaderIcon}>📄</div>
+        <div style={styles.pageHeaderIcon}>ðŸ“„</div>
         <div>
           <h1 style={styles.title}>Reports</h1>
           <p style={styles.subtitle}>
@@ -315,11 +325,11 @@ export default function Reports() {
       <div style={styles.card} className="no-print reports-filter-card">
         <div style={styles.presetCardGrid}>
           {[
-            { id: 'today', label: 'Today', icon: '📅' },
-            { id: 'yesterday', label: 'Yesterday', icon: '📆' },
-            { id: 'last7', label: 'This Week', icon: '📋' },
-            { id: 'month', label: 'This Month', icon: '📆' },
-            { id: 'lastmonth', label: 'Last Month', icon: '🗓️' },
+            { id: 'today', label: 'Today', icon: 'ðŸ“…' },
+            { id: 'yesterday', label: 'Yesterday', icon: 'ðŸ“†' },
+            { id: 'last7', label: 'This Week', icon: 'ðŸ“‹' },
+            { id: 'month', label: 'This Month', icon: 'ðŸ“†' },
+            { id: 'lastmonth', label: 'Last Month', icon: 'ðŸ—“ï¸' },
           ].map(({ id, label, icon }) => {
             const preset = getDatePreset(id);
             const isActive = orderFilter.dateFrom === preset?.dateFrom && orderFilter.dateTo === preset?.dateTo;
@@ -379,7 +389,7 @@ export default function Reports() {
               ref={searchInputRef}
               type="text"
               autoComplete="off"
-              placeholder="Order #, name, mobile, referrer, or scan barcode…"
+              placeholder="Order #, name, mobile, referrer, or scan barcode\u2026"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -519,24 +529,24 @@ export default function Reports() {
                   <div style={styles.patientCardGrid} className="patient-card-grid">
                     <div style={styles.patientItem}>
                       <span style={styles.patientLabel}>Age</span>
-                      <span style={styles.patientValue}>{reportData.age || '—'}</span>
+                      <span style={styles.patientValue}>{reportData.age || '\u2014'}</span>
                     </div>
                     <div style={styles.patientItem}>
                       <span style={styles.patientLabel}>Sex</span>
-                      <span style={styles.patientValue}>{reportData.sex === 'male' ? 'M' : reportData.sex === 'female' ? 'F' : '—'}</span>
+                      <span style={styles.patientValue}>{reportData.sex === 'male' ? 'M' : reportData.sex === 'female' ? 'F' : '\u2014'}</span>
                     </div>
                     <div style={styles.patientItem}>
                       <span style={styles.patientLabel}>Phone</span>
-                      <span style={styles.patientValue}>{reportData.phone || '—'}</span>
+                      <span style={styles.patientValue}>{reportData.phone || '\u2014'}</span>
                     </div>
                     <div style={styles.patientItem}>
                       <span style={styles.patientLabel}>Referred by</span>
-                      <span style={styles.patientValue}>{reportData.referred_by || '—'}</span>
+                      <span style={styles.patientValue}>{reportData.referred_by || '\u2014'}</span>
                     </div>
                   </div>
                   <div style={styles.patientAddress}>
                     <span style={styles.patientAddressLabel}>Address</span>
-                    <span style={styles.patientAddressValue}>{reportData.address || '—'}</span>
+                    <span style={styles.patientAddressValue}>{reportData.address || '\u2014'}</span>
                   </div>
                   {reportData.access_code && (
                     <div style={styles.reportBarcodeSection} className="report-barcode-section">
@@ -544,7 +554,7 @@ export default function Reports() {
                       <OrderBarcode value={reportData.access_code} height={26} fontSize={8} />
                     </div>
                   )}
-                  <div style={styles.reportDate}>Report Date: {formatDate(new Date())}</div>
+                  <div style={styles.reportDate}>Report Date: {formatDate(reportPrintedAt)}</div>
                 </div>
                 <div style={styles.departmentTitle}>{sectionName}</div>
               </div>
@@ -563,23 +573,23 @@ export default function Reports() {
                     <tr key={i}>
                       <td style={styles.td}>{r.test_name}</td>
                       <td style={{ ...styles.td, fontWeight: 700, fontSize: 13 }}>
-                        {r.result_value != null ? r.result_value : r.result_text || '—'}
+                        {r.result_value != null ? r.result_value : r.result_text || '\u2014'}
                       </td>
-                      <td style={styles.td}>{r.unit || '—'}</td>
-                      <td style={{ ...styles.td, fontSize: 11, color: '#666' }}>{r.refRange || '—'}</td>
+                      <td style={styles.td}>{r.unit || '\u2014'}</td>
+                      <td style={{ ...styles.td, fontSize: 11, color: '#666' }}>{r.refRange || '\u2014'}</td>
                       <td style={{ ...styles.td, color: r.flag === 'L' || r.flag === 'H' || r.flag === 'C' ? '#c00' : '#666' }}>
-                        {r.flag === 'N' ? 'N' : r.flag === 'L' ? '↓' : r.flag === 'H' ? '↑' : r.flag === 'C' ? '!!' : r.flag || 'N'}
+                        {r.flag === 'N' ? 'N' : r.flag === 'L' ? 'â†“' : r.flag === 'H' ? 'â†‘' : r.flag === 'C' ? '!!' : r.flag || 'N'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div style={styles.footer}>
-                <div style={styles.footerReadBy}>Read by: {labConfig.pathologist_name} · Printed by: {getPrintedBy()} · {formatDate(new Date())}</div>
+              <div style={styles.footer} className="report-print-footer">
+                <div style={styles.footerReadBy}>Read by: {labConfig.pathologist_name} Â· Printed by: {getPrintedBy()} Â· {formatDate(reportPrintedAt)}</div>
                 <div style={styles.footerClinical}>{labConfig.clinical_correlation_text || 'Please correlate clinically'}</div>
-                {orderedSections.length > 1 && (
-                  <div style={styles.pageNumber}>Page {sectionIdx + 1} of {orderedSections.length}</div>
-                )}
+                <div className="report-print-page-number" style={styles.pageNumber}>
+                  Page {sectionIdx + 1} of {orderedSections.length}
+                </div>
               </div>
             </div>
           ))}
@@ -593,11 +603,11 @@ export default function Reports() {
             </select>
             {typeof window.electronPrintPreview === 'function' ? (
               <button type="button" style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn" title="Opens report in new window — use Ctrl+P there to print">
-                🖨 View & Print
+                ðŸ–¨ View & Print
               </button>
             ) : (
               <button type="button" style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn">
-                🖨 Print Report
+                ðŸ–¨ Print Report
               </button>
             )}
             {printFeedback && <span style={styles.printFeedback}>{printFeedback}</span>}
@@ -740,8 +750,8 @@ const styles = {
   td: { padding: '8px 12px', borderBottom: '1px solid #f1f5f9' },
   footer: { marginTop: 16, paddingTop: 10, fontSize: 11, color: '#64748b' },
   footerReadBy: { marginBottom: 8 },
-  footerClinical: { fontStyle: 'italic' },
-  pageNumber: { marginTop: 8, fontSize: 11, color: '#64748b', textAlign: 'center' },
+  footerClinical: { fontStyle: 'italic', marginBottom: 4 },
+  pageNumber: { marginTop: 6, fontSize: 11, color: '#64748b', textAlign: 'right', width: '100%', alignSelf: 'flex-end' },
   actions: { display: 'flex', gap: 14, alignItems: 'center', marginTop: 20, padding: '18px 20px', background: 'linear-gradient(to right, #f8fafc 0%, #f1f5f9 100%)', borderRadius: 12, border: '1px solid #e2e8f0' },
   copiesSelect: { padding: '10px 16px', borderRadius: 10, border: '2px solid #e2e8f0', fontSize: 14, background: '#fff' },
   previewBtn: { background: 'linear-gradient(135deg, #475569 0%, #64748b 100%)', color: '#fff', border: 'none', padding: '12px 22px', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px rgba(71,85,105,0.25)' },
@@ -767,3 +777,4 @@ const styles = {
   hintWrap: { padding: 20 },
   actionBtn: { padding: '10px 20px', borderRadius: 10, border: '2px solid #0d7377', background: '#fff', color: '#0d7377', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' },
 };
+

@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+﻿import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
 /** HashRouter: real route is in `location.hash`, not `window.location.pathname`. */
@@ -22,25 +22,16 @@ const TITLE_MAP = {
 
 function HotkeyHandler() {
   const navigate = useNavigate();
-  const location = useLocation();
   useEffect(() => {
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && !e.target?.closest?.('input, textarea, select')) {
         if (e.key === 'n') { e.preventDefault(); navigate('/new-registration'); }
-        if (e.key === 'p') {
-          e.preventDefault();
-          if (location.pathname === '/reports') {
-            window.dispatchEvent(new CustomEvent('app-print-trigger'));
-          } else {
-            navigate('/reports');
-          }
-        }
         if (e.key === 'e') { e.preventDefault(); navigate('/result-entry'); }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [navigate, location.pathname]);
+  }, [navigate]);
   return null;
 }
 
@@ -85,6 +76,7 @@ function formatDateTime() {
 }
 
 export default function Layout({ children, onLogout }) {
+  const navigate = useNavigate();
   const [clock, setClock] = useState(formatDateTime());
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [labName, setLabName] = useState('MONDAL DIAGNOSTIC CENTRE');
@@ -118,9 +110,11 @@ export default function Layout({ children, onLogout }) {
     return window.electronApp.onPrintTrigger(() => {
       if (getHashRoutePath() === '/reports') {
         window.dispatchEvent(new CustomEvent('app-print-trigger'));
+      } else {
+        navigate('/reports');
       }
     });
-  }, []);
+  }, [navigate]);
 
   const toggleAlwaysOnTop = () => {
     const next = !alwaysOnTop;
@@ -149,7 +143,7 @@ export default function Layout({ children, onLogout }) {
               style={{ ...styles.logoutBtn, ...(alwaysOnTop ? styles.pinActive : {}) }}
               title={alwaysOnTop ? 'Unpin from top' : 'Keep on top'}
             >
-              {alwaysOnTop ? '📌 On top' : 'Pin'}
+              {alwaysOnTop ? 'ðŸ“Œ On top' : 'Pin'}
             </button>
           )}
           <button
@@ -189,7 +183,7 @@ export default function Layout({ children, onLogout }) {
             {appVersion ? (
               <span style={styles.footerVersion}>v{appVersion}</span>
             ) : null}
-            Developed by <strong>Robiul Islam Molla</strong> · <a href="mailto:iamrobiul94@gmail.com" style={styles.footerLink}>iamrobiul94@gmail.com</a> · <a href="tel:+917029655755" style={styles.footerLink}>+91 7029655755</a>
+            Developed by <strong>Robiul Islam Molla</strong> Â· <a href="mailto:iamrobiul94@gmail.com" style={styles.footerLink}>iamrobiul94@gmail.com</a> Â· <a href="tel:+917029655755" style={styles.footerLink}>+91 7029655755</a>
           </footer>
         </main>
       </div>
@@ -322,3 +316,4 @@ const styles = {
     textDecoration: 'none',
   },
 };
+

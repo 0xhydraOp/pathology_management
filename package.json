@@ -11,7 +11,8 @@
     "build:icon": "node scripts/build-icon.mjs",
     "test": "node scripts/test-system.js",
     "release": "node scripts/create-release.js",
-    "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/copy-windows-install-notes.js",
+    "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/package-install-zip.js",
+    "release:clean": "node scripts/clean-release.js",
     "start": "electron ."
   },
   "dependencies": {
@@ -59,10 +60,6 @@
         {
           "target": "nsis",
           "arch": ["x64"]
-        },
-        {
-          "target": "zip",
-          "arch": ["x64"]
         }
       ],
       "icon": "build/icon.ico",
@@ -71,9 +68,10 @@
     "forceCodeSigning": false,
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
+      "include": "build/installer.nsh",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",

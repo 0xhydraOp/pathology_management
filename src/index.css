@@ -212,6 +212,23 @@ input, select, textarea {
   .report-page-break { page-break-after: always !important; }
   .report-page-break-before { page-break-before: always !important; }
   .report-page { page-break-inside: avoid !important; }
+  /* Fill printable height so footer + page number sit at bottom; page # bottom-right */
+  .report-print.report-page {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 220mm !important;
+    box-sizing: border-box !important;
+  }
+  .report-print-footer {
+    margin-top: auto !important;
+    width: 100% !important;
+  }
+  .report-print-page-number {
+    text-align: right !important;
+    width: 100% !important;
+    font-size: 11px !important;
+    color: #64748b !important;
+  }
   .report-card { box-shadow: none !important; border: none !important; }
   html, body, #root { overflow: visible !important; background: #fff !important; }
   .app-layout { min-height: auto !important; }

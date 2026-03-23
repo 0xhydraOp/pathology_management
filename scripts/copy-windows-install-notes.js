@@ -1,6 +1,7 @@
 /**
- * After electron-builder, copy WINDOWS_INSTALL.txt into release/ so the
- * folder always explains Setup .exe vs .zip (Setup is never inside the zip).
+ * Copy WINDOWS_INSTALL.txt → release/ (optional manual step).
+ * `npm run electron:build` uses **package-install-zip.js** instead, which
+ * copies the same text as READ_ME_FIRST_Windows_Install.txt and zips it with Setup.
  */
 const fs = require('fs');
 const path = require('path');

@@ -9,6 +9,7 @@ let mainWindow;
 let splashWindow;
 let previewWindow;
 let db;
+let previewPrintCopies = 1;
 
 /** One process = one DB file; second launch focuses the existing window (Windows/Linux). */
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -24,8 +25,13 @@ app.on('second-instance', () => {
   }
 });
 
-const STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
-const PREVIEW_STATE_FILE = path.join(app.getPath('userData'), 'preview-state.json');
+/** Resolve after app is ready — avoid reading userData path at module load. */
+function stateFilePath() {
+  return path.join(app.getPath('userData'), 'window-state.json');
+}
+function previewStateFilePath() {
+  return path.join(app.getPath('userData'), 'preview-state.json');
+}
 
 function getIconPath() {
   const ico = path.join(__dirname, '../build/icon.ico');
@@ -37,8 +43,9 @@ function getIconPath() {
 
 function loadWindowState() {
   try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    const sf = stateFilePath();
+    if (fs.existsSync(sf)) {
+      const data = JSON.parse(fs.readFileSync(sf, 'utf8'));
       const { width, height, x, y, isMaximized, isAlwaysOnTop } = data;
       const display = screen.getPrimaryDisplay();
       const { width: dw, height: dh } = display.workAreaSize;
@@ -61,14 +68,15 @@ function saveWindowState() {
       isMaximized: mainWindow.isMaximized(),
       isAlwaysOnTop: mainWindow.isAlwaysOnTop(),
     };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 0));
+    fs.writeFileSync(stateFilePath(), JSON.stringify(state, null, 0));
   } catch (_) {}
 }
 
 function loadPreviewState() {
   try {
-    if (fs.existsSync(PREVIEW_STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(PREVIEW_STATE_FILE, 'utf8'));
+    const pf = previewStateFilePath();
+    if (fs.existsSync(pf)) {
+      const data = JSON.parse(fs.readFileSync(pf, 'utf8'));
       if (data.width > 400 && data.height > 300) return data;
     }
   } catch (_) {}
@@ -79,7 +87,7 @@ function savePreviewState(win) {
   if (!win || win.isDestroyed()) return;
   try {
     const b = win.getBounds();
-    fs.writeFileSync(PREVIEW_STATE_FILE, JSON.stringify({ width: b.width, height: b.height }));
+    fs.writeFileSync(previewStateFilePath(), JSON.stringify({ width: b.width, height: b.height }));
   } catch (_) {}
 }
 
@@ -247,12 +255,13 @@ function doPrint(copies = 1) {
   }
 }
 
-async function doPrintPreview() {
+async function doPrintPreview(copies = 1) {
   const win = mainWindow || BrowserWindow.getFocusedWindow();
   if (!win || !win.webContents) return { ok: false, error: 'No window' };
   let pdfPath;
   let pdfWin;
   try {
+    previewPrintCopies = Math.max(1, parseInt(copies, 10) || 1);
     // Margins are in inches (Electron 33+ docs: webContents.printToPDF).
     const pdfData = await win.webContents.printToPDF({
       printBackground: true,
@@ -332,9 +341,16 @@ async function doPrintPreview() {
 }
 
 app.whenReady().then(async () => {
+  const userDataDir = app.getPath('userData');
+  try {
+    fs.mkdirSync(userDataDir, { recursive: true });
+  } catch (e) {
+    console.error('[app] Could not create user data folder:', userDataDir, e);
+  }
+
   createSplashWindow();
 
-  db = new Database(app.getPath('userData'));
+  db = new Database(userDataDir);
   await db.init();
 
   const safeDb = (fn) => (...args) => { try { return fn(...args); } catch (e) { console.error('DB error:', e); throw e; } };
@@ -408,7 +424,7 @@ app.whenReady().then(async () => {
     }
   });
   ipcMain.handle('app:print', (_, copies) => doPrint(copies || 1));
-  ipcMain.handle('app:printPreview', () => doPrintPreview());
+  ipcMain.handle('app:printPreview', (_, copies) => doPrintPreview(copies || 1));
   ipcMain.handle('app:setTitle', (_, title) => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();
     if (w && !w.isDestroyed()) w.setTitle(title || 'MONDAL DIAGNOSTIC CENTRE');
@@ -435,7 +451,11 @@ app.whenReady().then(async () => {
   globalShortcut.register('CommandOrControl+P', () => {
     const win = BrowserWindow.getFocusedWindow();
     if (win === previewWindow && win?.webContents) {
-      win.webContents.print({ silent: false, printBackground: true });
+      win.webContents.print({
+        silent: false,
+        printBackground: true,
+        copies: Math.max(1, parseInt(previewPrintCopies, 10) || 1),
+      });
     } else if (mainWindow?.webContents) {
       mainWindow.webContents.send('app:print-trigger');
       if (win !== mainWindow) mainWindow.focus();
@@ -455,3 +475,4 @@ app.on('will-quit', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+

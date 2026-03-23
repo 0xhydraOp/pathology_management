@@ -10,7 +10,9 @@ pathologycal lab managment system/
 │   ├── logo.png             # Fallback logo
 │   └── icon.png             # App icon (magnifying glass + blood drop)
 ├── build/
-│   └── icon.ico             # Windows app icon (generated)
+│   ├── icon.ico             # Windows app icon (generated)
+│   ├── license.txt          # NSIS license page
+│   └── installer.nsh        # NSIS: force Desktop + Start Menu shortcuts on install
 ├── electron/
 │   ├── main.js              # Electron main process
 │   ├── preload.js           # IPC bridge
@@ -53,9 +55,9 @@ npm run electron:dev
 
 **Login:** `admin` / `admin123` — initial account only; **no sample patients or orders** are included. Use a strong password in production.
 
-## Windows ZIP in repo (Git LFS)
+## Windows install ZIP in repo (Git LFS)
 
-The packaged **`lfs-releases/*-win.zip`** is tracked with **[Git LFS](https://git-lfs.github.com/)** (too large for normal Git on GitHub).
+If you ship **`lfs-releases/*-Windows-Install-Package.zip`** (or similar), it can be tracked with **[Git LFS](https://git-lfs.github.com/)** when the file is large.
 
 **Clone with the real ZIP:**
 
@@ -66,9 +68,9 @@ cd pathology_management
 git lfs pull
 ```
 
-Or download the ZIP from the repo browser on GitHub (GitHub serves LFS files in the UI when LFS is set up).
+Or download from the repo browser on GitHub (GitHub serves LFS blobs when configured).
 
-## Build Windows installer + ZIP
+## Build Windows installer + install package ZIP
 
 ```powershell
 npm run electron:build
@@ -76,11 +78,15 @@ npm run electron:build
 
 Artifacts (gitignored) are written to **`release/`**:
 
-- **`MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`** — NSIS installer (**use this on a new PC**). Creates Desktop + Start Menu shortcuts and uninstaller. **This file is separate from the zip — it is not inside the zip.**
-- **`MONDAL DIAGNOSTIC CENTRE-<version>-win.zip`** — portable folder only (extract → run `.exe`). **No setup.exe inside; no shortcuts** — that is expected.
-- **`WINDOWS_INSTALL.txt`** — copied into `release/` after build; give this to users who are unsure which file to run.
+- **`MONDAL DIAGNOSTIC CENTRE Setup <version>.exe`** — NSIS installer. Wizard (license, folder choice, UAC if needed), **Desktop + Start Menu shortcuts** (`build/installer.nsh` backup).
+- **`MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip`** — contains **the same Setup .exe** + **`READ_ME_FIRST_Windows_Install.txt`**. Extract → run **Setup** — this is for **proper installation**, not a portable app.
+- **`READ_ME_FIRST_Windows_Install.txt`** — also copied loose in `release/` after build (same text as `WINDOWS_INSTALL.txt` in the repo root).
 
-If another PC “just runs” from a zip with no shortcuts, send them the **Setup .exe** from your `release/` folder (or upload both assets to GitHub Releases).
+There is **no** portable “extract and run `MONDAL … .exe` from the zip” release anymore; the zip is only an **installer bundle**.
+
+**If users say “it only runs, it doesn’t install”:** they ran something other than **Setup .exe** (e.g. an old portable zip or `win-unpacked`). They must run **`… Setup ….exe`**.
+
+**Trim `release/` after a build** (drops `win-unpacked/`, `.blockmap`, debug yml — keeps Setup `.exe` + install ZIP + readme): `npm run release:clean`
 
 The web UI is built to **`dist/`** first; Electron bundles that into the app.
 
@@ -93,11 +99,11 @@ The web UI is built to **`dist/`** first; Electron bundles that into the app.
 node scripts/create-release.js
 ```
 
-This creates tag **`v<version>`** (from `package.json`) and uploads the **Setup .exe** and **.zip** assets. If the release already exists, it re-uploads assets (`--clobber`).
+This creates tag **`v<version>`** (from `package.json`) and uploads the **Setup .exe** and **Windows-Install-Package.zip** assets. If the release already exists, it re-uploads assets (`--clobber`).
 
 ## Backup & data folder (Windows)
 
-- The installer puts the app under **Program Files** (or a folder you choose). Your **database, backups, and exports** live in **Electron user data** (typically `%APPDATA%\<app name>\`: subfolders `backups`, `exports`, and file `lab.db`). Open **Settings → Support** to see the exact path.
+- The **Setup** installer puts the app under **Program Files** (or another folder **you choose in the wizard**). Your **database, backups, and exports** always live in **Electron user data** (typically `%APPDATA%\mondal-diagnostic-centre\`: `lab.db`, `backups\`, `exports\`). Open **Settings → Support** to see the exact path — this folder is created when the app first starts successfully.
 - **NSIS uninstall** can remove that app data folder when you uninstall (so back up first if you need to keep data).
 - Older builds (before v1.0.2) used `%APPDATA%\MondalDiagnosticCentre\` — on first run the app **copies `lab.db`** from there if the new location has no database yet. You may delete the old folder manually after verifying the app.
 - **Save to PC…** in **Settings → Backup** still lets you copy backups anywhere (Desktop, USB, etc.).

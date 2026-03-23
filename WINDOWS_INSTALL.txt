@@ -1,46 +1,50 @@
 ================================================================================
-  MONDAL DIAGNOSTIC CENTRE — Windows install guide
+  IMPORTANT — READ THIS FIRST (Windows)
 ================================================================================
 
-TWO DIFFERENT DOWNLOADS (do not confuse them)
+If you downloaded the **ZIP** named like:
+    MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip
 
-1) SETUP / INSTALLER (recommended)
-   • File name looks like:  MONDAL DIAGNOSTIC CENTRE Setup 1.0.2.exe
-     (or similar, ending in .exe — it is NOT inside the .zip)
-   • Run this file on the new PC.
-   • It installs the app, creates Desktop + Start Menu shortcuts, and adds
-     an entry in Settings → Apps (uninstall).
-   • You get this from the same folder as the zip after building, or from
-     GitHub Releases as the separate .exe asset (not the .zip).
+  1. Extract the ZIP (right-click → Extract All…).
+  2. Inside the folder you will find:
+       •  MONDAL DIAGNOSTIC CENTRE Setup <version>.exe   ← RUN THIS to install
+       •  READ_ME_FIRST_Windows_Install.txt              (this guide)
+  3. Double-click the **Setup .exe** — you should see the install wizard
+     (license, choose folder, progress). That is a proper installation.
+  4. After install, use the **Desktop** or **Start Menu** shortcut.
 
-2) ZIP FILE (portable / optional)
-   • File name looks like:  MONDAL DIAGNOSTIC CENTRE-1.0.2-win.zip
-   • This is ONLY a compressed folder. There is NO setup.exe inside it.
-   • After extract: double-click the main .exe in that folder to run.
-   • Shortcuts are NOT created — that is normal for a portable zip.
-   • Use this if you cannot run the installer; for a “normal” PC install,
-     use the Setup .exe instead.
+Do NOT look for a “portable” app .exe inside this ZIP — the package is only
+the **installer** + instructions. There is no extract-and-run portable build.
+
+If the program opens with NO wizard (no license, no “Installing…”):
+  → You ran the wrong file, or an old portable zip from an older release.
+  → Always run the file whose name contains **Setup** and ends in **.exe**.
 
 ================================================================================
-If you only have the ZIP
+AFTER INSTALL — WHERE IS MY DATA?
 ================================================================================
-  • Shortcuts will not appear — use the Setup .exe for that.
-  • Ask whoever built the app to send you BOTH files from the release\
-    folder after:  npm run electron:build
-    Or download the Setup .exe from GitHub Releases (not only the zip).
+  • Program: folder you chose in Setup (often under Program Files).
+  • Database, backups, exports:
+        %APPDATA%\mondal-diagnostic-centre\
+  • In the app: Settings → Support shows the exact path.
+
+================================================================================
+GitHub Releases / two assets
+================================================================================
+  You may see BOTH:
+    • The same **Setup .exe** alone (direct download), AND
+    • The **Windows-Install-Package.zip** (Setup + this readme together).
+
+  Either way, run **Setup .exe** for a normal installation.
 
 ================================================================================
 Build machine (developer)
 ================================================================================
   After:  npm run electron:build
 
-  Check folder:  release\
-
-  You should see BOTH:
-    - *.exe  → NSIS installer (Setup)
-    - *.zip  → portable archive
-
-  If the Setup .exe is missing, the NSIS step failed — run the build on
-  Windows and check the terminal for errors (antivirus may block NSIS).
+  In release\ you should see:
+    • MONDAL DIAGNOSTIC CENTRE Setup <version>.exe  (NSIS installer)
+    • MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip
+    • win-unpacked\  (intermediate; not for end users)
 
 ================================================================================

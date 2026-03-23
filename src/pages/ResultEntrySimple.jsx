@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { formatOrderDateMediumIN } from '../utils/dateDisplay';
 import { showToast } from '../utils/toastBus';
@@ -31,6 +31,7 @@ function getDateRangeForFilter(period) {
 function BatchEntryMode({ onClose, loadPendingOrders }) {
   const [params, setParams] = useState([]);
   const [paramsLoaded, setParamsLoaded] = useState(false);
+  const [rangesByParam, setRangesByParam] = useState({});
   const [allOrders, setAllOrders] = useState([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [ordersWithParam, setOrdersWithParam] = useState([]);
@@ -42,10 +43,19 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
 
   useEffect(() => {
     if (!window.db) return;
-    window.db.all(`SELECT id, code, name, unit FROM parameters WHERE type='numeric' ORDER BY section, display_order`)
+    window.db.all(`SELECT id, code, name, unit, decimal_places, min_allowed_value, max_allowed_value FROM parameters WHERE type='numeric' ORDER BY section, display_order`)
       .then((rows) => { setParams(rows || []); setParamsLoaded(true); });
+    window.db.all(`SELECT parameter_id, sex, min_age, max_age, low_value, high_value, critical_low, critical_high FROM parameter_ranges`)
+      .then((rows) => {
+        const map = {};
+        (rows || []).forEach((row) => {
+          if (!map[row.parameter_id]) map[row.parameter_id] = [];
+          map[row.parameter_id].push(row);
+        });
+        setRangesByParam(map);
+      });
     window.db.all(
-      `SELECT o.id, o.order_date, p.patient_id, p.name as patient_name
+      `SELECT o.id, o.order_date, p.patient_id, p.name as patient_name, p.age, p.sex
        FROM orders o JOIN patients p ON o.patient_id = p.id
        WHERE o.status IN ('pending','partial')
        ORDER BY o.order_date DESC, o.id DESC`
@@ -78,6 +88,20 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
   const orders = ordersWithParam;
   const currentOrder = orders[currentIdx];
 
+  const getOrderRange = useCallback((order, parameterId) => {
+    const age = order?.age ?? 30;
+    const sex = order?.sex || 'any';
+    const ranges = rangesByParam[parameterId] || [];
+    let best = null;
+    ranges.forEach((r) => {
+      const match = (r.sex === 'any' || r.sex === sex) && age >= (r.min_age ?? 0) && age <= (r.max_age ?? 150);
+      if (match && (!best || (r.sex !== 'any' && best.sex === 'any'))) best = r;
+    });
+    return best
+      ? { low: best.low_value, high: best.high_value, criticalLow: best.critical_low, criticalHigh: best.critical_high }
+      : null;
+  }, [rangesByParam]);
+
   useEffect(() => {
     setCurrentIdx(0);
   }, [selectedParam?.id]);
@@ -91,13 +115,34 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
     }
     const numVal = parseFloat(val);
     if (isNaN(numVal)) return;
+    if (selectedParam.min_allowed_value != null && numVal < selectedParam.min_allowed_value) {
+      showToast(`${selectedParam.name}: Value must be >= ${selectedParam.min_allowed_value}`, 'warning');
+      return;
+    }
+    if (selectedParam.max_allowed_value != null && numVal > selectedParam.max_allowed_value) {
+      showToast(`${selectedParam.name}: Value must be <= ${selectedParam.max_allowed_value}`, 'warning');
+      return;
+    }
     setSaving(true);
     try {
+      const flag = computeFlag(numVal, getOrderRange(currentOrder, selectedParam.id));
       await window.db.run(
         `INSERT INTO order_results (order_id, parameter_id, result_value, result_text, flag) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(order_id, parameter_id) DO UPDATE SET result_value=excluded.result_value, result_text=excluded.result_text, flag=excluded.flag`,
-        [currentOrder.id, selectedParam.id, numVal, null, 'N']
+        [currentOrder.id, selectedParam.id, numVal, null, flag]
       );
+      const counts = await window.db.get(
+        `SELECT
+           (SELECT COUNT(*) FROM order_tests WHERE order_id = ?) AS total_tests,
+           (SELECT COUNT(*) FROM order_results WHERE order_id = ? AND (
+             result_value IS NOT NULL OR (result_text IS NOT NULL AND TRIM(result_text) != '')
+           )) AS filled_tests`,
+        [currentOrder.id, currentOrder.id]
+      );
+      const total = Number(counts?.total_tests) || 0;
+      const filled = Number(counts?.filled_tests) || 0;
+      const status = filled >= total && total > 0 ? 'complete' : filled > 0 ? 'partial' : 'pending';
+      await window.db.run('UPDATE orders SET status = ? WHERE id = ?', [status, currentOrder.id]);
       setValues((v) => ({ ...v, [currentOrder.id]: val }));
       if (currentIdx < orders.length - 1) {
         setCurrentIdx((i) => i + 1);
@@ -145,7 +190,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
 
   return (
     <div style={styles.container} className="result-entry-page">
-      <h1 style={styles.title}>Batch Entry — {selectedParam.name}</h1>
+      <h1 style={styles.title}>Batch Entry â€” {selectedParam.name}</h1>
       <p style={styles.subtitle}>Enter {selectedParam.name} for each patient. Press Enter to save and move to next.</p>
       <div style={styles.batchToolbar}>
         <label>Test: </label>
@@ -159,10 +204,10 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       {currentOrder && (
         <div style={styles.card}>
           <div style={styles.patientBar}>
-            <strong>{currentOrder.patient_name}</strong> ({currentOrder.patient_id}) — Order #{currentOrder.id}
+            <strong>{currentOrder.patient_name}</strong> ({currentOrder.patient_id}) â€” Order #{currentOrder.id}
           </div>
           <div style={styles.batchInputRow}>
-            <label>{selectedParam.name} ({selectedParam.unit || '—'}):</label>
+            <label>{selectedParam.name} ({selectedParam.unit || 'â€”'}):</label>
             <input
               ref={inputRef}
               type="number"
@@ -419,31 +464,31 @@ export default function ResultEntrySimple() {
     const r = results[test.id];
     if (test.type === 'derived') {
       const f = formulas[test.id];
-      if (!f) return { display: '—', flag: 'N' };
+      if (!f) return { display: 'â€”', flag: 'N' };
       const codeToId = {};
       tests.forEach((t) => (codeToId[t.code] = t.id));
       const vals = {};
       for (const code of f.deps) {
         const depTest = tests.find((t) => t.code === code);
-        if (!depTest) return { display: '—', flag: 'N' };
+        if (!depTest) return { display: 'â€”', flag: 'N' };
         let v;
         if (depTest.type === 'derived') {
           const d = getResultDisplay(depTest);
-          if (d.display === '—' || (d.display && d.display.startsWith('Not calculable'))) return { display: '—', flag: 'N' };
+          if (d.display === 'â€”' || (d.display && d.display.startsWith('Not calculable'))) return { display: 'â€”', flag: 'N' };
           v = parseFloat(d.display);
-          if (isNaN(v)) return { display: '—', flag: 'N' };
+          if (isNaN(v)) return { display: 'â€”', flag: 'N' };
         } else {
           const pid = codeToId[code];
-          if (!pid) return { display: '—', flag: 'N' };
+          if (!pid) return { display: 'â€”', flag: 'N' };
           v = results[pid]?.value ?? results[pid]?.text;
         }
-        if (v == null || v === '') return { display: '—', flag: 'N' };
+        if (v == null || v === '') return { display: 'â€”', flag: 'N' };
         vals[code] = v;
       }
       if (test.code === 'LDL' && parseFloat(vals.TG) > 400) return { display: 'Not calculable (TG > 400)', flag: 'N' };
-      if (test.code === 'AGRATIO' && parseFloat(vals.GLOB) === 0) return { display: '—', flag: 'N' };
+      if (test.code === 'AGRATIO' && parseFloat(vals.GLOB) === 0) return { display: 'â€”', flag: 'N' };
       const computed = evalFormula(f.expr, vals);
-      if (computed == null || isNaN(computed)) return { display: '—', flag: 'N' };
+      if (computed == null || isNaN(computed)) return { display: 'â€”', flag: 'N' };
       const dec = test.decimal_places ?? 0;
       const display = Number(computed).toFixed(dec);
       const range = getRange(patient, ranges[test.id]);
@@ -461,11 +506,11 @@ export default function ResultEntrySimple() {
       const numVal = parseFloat(value);
       if (!isNaN(numVal)) {
         if (test.min_allowed_value != null && numVal < test.min_allowed_value) {
-          showToast(`${test.name}: Value must be ≥ ${test.min_allowed_value}`, 'warning');
+          showToast(`${test.name}: Value must be â‰¥ ${test.min_allowed_value}`, 'warning');
           return;
         }
         if (test.max_allowed_value != null && numVal > test.max_allowed_value) {
-          showToast(`${test.name}: Value must be ≤ ${test.max_allowed_value}`, 'warning');
+          showToast(`${test.name}: Value must be â‰¤ ${test.max_allowed_value}`, 'warning');
           return;
         }
       }
@@ -537,7 +582,7 @@ export default function ResultEntrySimple() {
         const flag = test.type === 'derived' ? derived.flag : (r?.flag ?? 'N');
         const numVal = parseFloat(val);
         const isNum = (test.type === 'numeric' && val !== '' && !isNaN(numVal)) ||
-          (test.type === 'derived' && val !== '—' && val !== '' && !isNaN(numVal) && !String(val).startsWith('Not calculable'));
+          (test.type === 'derived' && val !== 'â€”' && val !== '' && !isNaN(numVal) && !String(val).startsWith('Not calculable'));
         await window.db.run(
           `INSERT INTO order_results (order_id, parameter_id, result_value, result_text, flag) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(order_id, parameter_id) DO UPDATE SET result_value=excluded.result_value, result_text=excluded.result_text, flag=excluded.flag`,
@@ -547,7 +592,7 @@ export default function ResultEntrySimple() {
       const filled = tests.filter((t) => {
         const r = results[t.id];
         const d = getResultDisplay(t);
-        if (t.type === 'derived') return d.display !== '—';
+        if (t.type === 'derived') return d.display !== 'â€”';
         if (t.type === 'numeric') return r?.value != null && r.value !== '';
         if (t.type === 'text') return r?.text != null && String(r.text).trim() !== '';
         return (r?.value != null && r.value !== '') || (r?.text != null && String(r.text).trim() !== '');
@@ -690,11 +735,11 @@ export default function ResultEntrySimple() {
                 disabled={pendingRefreshLoading}
                 title="Refresh list"
               >
-                {pendingRefreshLoading ? '…' : '↻'}
+                {pendingRefreshLoading ? 'â€¦' : 'â†»'}
               </button>
             </div>
           </div>
-          <p style={styles.pendingHint}>Registration and test selection done — click to enter results.</p>
+          <p style={styles.pendingHint}>Registration and test selection done â€” click to enter results.</p>
           {filteredPending.length === 0 ? (
             <div style={styles.emptyActionWrap}>
               <div style={styles.empty}>
@@ -722,9 +767,9 @@ export default function ResultEntrySimple() {
                   title="Click to enter results"
                 >
                   <span style={styles.pendingId}>#{o.id}</span>
-                  <span style={styles.pendingName}>{o.patient_name || '—'}</span>
-                  <span style={styles.pendingPtId}>{o.patient_id || '—'}</span>
-                  <span style={styles.pendingRef}>{o.referred_by || '—'}</span>
+                  <span style={styles.pendingName}>{o.patient_name || 'â€”'}</span>
+                  <span style={styles.pendingPtId}>{o.patient_id || 'â€”'}</span>
+                  <span style={styles.pendingRef}>{o.referred_by || 'â€”'}</span>
                   <span style={styles.pendingDate}>
                     {formatOrderDateMediumIN(o.order_date)}
                   </span>
@@ -758,7 +803,7 @@ export default function ResultEntrySimple() {
                 onClick={() => setSelectedPatient(p)}
                 onKeyDown={keyboardActivateHandler(() => setSelectedPatient(p))}
               >
-                <strong>{p.patient_id}</strong> — {p.name} {p.age ? `(${p.age} Y)` : ''} | {p.referred_by || '—'}
+                <strong>{p.patient_id}</strong> â€” {p.name} {p.age ? `(${p.age} Y)` : ''} | {p.referred_by || 'â€”'}
               </div>
             ))}
             {search.length >= 2 && patients.length === 0 && <div style={styles.empty}>No patients found</div>}
@@ -781,7 +826,7 @@ export default function ResultEntrySimple() {
                   onClick={() => setSelectedOrder(o)}
                   onKeyDown={keyboardActivateHandler(() => setSelectedOrder(o))}
                 >
-                  Order #{o.id} — {formatOrderDateMediumIN(o.order_date)} ({o.status})
+                  Order #{o.id} â€” {formatOrderDateMediumIN(o.order_date)} ({o.status})
                 </div>
               ))}
               {orders.length === 0 && <div style={styles.empty}>No orders for this patient</div>}
@@ -795,7 +840,7 @@ export default function ResultEntrySimple() {
 
         <div style={styles.batchModeRow}>
           <button type="button" style={styles.batchModeBtn} onClick={() => setBatchMode(true)}>
-            ⚡ Batch entry — enter one test for multiple patients
+            âš¡ Batch entry â€” enter one test for multiple patients
           </button>
         </div>
       </div>
@@ -818,7 +863,7 @@ export default function ResultEntrySimple() {
   const filledCount = tests.filter((t) => {
     const r = results[t.id];
     const d = getResultDisplay(t);
-    return t.type === 'derived' ? d.display !== '—' : (r?.value != null || r?.text != null);
+    return t.type === 'derived' ? d.display !== 'â€”' : (r?.value != null || r?.text != null);
   }).length;
 
   const testsBySection = tests.reduce((acc, t) => {
@@ -847,7 +892,7 @@ export default function ResultEntrySimple() {
 
   return (
     <div style={styles.container} className="result-entry-page">
-      <h1 style={styles.title}>Enter Results — {patient?.patient_name}</h1>
+      <h1 style={styles.title}>Enter Results â€” {patient?.patient_name}</h1>
       <div style={styles.progressBar}>
         <span style={styles.progressText}>{filledCount} / {tests.length} tests entered</span>
         <div style={styles.progressTrack}>
@@ -855,7 +900,7 @@ export default function ResultEntrySimple() {
         </div>
       </div>
       <div style={styles.patientBar}>
-        <strong>{patient?.patient_name}</strong> ({patient?.pt_id}) | Age: {patient?.age ?? '—'} Y | Sex: {patient?.sex === 'male' ? 'M' : patient?.sex === 'female' ? 'F' : '—'} | Referred by: {patient?.referred_by || '—'}
+        <strong>{patient?.patient_name}</strong> ({patient?.pt_id}) | Age: {patient?.age ?? 'â€”'} Y | Sex: {patient?.sex === 'male' ? 'M' : patient?.sex === 'female' ? 'F' : 'â€”'} | Referred by: {patient?.referred_by || 'â€”'}
       </div>
 
       {criticalPending && (
@@ -929,7 +974,7 @@ export default function ResultEntrySimple() {
                     )}
                   >
                     <td colSpan={5} style={{ cursor: 'pointer', fontWeight: 600 }}>
-                      {isCollapsed ? '▶' : '▼'} {sectionName}
+                      {isCollapsed ? 'â–¶' : 'â–¼'} {sectionName}
                     </td>
                   </tr>
                   {!isCollapsed && sectionTests.map((test) => {
@@ -954,7 +999,7 @@ export default function ResultEntrySimple() {
                             />
                           )}
                         </td>
-                        <td>{test.unit || '—'}</td>
+                        <td>{test.unit || 'â€”'}</td>
                         <td style={styles.ref}>{formatRange(range)}</td>
                         <td style={disp.flag === 'C' || disp.flag === 'L' || disp.flag === 'H' ? { color: 'red', fontWeight: 600 } : {}}>
                           {disp.flag}
@@ -977,13 +1022,13 @@ export default function ResultEntrySimple() {
           Save only
         </button>
         <button type="button" style={styles.btnNext} onClick={() => handleSaveOnlyClick(true)} disabled={saving} title="Save and open next pending order">
-          Next pending →
+          Next pending â†’
         </button>
         <button type="button" style={styles.btnSecondary} onClick={goBack}>
           Back to Select Patient
         </button>
       </div>
-      <p style={styles.keyboardHint}>Ctrl+S to save · Tab to move between fields</p>
+      <p style={styles.keyboardHint}>Ctrl+S to save Â· Tab to move between fields</p>
     </div>
   );
 }
@@ -1047,3 +1092,5 @@ const styles = {
   btnConfirm: { background: '#c00', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600 },
   btnCancel: { background: '#eee', border: 'none', padding: '10px 20px', borderRadius: 8 },
 };
+
+
