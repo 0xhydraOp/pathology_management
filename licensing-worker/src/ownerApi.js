@@ -21,16 +21,15 @@ function id(value) {
   if (!idOK.test(value)) throw new RequestDenied("id");
   return value;
 }
-function policy(b) {
+function policy(b, { trial = false } = {}) {
   if (
-    !Number.isSafeInteger(b.expiresAt) ||
-    b.expiresAt <= now() ||
+    (!trial && (!Number.isSafeInteger(b.expiresAt) || b.expiresAt <= now())) ||
     !Number.isInteger(b.seats) ||
     b.seats < 1 ||
     b.seats > 10000 ||
     !Number.isInteger(b.offlineSeconds) ||
     b.offlineSeconds < 1 ||
-    b.offlineSeconds > 31536000
+    b.offlineSeconds > 2592000
   )
     throw new RequestDenied("policy");
 }
@@ -253,16 +252,21 @@ export async function ownerApi(request, env, path) {
   const who = await authenticateOwner(request, env, { requireToken: false });
   csrf(request);
   const route = path.slice("/v1/owner/".length);
+  if (route === "customers/invite" && env.CUSTOMER_PORTAL_ENABLED !== "true")
+    throw new RequestDenied("portal disabled");
   if (!fields[route]) throw new RequestDenied("route");
   const raw = await body(request);
-  const b = pageFields[route]
-    ? optionalFields(raw, fields[route], pageFields[route])
-    : exactFields(
-        raw,
-        route === "audit/list" && Object.hasOwn(raw, "cursor")
-          ? ["cursor"]
-          : fields[route],
-      );
+  const b =
+    route === "licenses/create" && raw.kind === "trial"
+      ? exactFields(raw, ["customerId", "kind", "seats", "offlineSeconds"])
+      : pageFields[route]
+        ? optionalFields(raw, fields[route], pageFields[route])
+        : exactFields(
+            raw,
+            route === "audit/list" && Object.hasOwn(raw, "cursor")
+              ? ["cursor"]
+              : fields[route],
+          );
   const db = env.DB.withSession("first-primary");
   if (route === "customers/list") {
     const status = option(b.status, ["all", "active", "disabled"]);
@@ -429,6 +433,7 @@ export async function ownerApi(request, env, path) {
         "revoked",
         "suspended",
         "expired",
+        "pending",
       ]);
     const predicate = ["l.customer_id=?"],
       bindings = [customerId];
@@ -440,10 +445,18 @@ export async function ownerApi(request, env, path) {
     else if (status === "suspended")
       predicate.push("l.status='active' AND l.suspended=1");
     else if (status === "expired") {
-      predicate.push("l.status='active' AND l.suspended=0 AND l.expires_at<=?");
+      predicate.push(
+        "l.status='active' AND l.suspended=0 AND l.expires_at<=? AND (l.kind!='trial' OR l.trial_started_at IS NOT NULL)",
+      );
       bindings.push(now());
+    } else if (status === "pending") {
+      predicate.push(
+        "l.status='active' AND l.suspended=0 AND l.kind='trial' AND l.trial_started_at IS NULL",
+      );
     } else if (status === "active") {
-      predicate.push("l.status='active' AND l.suspended=0 AND l.expires_at>?");
+      predicate.push(
+        "l.status='active' AND l.suspended=0 AND (l.expires_at>? OR (l.kind='trial' AND l.trial_started_at IS NULL))",
+      );
       bindings.push(now());
     }
     const licenses = await page(
@@ -451,7 +464,7 @@ export async function ownerApi(request, env, path) {
       env,
       { resource: "licenses", customerId, kind, status },
       b.cursor,
-      "SELECT l.id,l.customer_id,l.kind,l.status,l.suspended,l.expires_at,l.seats,l.offline_seconds,l.revision,l.created_at,(SELECT count(*) FROM activations a WHERE a.license_id=l.id AND a.status='active') active_seats FROM licenses l",
+      "SELECT l.id,l.customer_id,l.kind,l.trial_started_at,l.status,l.suspended,l.expires_at,l.seats,l.offline_seconds,l.revision,l.created_at,(SELECT count(*) FROM activations a WHERE a.license_id=l.id AND a.status='active') active_seats FROM licenses l",
       predicate,
       bindings,
       "l",
@@ -475,7 +488,7 @@ export async function ownerApi(request, env, path) {
     });
   }
   if (route === "licenses/create") {
-    policy(b);
+    policy(b, { trial: b.kind === "trial" });
     const customerId = id(b.customerId);
     if (!["trial", "licence"].includes(b.kind)) throw new RequestDenied("kind");
     const c = await db
@@ -498,7 +511,7 @@ export async function ownerApi(request, env, path) {
         .bind(
           licenseId,
           await hash(key),
-          b.expiresAt,
+          b.kind === "trial" ? 0 : b.expiresAt,
           b.seats,
           b.offlineSeconds,
           now(),
@@ -512,7 +525,9 @@ export async function ownerApi(request, env, path) {
         customerId,
         licenseId,
         {
-          expiresAt: b.expiresAt,
+          ...(b.kind === "trial"
+            ? { startsOnFirstActivation: true, durationSeconds: 604800 }
+            : { expiresAt: b.expiresAt }),
           seats: b.seats,
           offlineSeconds: b.offlineSeconds,
         },
@@ -532,6 +547,11 @@ export async function ownerApi(request, env, path) {
   let details = {};
   if (action === "renew") {
     policy(b);
+    if (
+      l.kind === "trial" &&
+      (l.trial_started_at === null || b.expiresAt <= l.expires_at)
+    )
+      throw new RequestDenied("trial");
     changes.push(
       db
         .prepare(
@@ -553,7 +573,11 @@ export async function ownerApi(request, env, path) {
         .bind(licenseId),
     );
   else if (action === "reactivate") {
-    if (l.expires_at <= now()) throw new RequestDenied("expired");
+    if (
+      l.expires_at <= now() &&
+      !(l.kind === "trial" && l.trial_started_at === null)
+    )
+      throw new RequestDenied("expired");
     changes.push(
       db
         .prepare(

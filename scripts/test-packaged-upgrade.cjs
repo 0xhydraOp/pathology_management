@@ -41,7 +41,7 @@ async function main() {
     fs.writeFileSync(path.join(artifacts, name + '.pdf'), Buffer.from(bytes, 'base64'));
   }
   try {
-    await launch(); await page.getByRole('button', { name: 'Create administrator', exact: true }).waitFor();
+    await launch();await page.getByRole('button',{name:'Activate installation',exact:true}).waitFor();assert.ok(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY,'Run through the local synthetic licensing runner.');await page.getByLabel('Licence key',{exact:true}).fill(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY);await page.getByRole('button',{name:'Activate installation',exact:true}).click();await page.getByRole('button', { name: 'Create administrator', exact: true }).waitFor();
     await page.getByLabel('Username', { exact: true }).fill('synthetic-admin'); await page.getByLabel('New password', { exact: true }).fill('synthetic-original-password'); await page.getByLabel('Confirm new password', { exact: true }).fill('synthetic-original-password'); await page.getByRole('button', { name: 'Create administrator', exact: true }).click(); await login('synthetic-original-password');
     const runtime = await app.evaluate(() => ({ electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome })); assert.equal(runtime.electron, '44.7.0');
     assert.ok(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY,'Run through the local synthetic licensing runner.');

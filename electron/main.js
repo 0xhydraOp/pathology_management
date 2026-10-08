@@ -408,18 +408,14 @@ app.whenReady().then(async () => {
       return dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{title:encrypted?'Save encrypted backup on your PC':'Save backup on your PC',defaultPath:path.join(isolatedDataDir || app.getPath('desktop'),encrypted?`lab_backup_${timestamp}.db.enc`:`lab_backup_${timestamp}.db`),filters:[{name:encrypted?'Encrypted backup':'SQLite backup',extensions:[encrypted?'enc':'db']}]});
     },
   });
-  let licenceRefreshTimer;
-  const scheduleLicenceRefresh=()=>{
-    clearTimeout(licenceRefreshTimer);if(!licensing.configured())return;
-    const status=licensing.status(),remaining=(status.offlineUntil || 0)-Date.now()/1000;
-    const seconds=status.allowed?Math.max(1,Math.min(300,Math.floor(remaining/2))):60;
-    licenceRefreshTimer=setTimeout(async()=>{try{if(licensing.data?.key)await licensing.refresh();}catch{}scheduleLicenceRefresh();},seconds*1000);
-  };
-  app.on('will-quit',()=>clearTimeout(licenceRefreshTimer));
-  require('./licensingIpc.cjs').registerLicensingIpc(ipcMain,auth,licensing,{onChange:scheduleLicenceRefresh});
-  // Startup revalidation is main-process initiated; network failure retains the
-  // signed cached allowance and cannot lengthen it or affect clinical data.
-  if(licensing.configured())void licensing.refresh().catch(()=>{}).finally(scheduleLicenceRefresh);
+  const licenceScheduler=new (require('./licensingScheduler.cjs').LicensingScheduler)(licensing,{
+    onStatus:status=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('licensing:status',status);},
+  });
+  app.on('will-quit',()=>licenceScheduler.close());
+  require('./licensingIpc.cjs').registerLicensingIpc(ipcMain,auth,licensing,{onChange:()=>licenceScheduler.changed(),isFreshInstall:()=>require('./onboarding.cjs').isFreshInstall(db)});
+  // Startup verification and bounded retries retain the original signed
+  // deadline on network errors. No clinical information is transmitted.
+  licenceScheduler.start();
   const appOperations={};
   const appHandle=(name,permission,fn)=>{if(require('./applicationIpc.cjs').appPermissions[name]!==permission)throw new Error('Application permission mismatch');appOperations[name]=fn;};
   appHandle('print','staff', (_, copies, profile) => doPrint(copies || 1,profile));

@@ -1,5 +1,7 @@
 # System-owner administration
 
+Current deployment preparation (9 October 2026): admin.molladigital.com is the private owner workspace; license.molladigital.com is the activation API. Manual owner-issued keys require no customer identity-provider onboarding; the optional invitation portal is disabled in production configuration. Initial trials are seven days from first committed activation, paid offline allowance is capped at 30 days, and quiet reminders begin in the last five days. Older configuration/examples below are implementation history where they differ. [Confirmed policy](LICENSING_POLICY.md) and [deployment plan](CLOUDFLARE_DEPLOYMENT_PLAN.md) are authoritative. No deployment occurred.
+
 Prepared locally for Patholy Management System on 8 October 2026. Nothing has been deployed and no Cloudflare account setting or resource has been changed.
 
 ## Three identities

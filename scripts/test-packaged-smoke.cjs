@@ -11,7 +11,10 @@ async function main(){
   app=await _electron.launch({executablePath:executable,args:['--isolated-data-dir='+data],env:{...process.env,APPDATA:path.join(root,'roaming'),LOCALAPPDATA:path.join(root,'local'),ELECTRON_DEV:'1'},timeout:20000});
   await app.firstWindow();let page;for(let attempt=0;attempt<100&&!page;attempt++){page=app.windows().find(p=>p.url().startsWith('file:'));if(!page)await new Promise(r=>setTimeout(r,50));}
   if(!page)throw new Error('Production application window missing');page.setDefaultTimeout(8000);
-  await page.getByRole('button',{name:'Create administrator',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Activate installation',exact:true}).waitFor();
+  assert.ok(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY,'Run through the local synthetic licensing runner.');
+  assert.match(await page.evaluate(async()=>{try{await window.db.setupAdmin('premature-admin','synthetic-packaged-password');return 'FAIL';}catch(e){return e.message;}}),/Licence allowance ended/);
+  await page.getByLabel('Licence key',{exact:true}).fill(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY);await page.getByRole('button',{name:'Activate installation',exact:true}).click();await page.getByRole('button',{name:'Create administrator',exact:true}).waitFor();
   assert.ok((await page.title()).endsWith('v'+require('../package.json').version));
   assert.ok((await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('file:')).getTitle())).endsWith('v'+require('../package.json').version));
   const runtime=await app.evaluate(({app,BrowserWindow})=>({packaged:app.isPackaged,version:app.getVersion(),data:app.getPath('userData'),prefs:BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('file:')).webContents.getLastWebPreferences()}));

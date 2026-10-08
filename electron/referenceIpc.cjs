@@ -4,7 +4,7 @@ function guardGenericSql(){throw new Error('Permission denied: generic SQL is di
 function registerReferenceIpc(ipcMain,db,{authorization=createAuthorization(db),licensing}={}){
  const auth=authorization;
  const handle=(name,fn)=>ipcMain.handle('db:'+name,(event,...args)=>{auth.trusted(event);const permission=permissions[name];const actor=permission==='public'?null:permission==='disabled'?null:auth.requireActor(event,permission);require('./licenceGate.cjs').requireLicence(name,licensing);return fn(event,actor,...args);});
- handle('credentialState',()=>db.credentialState());
+ handle('credentialState',()=>{const state=db.credentialState(),freshInstallation=require('./onboarding.cjs').isFreshInstall(db);return {...state,freshInstallation,recoveryRequired:state.setupRequired&&!freshInstallation};});
  handle('setupAdmin',(_,actor,username,password)=>db.setupAdmin(username,password));
  handle('changePassword',(event,actor,current,next)=>{const credentials=require('./credentials.cjs');const row=db.get('SELECT password_hash FROM users WHERE id=?',[actor.id]);if(!credentials.verify(current,row.password_hash))throw new Error('Current password is incorrect');credentials.validate(next);if(credentials.verify(next,row.password_hash))throw new Error('Choose a different password');const result=db._referenceAtomic(()=>{db.db.run('UPDATE users SET password_hash=? WHERE id=?',[credentials.hash(next),actor.id]);require('./applicationOperations.cjs').audit(db,actor,'change-password',actor.id);return {ok:true};});auth.invalidateUser(actor.id);return result;});
  handle('verifyUser',(event,_,username,password)=>auth.login(event,username,password));

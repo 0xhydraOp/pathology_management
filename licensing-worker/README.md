@@ -1,5 +1,7 @@
 # Local Worker implementation
 
+Current deployment preparation (9 October 2026): admin.molladigital.com is the private owner workspace; license.molladigital.com is the activation API. Manual owner-issued keys require no customer identity-provider onboarding; the optional invitation portal is disabled in production configuration. Initial trials are seven days from first committed activation, paid offline allowance is capped at 30 days, and quiet reminders begin in the last five days. Older configuration/examples below are implementation history where they differ. [Confirmed policy](../docs/LICENSING_POLICY.md) and [deployment plan](../docs/CLOUDFLARE_DEPLOYMENT_PLAN.md) are authoritative. No deployment occurred.
+
 ## Owner-console extension
 
 Current post-prerelease branch: 200-record scoped cursor pages fully enumerate customers, licences, devices and revocations; repeatable index-only migration `0003` supports these queries. See [current owner guide](../docs/OWNER_ADMINISTRATION.md). Every page retains owner/CSRF enforcement. `OWNER_MFA_CONTRACT` defaults to `UNVERIFIED`; the selected and live-certified contract explicitly chooses signed top-level `amr` or configured OIDC `custom.amr`. There is no universal Access MFA-claim assumption. See [MFA certification](../docs/MFA_CONTRACT.md). These changes do not replace `v1.1.0-rc.1` artifacts.

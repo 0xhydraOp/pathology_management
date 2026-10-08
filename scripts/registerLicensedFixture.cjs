@@ -5,7 +5,7 @@ const {createLicensingFixture}=require('./licensingFixture.cjs');
 async function registerLicensedApplicationFixture(ipc,db,services={}){
  const licensing=services.licensing || await createLicensingFixture({directory:path.join(db.dataRoot,'synthetic-licence-'+crypto.randomUUID())});
  const result=require('../electron/applicationIpc.cjs').registerApplicationIpc(ipc,db,{...services,licensing});
- if(services.withLicenceIpc)require('../electron/licensingIpc.cjs').registerLicensingIpc(ipc,result.authorization,licensing);
+ if(services.withLicenceIpc)require('../electron/licensingIpc.cjs').registerLicensingIpc(ipc,result.authorization,licensing,{isFreshInstall:()=>require('../electron/onboarding.cjs').isFreshInstall(db)});
  return {...result,licensing};
 }
 async function registerLicensedReferenceFixture(ipc,db,services={}){

@@ -8,7 +8,7 @@ Each protected call rechecks account existence, role, username and a credential 
 
 The existing staff/admin roles are retained. Staff have lab-wide operational access; this task does not introduce per-patient assignments or new roles. Complete database backups include account hashes and therefore require admin, even when encrypted. Operational Excel exports remain staff-accessible to preserve existing referral/billing workflows.
 
-The policy includes **56 registered invoke channels**: 49 database and 7 application channels. Two preload subscriptions (`onPrintTrigger`, `onPermissionDenied`) receive events and do not execute backend operations. Font-size preference and registration-draft storage are renderer-local, not privileged backend operations.
+The database/application policy includes **56 registered invoke channels**: 49 database and 7 application channels. Four separate licensing invoke channels are listed below. Print-trigger, permission-denied and licence-status subscriptions receive events and do not execute backend operations. Font-size preference and registration-draft storage are renderer-local, not privileged backend operations.
 
 ## Permission matrix
 
@@ -19,7 +19,11 @@ The exhaustive channel and named-read tables below are generated from the dispat
 | Channel | Required permission | Scope |
 | --- | --- | --- |
 | db:credentialState | public | Setup state only; no credentials |
-| db:setupAdmin | public | Atomic zero-account setup; rejects accountless patient data |
+| db:setupAdmin | public trusted main frame + valid signed licence | Atomic fresh setup only: zero users/patients/orders and no prior setup audit; otherwise login or offline recovery |
+| licensing:onboarding | trusted main frame | Fresh eligibility and redacted licence state; initialized installations receive only freshInstallation=false |
+| licensing:status | staff | Redacted installation status, no activation key |
+| licensing:activate | admin, or trusted fresh bootstrap | Fresh eligibility/initialized session checked before request and again before signed-grant persistence |
+| licensing:refresh | staff, or trusted fresh bootstrap | Same asynchronous authorization recheck; failure never extends grant |
 | db:changePassword | credential | Authenticated self-service; current password required, restricted sessions allowed |
 | db:prepareRestore | admin | File selection, lease recheck, authenticated backup/schema validation |
 | db:confirmRestore | admin | Candidate/session/generation check, verified recovery copy and replacement |

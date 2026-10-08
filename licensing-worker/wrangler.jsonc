@@ -7,6 +7,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
+  "routes": [
+    { "pattern": "admin.molladigital.com", "custom_domain": true },
+    { "pattern": "license.molladigital.com", "custom_domain": true }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -23,10 +27,13 @@
     },
   ],
   "vars": {
-    "SIGNING_KID": "REPLACE_BEFORE_DEPLOYMENT",
+    "OWNER_ORIGIN": "https://admin.molladigital.com",
+    "API_ORIGIN": "https://license.molladigital.com",
+    "CUSTOMER_PORTAL_ENABLED": "false",
+    "SIGNING_KID": "patholy-2026-10-k1",
     "ACCESS_ISSUER": "https://REPLACE.cloudflareaccess.com",
     "ACCESS_AUDIENCE": "REPLACE_BEFORE_DEPLOYMENT",
-    "CUSTOMER_ACCESS_AUDIENCE": "REPLACE_BEFORE_DEPLOYMENT",
+    "CUSTOMER_ACCESS_AUDIENCE": "",
     "OWNER_MFA_CONTRACT": "UNVERIFIED",
     "RATE_LIMIT_MAX": "30",
     "RATE_LIMIT_WINDOW": "60",

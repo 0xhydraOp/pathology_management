@@ -9,8 +9,9 @@ export async function startSyntheticWorker({
   rateLimit = 10000,
   ownerSubjects = ["synthetic-admin"],
   customerMigration = true,
-  mfaContract = 'access-idp-amr-top-level-v1',
+  mfaContract = "access-idp-amr-top-level-v1",
   createLicense = true,
+  customerPortal = true,
 } = {}) {
   const ed = generateKeyPairSync("ed25519"),
     rsa = generateKeyPairSync("rsa", { modulusLength: 2048 }),
@@ -27,6 +28,7 @@ export async function startSyntheticWorker({
             [
               "src/index.js",
               "src/ownerApi.js",
+              "src/hostBoundary.js",
               "src/ownerConsole.js",
               "src/ownerMfa.js",
               "console/assets.js",
@@ -43,6 +45,8 @@ export async function startSyntheticWorker({
           compatibilityFlags: ["nodejs_compat"],
           d1Databases: ["DB"],
           bindings: {
+            OWNER_ORIGIN: "https://owner.example.invalid",
+            API_ORIGIN: "https://license.example.invalid",
             SIGNING_KID: "synthetic-ed-1",
             SIGNING_PRIVATE_KEY: ed.privateKey
               .export({ type: "pkcs8", format: "der" })
@@ -57,6 +61,7 @@ export async function startSyntheticWorker({
             ACCESS_ADMIN_SUBJECTS: JSON.stringify(ownerSubjects),
             CUSTOMER_ACCESS_AUDIENCE: "synthetic-customer-audience",
             OWNER_MFA_CONTRACT: mfaContract,
+            CUSTOMER_PORTAL_ENABLED: customerPortal ? 'true' : 'false',
           },
         },
       ],
@@ -77,8 +82,27 @@ export async function startSyntheticWorker({
         )
       ).replaceAll("\n", " "),
     );
-  if (customerMigration) await db.exec((await readFile(new URL('../migrations/0003_owner_pagination.sql', import.meta.url), 'utf8')).replaceAll('\n', ' '));
-  const base = String(await mf.ready).replace(/\/$/, "");
+  if (customerMigration)
+    await db.exec(
+      (
+        await readFile(
+          new URL("../migrations/0003_owner_pagination.sql", import.meta.url),
+          "utf8",
+        )
+      ).replaceAll("\n", " "),
+    );
+  if (customerMigration)
+    await db.exec(
+      (
+        await readFile(
+          new URL("../migrations/0004_confirmed_policy.sql", import.meta.url),
+          "utf8",
+        )
+      ).replaceAll("\n", " "),
+    );
+  await mf.ready;
+  const base = "https://owner.example.invalid",
+    api = "https://license.example.invalid";
   const jwt = (overrides = {}) => {
     const head = Buffer.from(
         JSON.stringify({ alg: "RS256", kid: jwk.kid }),
@@ -90,7 +114,9 @@ export async function startSyntheticWorker({
           sub: "synthetic-admin",
           type: "app",
           email: "synthetic-owner@example.invalid",
-          ...(mfaContract === 'access-oidc-custom-amr-v1' ? {custom:{amr:['mfa']}} : {amr:['mfa']}),
+          ...(mfaContract === "access-oidc-custom-amr-v1"
+            ? { custom: { amr: ["mfa"] } }
+            : { amr: ["mfa"] }),
           iat: Math.floor(Date.now() / 1000),
           exp: Math.floor(Date.now() / 1000) + 3600,
           ...overrides,
@@ -107,29 +133,39 @@ export async function startSyntheticWorker({
     path,
     data,
     headers = { "content-type": "application/json" },
-  ) =>
-    mf.dispatchFetch(`${base}${path}`, {
+  ) => {
+    const licensingPath =
+      path === "/v1/activate" ||
+      path === "/v1/refresh" ||
+      path.startsWith("/v1/customer/");
+    const target = licensingPath ? api : base;
+    const sent = new Headers(headers);
+    if (path.startsWith("/v1/customer/") && sent.get("origin") === base)
+      sent.set("origin", api);
+    return mf.dispatchFetch(`${target}${path}`, {
       method: "POST",
-      headers,
+      headers: sent,
       body: JSON.stringify(data),
     });
+  };
   let created = {};
   if (createLicense) {
-  const create = await post(
-    "/v1/admin/create",
-    { seats, offlineSeconds, expiresAt },
-    adminHeaders,
-  );
-  if (create.status !== 200) {
-    await mf.dispose();
-    throw Error(`Fixture creation rejected ${create.status}`);
-  }
-  created = await create.json();
+    const create = await post(
+      "/v1/admin/create",
+      { seats, offlineSeconds, expiresAt },
+      adminHeaders,
+    );
+    if (create.status !== 200) {
+      await mf.dispose();
+      throw Error(`Fixture creation rejected ${create.status}`);
+    }
+    created = await create.json();
   }
   return {
     mf,
     db,
     url: base,
+    apiUrl: api,
     key: created.key,
     licenseId: created.licenseId,
     kid: "synthetic-ed-1",

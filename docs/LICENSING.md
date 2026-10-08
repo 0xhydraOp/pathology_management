@@ -1,5 +1,7 @@
 # Patholy licensing — implementation and deployment review
 
+Current deployment preparation (9 October 2026): admin.molladigital.com is the private owner workspace; license.molladigital.com is the activation API. Manual owner-issued keys require no customer identity-provider onboarding; the optional invitation portal is disabled in production configuration. Initial trials are seven days from first committed activation, paid offline allowance is capped at 30 days, and quiet reminders begin in the last five days. Older configuration/examples below are implementation history where they differ. [Confirmed policy](LICENSING_POLICY.md) and [deployment plan](CLOUDFLARE_DEPLOYMENT_PLAN.md) are authoritative. No deployment occurred.
+
 Implementation history begins **8 October 2026**, application **1.0.4**, Electron **44.7.0**; the recorded hashes/test counts below describe earlier builds. The published `v1.1.0-rc.1` at `42db0dc` remains immutable. Current feature-branch changes add complete owner cursor pagination and explicit top-level/custom OIDC MFA contracts, with production `OWNER_MFA_CONTRACT=UNVERIFIED`; see [OWNER_ADMINISTRATION.md](OWNER_ADMINISTRATION.md), [MFA_CONTRACT.md](MFA_CONTRACT.md) and [LFS_INSPECTION.md](LFS_INSPECTION.md). Historical LFS source inspection was static only; all implementation test records/keys remain synthetic. No Cloudflare resource, secret, subscription or account setting was created or changed.
 
 ## Policy, architecture and protected operations

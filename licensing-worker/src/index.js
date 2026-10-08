@@ -1,12 +1,13 @@
 import { ownerConsoleResponse } from "./ownerConsole.js";
 import { ownerApi, acceptInvitation } from "./ownerApi.js";
 import { hasOwnerMfaEvidence } from "./ownerMfa.js";
+import { permitsHost } from "./hostBoundary.js";
 export class RequestDenied extends Error {}
 // D1 emits database errors rather than exposing a typed constraint code.
 // Recognize only our explicit authorization/concurrency guards; infrastructure
 // and all other errors remain service failures.
 function expectedGuard(error) {
-  return /(?:seat unavailable|license unavailable|request unavailable|NOT NULL constraint failed: (?:activations\.license_id|owner_guard\.id))/.test(
+  return /(?:seat unavailable|license unavailable|request unavailable|trial unavailable|NOT NULL constraint failed: (?:activations\.license_id|owner_guard\.id))/.test(
     String(error?.message || ""),
   );
 }
@@ -194,7 +195,7 @@ function policy(b) {
     b.seats > 10000 ||
     !Number.isInteger(b.offlineSeconds) ||
     b.offlineSeconds < 1 ||
-    b.offlineSeconds > 31536000
+    b.offlineSeconds > 2592000
   )
     throw new RequestDenied("policy");
 }
@@ -221,7 +222,10 @@ async function sign(row, activation, env) {
         policyRevision: row.revision,
         issuedAt: time,
         expiresAt: row.expires_at,
-        offlineUntil: Math.min(row.expires_at, time + row.offline_seconds),
+        offlineUntil: Math.min(
+          row.expires_at,
+          time + Math.min(row.offline_seconds, 2592000),
+        ),
         status,
       }),
     ),
@@ -304,11 +308,45 @@ async function activate(request, env, path) {
       row.suspended === 1 ||
       row.customer_status === "disabled" ||
       row.status !== "active" ||
-      row.expires_at <= now())
+      (row.expires_at <= now() &&
+        !(row.kind === "trial" && row.trial_started_at === null)))
   )
     return denied();
   try {
-    await db.batch([
+    const changes = [];
+    // Start is committed with allocation and request identity. A failed claim
+    // rolls the timestamp back, and concurrent retries cannot move the anchor.
+    if (row.kind === "trial" && row.trial_started_at === null && !activation) {
+      const started = now();
+      // Validate signing configuration before committing the one-time start.
+      await sign(
+        { ...row, expires_at: started + 604800 },
+        { id: crypto.randomUUID(), status: "active", device_id: b.deviceId },
+        env,
+      );
+      changes.push(
+        db
+          .prepare(
+            "UPDATE licenses SET trial_started_at=?,expires_at=?,revision=revision+1 WHERE id=? AND kind='trial' AND trial_started_at IS NULL AND status='active' AND suspended=0 AND (customer_id IS NULL OR EXISTS(SELECT 1 FROM customers WHERE id=licenses.customer_id AND status='active'))",
+          )
+          .bind(started, started + 604800, row.id),
+      );
+      changes.push(
+        db
+          .prepare(
+            "INSERT INTO owner_audit(id,actor,action,customer_id,license_id,created_at,details) SELECT ?,?,'trial.start',?,?,?,? WHERE changes()=1",
+          )
+          .bind(
+            crypto.randomUUID(),
+            `license:${row.id}`,
+            row.customer_id,
+            row.id,
+            started,
+            JSON.stringify({ durationSeconds: 604800 }),
+          ),
+      );
+    }
+    changes.push(
       db
         .prepare(
           "INSERT INTO activations(id,license_id,device_id,status,created_at) SELECT ?,?,?,'active',? WHERE NOT EXISTS(SELECT 1 FROM activations WHERE license_id=? AND device_id=?)",
@@ -326,7 +364,8 @@ async function activate(request, env, path) {
           "INSERT OR IGNORE INTO requests(request_id,license_id,device_id,activation_id,created_at) SELECT ?,?,?,id,? FROM activations WHERE license_id=? AND device_id=?",
         )
         .bind(b.requestId, row.id, b.deviceId, now(), row.id, b.deviceId),
-    ]);
+    );
+    await db.batch(changes);
   } catch (error) {
     if (expectedGuard(error)) return denied();
     throw error;
@@ -389,6 +428,11 @@ async function admin(request, env, action) {
     if (!row) return denied();
     if (action === "renew") {
       policy(b);
+      if (
+        row.kind === "trial" &&
+        (row.trial_started_at === null || b.expiresAt <= row.expires_at)
+      )
+        throw new RequestDenied("trial");
       if (row.status === "revoked") return denied();
       const seats = await db
         .prepare(
@@ -481,6 +525,8 @@ async function admin(request, env, action) {
 export default {
   async fetch(request, env) {
     try {
+      if (!permitsHost(request, env))
+        return response({ error: "Not found." }, 404);
       if (
         !env.SIGNING_PRIVATE_KEY ||
         !env.SIGNING_KID ||
@@ -494,6 +540,13 @@ export default {
       )
         return response({ error: "Licensing service unavailable." }, 503);
       const path = new URL(request.url).pathname;
+      if (path === "/" && request.method === "GET") {
+        await authenticateOwner(request, env, { requireToken: false });
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "/owner", "Cache-Control": "no-store" },
+        });
+      }
       if (
         request.method === "GET" &&
         (path === "/owner" ||
@@ -505,7 +558,8 @@ export default {
           await verifyAccess(request, env, env.CUSTOMER_ACCESS_AUDIENCE);
         else await authenticateOwner(request, env, { requireToken: false });
         return (
-          ownerConsoleResponse(path) || response({ error: "Not found." }, 404)
+          ownerConsoleResponse(path, env.API_ORIGIN, env.CUSTOMER_PORTAL_ENABLED) ||
+          response({ error: "Not found." }, 404)
         );
       }
       if (request.method !== "POST")

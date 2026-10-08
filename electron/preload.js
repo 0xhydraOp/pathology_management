@@ -6,6 +6,7 @@ const invoke=async(...args)=>{try{return await ipcRenderer.invoke(...args);}catc
 ipcRenderer.on('licensing:status',(_,status)=>{for(const listener of licenceListeners)listener(status);});
 contextBridge.exposeInMainWorld('licensing', {
   getStatus:()=>invoke('licensing:status'),
+  getOnboardingState:()=>invoke('licensing:onboarding'),
   activate:key=>invoke('licensing:activate',key),
   refresh:()=>invoke('licensing:refresh'),
   onStatus:listener=>{licenceListeners.add(listener);return ()=>licenceListeners.delete(listener);}

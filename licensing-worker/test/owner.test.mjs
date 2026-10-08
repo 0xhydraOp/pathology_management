@@ -215,7 +215,6 @@ async function trial(f, customerId) {
     {
       customerId,
       kind: "trial",
-      expiresAt: Math.floor(Date.now() / 1000) + 3600,
       seats: 2,
       offlineSeconds: 60,
     },
@@ -352,7 +351,7 @@ test(
             "/v1/owner/licenses/renew",
             {
               licenseId: l.licenseId,
-              expiresAt: Math.floor(Date.now() / 1000) + 7200,
+              expiresAt: Math.floor(Date.now() / 1000) + 604800 + 7200,
               seats: 2,
               offlineSeconds: 90,
             },
@@ -385,7 +384,7 @@ test(
       assert.equal(list.revocations.length, 1);
       assert.equal(
         (await f.db.prepare("SELECT count(*) n FROM owner_audit").first()).n,
-        9,
+        10,
       );
       assert.equal(
         (
