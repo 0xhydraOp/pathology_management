@@ -1,75 +1,9 @@
-# Setup Instructions — Pathology Lab Management System
+# Development setup
 
-## What You Need
+Patholy Management System requires Node.js >=22.12.0 and npm. Run `npm ci`, then `npm run electron:dev`; a Vite-only browser is not the desktop application.
 
-| Program | Purpose |
-|---------|---------|
-| **Node.js** | Run JavaScript, npm (v18+ recommended) |
-| **npm** | Comes with Node.js |
+Fresh installations require administrator setup. No default password is distributed. Legacy defaults must be replaced. Production licensing is unconfigured, so new clinical mutations remain blocked; use explicit synthetic fixtures for automated testing, never a production bypass.
 
-No Visual Studio or C++ build tools required — the project uses sql.js (pure JavaScript SQLite).
+Run `npm test`, `npm run build`, and the browser/packaged suites documented in [PRERELEASE.md](docs/PRERELEASE.md). Worker tests run separately in `licensing-worker` and require no Cloudflare resources.
 
----
-
-## Step 1: Install Dependencies
-
-1. Open PowerShell or Command Prompt.
-2. Go to the project folder:
-
-```powershell
-cd "c:\Users\iamro\OneDrive\Desktop\pathologycal lab managment system"
-```
-
-3. Install:
-
-```powershell
-npm install
-```
-
----
-
-## Step 2: Run the Application
-
-```powershell
-npm run electron:dev
-```
-
-**Important:** Use `electron:dev`, not `npm run dev`. The app needs Electron for the database — running only Vite (dev) shows a blank/broken screen.
-
-**Login:** `admin` / `admin123` — bootstrap account only; no bundled patient/order data.
-
----
-
-## Step 3: Build Windows Installer (Optional)
-
-```powershell
-npm run electron:build
-```
-
-The installer (`.exe`) will be in the `dist/` folder. The app icon is generated from `assets/icon.png`.
-
----
-
-## Troubleshooting
-
-### Port 5173 already in use
-
-Close any previous instance, then:
-
-```powershell
-taskkill /F /IM electron.exe 2>$null
-taskkill /F /IM node.exe 2>$null
-```
-
-Then run `npm run electron:dev` again.
-
-### "EPERM: operation not permitted" during npm install
-
-- Close programs using the project folder.
-- Run the terminal as Administrator.
-- Try again.
-
-### OneDrive sync issues
-
-- Pause OneDrive sync while running `npm install`.
-- Or move the project to a non-synced folder (e.g. `C:\Projects\`).
+`npm run electron:build` creates unsigned Windows evaluation packages in `release/`. They are activation-pending prereleases and are not for real lab use. Preserve data before migration; see [RECOVERY.md](docs/RECOVERY.md). The installer retains the existing data-folder identity and does not delete lab data on uninstall.

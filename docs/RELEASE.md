@@ -1,24 +1,13 @@
-# Release checklist
+# Reviewed release process
 
-## Automatic (recommended)
+Current candidate: **1.1.0-rc.1**, unsigned and activation pending. See [PRERELEASE.md](PRERELEASE.md). GitHub publication does not deploy Cloudflare. The former automatic latest-release workflow and obsolete default-password instructions are superseded.
 
-GitHub Actions builds and publishes when you push a version tag:
+1. Review the complete working tree and staged work, secrets/history and clinical/recovery paths. Obtain independent security, clinical and packaging reviews. Confirm copyright ownership and notices.
+2. Run `npm ci`, `npm test`, browser/Worker/D1/PDF regressions and targeted failure tests using explicit temporary synthetic databases. Never open real lab data. Audit dependencies while documenting coverage limitations.
+3. Commit reviewed source on the feature branch. Build from that exact clean commit; embed/record the source SHA. Keep production licensing unset until live service verification.
+4. Build the explicitly named prerelease installer with `npm run electron:build`. Verify packaged behavior, archive contents, public/unconfigured trust material, licence notices and source commit. Do not publish synthetic QA packages.
+5. Create SHA-256 checksums and an explicit manifest `{commit,version,assets:[{path,sha256}]}`. Include only the reviewed installer, installer archive, checksums and sanitized verification/notes. Never attach the whole release directory.
+6. Push the feature branch normally. Check rules; do not force-push or merge the default branch. Publish a new prerelease targeting the exact commit: `node scripts/create-release.js manifest.json release-notes.md`. It refuses a dirty tree, mismatched commit/version/hash, guessed assets and existing releases.
+7. Read back the release/tag/asset metadata, download uploaded checksum text and compare it. Record public links and remaining limitations. Physical printer/driver, elevated installation/upgrade and power-loss checks stay NOT TESTED unless performed.
 
-```powershell
-git tag -a v1.0.2 -m "Release v1.0.2"
-git push origin v1.0.2
-```
-
-Match `v…` to `version` in `package.json`. Watch **Actions** → *Release Windows build*, then open **Releases**.
-
-You can also run the workflow manually: **Actions** → *Release Windows build* → **Run workflow**.
-
-## Manual (local + GitHub CLI)
-
-1. Bump `version` in `package.json` (semver).
-2. `npm test`
-3. `npm run electron:build`
-4. Confirm **`release/`** contains the `.exe` and `-win.zip`.
-5. `gh auth login` then `node scripts/create-release.js`.
-
-No sample patients or orders ship with the app; the DB is created under `%APPDATA%` with catalogue JSON only.
+GitHub Actions is manual verification/build only, has read-only repository permission and never publishes automatically on tag pushes. Source and dependencies retain their own licence rights. Old historical LFS archives are not new candidate assets.

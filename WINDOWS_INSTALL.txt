@@ -2,12 +2,18 @@
   IMPORTANT — READ THIS FIRST (Windows)
 ================================================================================
 
+ACTIVATION-PENDING PRERELEASE 1.1.0-rc.1 — NOT FOR PRODUCTION LAB USE.
+Windows binaries are unsigned. No production activation service is configured.
+New registration, result editing and report finalization are unavailable.
+Existing-record viewing, issued reprints, backup/export and recovery remain available.
+Use synthetic data only. Read the included PRERELEASE.md before installation.
+
 If you downloaded the **ZIP** named like:
-    MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip
+    Patholy Management System-<version>-Windows-Install-Package.zip
 
   1. Extract the ZIP (right-click → Extract All…).
   2. Inside the folder you will find:
-       •  MONDAL DIAGNOSTIC CENTRE Setup <version>.exe   ← RUN THIS to install
+       •  Patholy Management System Setup <version>.exe   ← RUN THIS to install
        •  READ_ME_FIRST_Windows_Install.txt              (this guide)
   3. Double-click the **Setup .exe** — you should see the install wizard
      (license, choose folder, progress). That is a proper installation.
@@ -43,8 +49,18 @@ Build machine (developer)
   After:  npm run electron:build
 
   In release\ you should see:
-    • MONDAL DIAGNOSTIC CENTRE Setup <version>.exe  (NSIS installer)
-    • MONDAL DIAGNOSTIC CENTRE-<version>-Windows-Install-Package.zip
+    • Patholy Management System Setup <version>.exe  (NSIS installer)
+    • Patholy Management System-<version>-Windows-Install-Package.zip
     • win-unpacked\  (intermediate; not for end users)
 
 ================================================================================
+
+DATA AND RECOVERY
+Uninstallation preserves lab data. Preserve the data folder before reinstalling or recovery.
+A fresh lab requires administrator setup; there is no default password.
+See the included RECOVERY.md for encrypted backup/restore, lost-password recovery and limitations.
+Close the lab application, then open the included Recover Administrator.cmd in the installation folder.
+Alternatively run "Patholy Management System.exe" --recover-administrator.
+Select the existing data folder, choose an existing administrator, enter a new password and confirm.
+The installed app supplies its own runtime. Windows access to the data folder is required.
+See RECOVERY.md; no hidden account is provided.

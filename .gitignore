@@ -6,8 +6,21 @@ dist/
 
 # Environment
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+*.secret.json
+*.pem
+*.key
+*.pfx
+*.p12
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.enc
+backups/
+exports/
 
 # Logs
 *.log

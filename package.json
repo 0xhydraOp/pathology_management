@@ -1,7 +1,7 @@
 {
   "name": "mondal-diagnostic-centre",
-  "version": "1.0.2",
-  "description": "Pathology Lab Management System - MONDAL DIAGNOSTIC CENTRE",
+  "version": "1.1.0-rc.1",
+  "description": "Patholy Management System",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=1 electron .\"",
     "build:icon": "node scripts/build-icon.mjs",
-    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js",
+    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js scripts/test-reference-intervals.cjs scripts/test-reference-hardening.cjs scripts/test-print-profile.cjs scripts/test-authorization.cjs scripts/test-recovery.cjs scripts/test-administrator-recovery.cjs scripts/test-licensing-client.cjs scripts/test-licensing-ipc.cjs scripts/test-billing-integrity.cjs",
     "release": "node scripts/create-release.js",
     "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/package-install-zip.js",
     "release:clean": "node scripts/clean-release.js",
@@ -19,24 +19,24 @@
     "jsbarcode": "^3.12.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
+    "react-router-dom": "7.18.4",
     "sql.js": "^1.11.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
     "png-to-ico": "^3.0.1",
-    "sharp": "^0.34.5",
-    "vite": "^6.0.1",
+    "sharp": "0.35.5",
+    "vite": "6.4.4",
     "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.mondal.diagnostic",
-    "productName": "MONDAL DIAGNOSTIC CENTRE",
+    "productName": "Patholy Management System",
     "directories": {
       "output": "release"
     },
@@ -51,19 +51,46 @@
     ],
     "extraFiles": [
       {
+        "from": "build/Recover Administrator.cmd",
+        "to": "Recover Administrator.cmd"
+      },
+      {
+        "from": "docs/RECOVERY.md",
+        "to": "RECOVERY.md"
+      },
+      {
         "from": "WINDOWS_INSTALL.txt",
         "to": "READ_ME_FIRST_Windows_Install.txt"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "third-party-licenses",
+        "to": "third-party-licenses"
+      },
+      {
+        "from": "docs/PRERELEASE.md",
+        "to": "PRERELEASE.md"
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true,
+      "artifactName": "Patholy Management System Activation-Pending Prerelease Setup 1.1.0-rc.1.exe"
     },
     "forceCodeSigning": false,
     "nsis": {
@@ -77,12 +104,32 @@
       "installerHeaderIcon": "build/icon.ico",
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "MONDAL DIAGNOSTIC CENTRE",
-      "menuCategory": "MONDAL DIAGNOSTIC CENTRE",
-      "runAfterFinish": true,
+      "shortcutName": "Patholy Management System",
+      "menuCategory": "Patholy Management System",
+      "runAfterFinish": false,
       "license": "build/license.txt",
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": false
     },
-    "icon": "build/icon.ico"
+    "icon": "build/icon.ico",
+    "extraMetadata": {
+      "patholyActivationPendingPrerelease": true
+    }
+  },
+  "overrides": {
+    "concurrently": {
+      "shell-quote": "1.12.0"
+    },
+    "@electron/get": {
+      "global-agent": "4.1.3"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "license": "MIT",
+  "author": "Robiul Islam Molla",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xhydraOp/pathology_management.git"
   }
 }
