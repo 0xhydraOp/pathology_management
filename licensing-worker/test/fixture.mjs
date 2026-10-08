@@ -9,6 +9,8 @@ export async function startSyntheticWorker({
   rateLimit = 10000,
   ownerSubjects = ["synthetic-admin"],
   customerMigration = true,
+  mfaContract = 'access-idp-amr-top-level-v1',
+  createLicense = true,
 } = {}) {
   const ed = generateKeyPairSync("ed25519"),
     rsa = generateKeyPairSync("rsa", { modulusLength: 2048 }),
@@ -26,6 +28,7 @@ export async function startSyntheticWorker({
               "src/index.js",
               "src/ownerApi.js",
               "src/ownerConsole.js",
+              "src/ownerMfa.js",
               "console/assets.js",
             ].map(async (file) => ({
               type: "ESModule",
@@ -53,6 +56,7 @@ export async function startSyntheticWorker({
             ACCESS_JWKS_JSON: JSON.stringify({ keys: [jwk] }),
             ACCESS_ADMIN_SUBJECTS: JSON.stringify(ownerSubjects),
             CUSTOMER_ACCESS_AUDIENCE: "synthetic-customer-audience",
+            OWNER_MFA_CONTRACT: mfaContract,
           },
         },
       ],
@@ -73,6 +77,7 @@ export async function startSyntheticWorker({
         )
       ).replaceAll("\n", " "),
     );
+  if (customerMigration) await db.exec((await readFile(new URL('../migrations/0003_owner_pagination.sql', import.meta.url), 'utf8')).replaceAll('\n', ' '));
   const base = String(await mf.ready).replace(/\/$/, "");
   const jwt = (overrides = {}) => {
     const head = Buffer.from(
@@ -83,7 +88,9 @@ export async function startSyntheticWorker({
           iss: issuer,
           aud: ["synthetic-audience"],
           sub: "synthetic-admin",
-          amr: ["mfa"],
+          type: "app",
+          email: "synthetic-owner@example.invalid",
+          ...(mfaContract === 'access-oidc-custom-amr-v1' ? {custom:{amr:['mfa']}} : {amr:['mfa']}),
           iat: Math.floor(Date.now() / 1000),
           exp: Math.floor(Date.now() / 1000) + 3600,
           ...overrides,
@@ -106,6 +113,8 @@ export async function startSyntheticWorker({
       headers,
       body: JSON.stringify(data),
     });
+  let created = {};
+  if (createLicense) {
   const create = await post(
     "/v1/admin/create",
     { seats, offlineSeconds, expiresAt },
@@ -115,7 +124,8 @@ export async function startSyntheticWorker({
     await mf.dispose();
     throw Error(`Fixture creation rejected ${create.status}`);
   }
-  const created = await create.json();
+  created = await create.json();
+  }
   return {
     mf,
     db,

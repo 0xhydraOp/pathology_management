@@ -75,30 +75,242 @@ const fields = {
   "licenses/reset": ["licenseId", "activationId"],
   "licenses/transfer": ["licenseId", "activationId", "deviceId"],
   "audit/list": [],
+  "devices/list": ["customerId"],
+  "revocations/list": ["customerId"],
 };
+// Keyset pages are bounded technical queries, not business policy. A cursor is
+// authenticated and bound to the resource, scope and filters that minted it.
+const PAGE_SIZE = 200;
+const pageFields = {
+  "customers/list": ["cursor", "query", "status"],
+  "licenses/list": ["cursor", "kind", "status"],
+  "devices/list": ["cursor", "licenseId", "status"],
+  "revocations/list": ["cursor", "licenseId"],
+};
+function optionalFields(value, required, optional) {
+  if (
+    !value ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    !required.every((key) => Object.hasOwn(value, key)) ||
+    Object.keys(value).some(
+      (key) => !required.includes(key) && !optional.includes(key),
+    )
+  ) {
+    throw new RequestDenied("fields");
+  }
+  return value;
+}
+function option(value, choices) {
+  if (value === undefined) return "all";
+  if (!choices.includes(value)) throw new RequestDenied("filter");
+  return value;
+}
+const cursorText = new TextEncoder();
+async function cursorKey(env) {
+  return crypto.subtle.importKey(
+    "raw",
+    cursorText.encode(env.RATE_LIMIT_SALT),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+}
+function decodeCursor64(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value))
+    throw new RequestDenied("cursor");
+  try {
+    return Uint8Array.from(
+      atob(value.replaceAll("-", "+").replaceAll("_", "/")),
+      (c) => c.charCodeAt(0),
+    );
+  } catch {
+    throw new RequestDenied("cursor");
+  }
+}
+async function parseCursor(value, scope, env) {
+  if (value === undefined) return null;
+  if (typeof value !== "string" || value.length > 2048)
+    throw new RequestDenied("cursor");
+  const parts = value.split(".");
+  if (parts.length !== 2) throw new RequestDenied("cursor");
+  const payloadBytes = decodeCursor64(parts[0]),
+    signature = decodeCursor64(parts[1]);
+  if (
+    !(await crypto.subtle.verify(
+      "HMAC",
+      await cursorKey(env),
+      signature,
+      cursorText.encode(`patholy-owner-page-v1\n${parts[0]}`),
+    ))
+  )
+    throw new RequestDenied("cursor");
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+  } catch {
+    throw new RequestDenied("cursor");
+  }
+  exactFields(payload, ["v", "scope", "createdAt", "id"]);
+  if (
+    payload.v !== 1 ||
+    payload.scope !== JSON.stringify(scope) ||
+    !Number.isSafeInteger(payload.createdAt) ||
+    payload.createdAt < 0
+  )
+    throw new RequestDenied("cursor");
+  id(payload.id);
+  return payload;
+}
+async function page(
+  db,
+  env,
+  scope,
+  cursor,
+  select,
+  predicate,
+  bindings,
+  alias,
+) {
+  const after = await parseCursor(cursor, scope, env);
+  const where = [...predicate];
+  const values = [...bindings];
+  if (after) {
+    where.push(
+      `(${alias}.created_at<? OR (${alias}.created_at=? AND ${alias}.id<?))`,
+    );
+    values.push(after.createdAt, after.createdAt, after.id);
+  }
+  const statement = db.prepare(
+    `${select}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY ${alias}.created_at DESC,${alias}.id DESC LIMIT ${PAGE_SIZE + 1}`,
+  );
+  const rows = (
+    await (values.length ? statement.bind(...values) : statement).all()
+  ).results;
+  const records = rows.slice(0, PAGE_SIZE),
+    last = records.at(-1);
+  let nextCursor = null;
+  if (rows.length > PAGE_SIZE) {
+    const payload = b64(
+      cursorText.encode(
+        JSON.stringify({
+          v: 1,
+          scope: JSON.stringify(scope),
+          createdAt: last.created_at,
+          id: last.id,
+        }),
+      ),
+    );
+    nextCursor = `${payload}.${b64(await crypto.subtle.sign("HMAC", await cursorKey(env), cursorText.encode(`patholy-owner-page-v1\n${payload}`)))}`;
+  }
+  return { records, nextCursor };
+}
+async function devicePage(db, env, b, cursor) {
+  const customerId = id(b.customerId),
+    licenseId = b.licenseId === undefined ? null : id(b.licenseId);
+  const status = option(b.status, ["all", "active", "revoked"]);
+  const predicate = ["l.customer_id=?"],
+    bindings = [customerId];
+  if (licenseId !== null) {
+    predicate.push("a.license_id=?");
+    bindings.push(licenseId);
+  }
+  if (status !== "all") {
+    predicate.push("a.status=?");
+    bindings.push(status);
+  }
+  return page(
+    db,
+    env,
+    { resource: "devices", customerId, licenseId, status },
+    cursor,
+    "SELECT a.id,a.license_id,a.device_id,a.status,a.created_at FROM activations a JOIN licenses l ON l.id=a.license_id",
+    predicate,
+    bindings,
+    "a",
+  );
+}
+async function revocationPage(db, env, b, cursor) {
+  const customerId = id(b.customerId),
+    licenseId = b.licenseId === undefined ? null : id(b.licenseId);
+  const predicate = ["l.customer_id=?"],
+    bindings = [customerId];
+  if (licenseId !== null) {
+    predicate.push("r.license_id=?");
+    bindings.push(licenseId);
+  }
+  return page(
+    db,
+    env,
+    { resource: "revocations", customerId, licenseId },
+    cursor,
+    "SELECT r.id,r.license_id,r.activation_id,r.created_at,r.actor FROM revocations r JOIN licenses l ON l.id=r.license_id",
+    predicate,
+    bindings,
+    "r",
+  );
+}
 export async function ownerApi(request, env, path) {
   const who = await authenticateOwner(request, env, { requireToken: false });
   csrf(request);
   const route = path.slice("/v1/owner/".length);
   if (!fields[route]) throw new RequestDenied("route");
   const raw = await body(request);
-  const b = exactFields(
-    raw,
-    route === "audit/list" && Object.hasOwn(raw, "cursor")
-      ? ["cursor"]
-      : fields[route],
-  );
+  const b = pageFields[route]
+    ? optionalFields(raw, fields[route], pageFields[route])
+    : exactFields(
+        raw,
+        route === "audit/list" && Object.hasOwn(raw, "cursor")
+          ? ["cursor"]
+          : fields[route],
+      );
   const db = env.DB.withSession("first-primary");
-  if (route === "customers/list")
+  if (route === "customers/list") {
+    const status = option(b.status, ["all", "active", "disabled"]);
+    if (
+      b.query !== undefined &&
+      (typeof b.query !== "string" || b.query.length > 120)
+    )
+      throw new RequestDenied("filter");
+    const query = (b.query || "").trim().toLowerCase(),
+      predicate = [],
+      bindings = [];
+    if (status !== "all") {
+      predicate.push("c.status=?");
+      bindings.push(status);
+    }
+    if (query) {
+      const match = `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+      predicate.push(
+        "(lower(c.display_name) LIKE ? ESCAPE '\\' OR lower(c.email) LIKE ? ESCAPE '\\')",
+      );
+      bindings.push(match, match);
+    }
+    const result = await page(
+      db,
+      env,
+      { resource: "customers", status, query },
+      b.cursor,
+      "SELECT c.id,c.display_name,c.email,c.status,c.identity_subject,c.created_at FROM customers c",
+      predicate,
+      bindings,
+      "c",
+    );
+    return reply({ customers: result.records, nextCursor: result.nextCursor });
+  }
+  if (route === "devices/list") {
+    const result = await devicePage(db, env, b, b.cursor);
     return reply({
-      customers: (
-        await db
-          .prepare(
-            "SELECT id,display_name,email,status,identity_subject,created_at FROM customers ORDER BY created_at DESC LIMIT 1000",
-          )
-          .all()
-      ).results,
+      activations: result.records,
+      nextCursor: result.nextCursor,
     });
+  }
+  if (route === "revocations/list") {
+    const result = await revocationPage(db, env, b, b.cursor);
+    return reply({
+      revocations: result.records,
+      nextCursor: result.nextCursor,
+    });
+  }
   if (route === "customers/create") {
     if (
       typeof b.displayName !== "string" ||
@@ -209,32 +421,58 @@ export async function ownerApi(request, env, path) {
     });
   }
   if (route === "licenses/list") {
-    const customerId = id(b.customerId);
-    const licenses = (
-      await db
-        .prepare(
-          "SELECT l.id,l.customer_id,l.kind,l.status,l.suspended,l.expires_at,l.seats,l.offline_seconds,l.revision,l.created_at,(SELECT count(*) FROM activations a WHERE a.license_id=l.id AND a.status='active') active_seats FROM licenses l WHERE l.customer_id=? ORDER BY l.created_at DESC LIMIT 1000",
-        )
-        .bind(customerId)
-        .all()
-    ).results;
-    const activations = (
-      await db
-        .prepare(
-          "SELECT a.id,a.license_id,a.device_id,a.status,a.created_at FROM activations a JOIN licenses l ON l.id=a.license_id WHERE l.customer_id=? LIMIT 1000",
-        )
-        .bind(customerId)
-        .all()
-    ).results;
-    const revocations = (
-      await db
-        .prepare(
-          "SELECT r.id,r.license_id,r.activation_id,r.created_at,r.actor FROM revocations r JOIN licenses l ON l.id=r.license_id WHERE l.customer_id=? ORDER BY r.created_at DESC LIMIT 1000",
-        )
-        .bind(customerId)
-        .all()
-    ).results;
-    return reply({ licenses, activations, revocations });
+    const customerId = id(b.customerId),
+      kind = option(b.kind, ["all", "trial", "licence"]),
+      status = option(b.status, [
+        "all",
+        "active",
+        "revoked",
+        "suspended",
+        "expired",
+      ]);
+    const predicate = ["l.customer_id=?"],
+      bindings = [customerId];
+    if (kind !== "all") {
+      predicate.push("l.kind=?");
+      bindings.push(kind);
+    }
+    if (status === "revoked") predicate.push("l.status='revoked'");
+    else if (status === "suspended")
+      predicate.push("l.status='active' AND l.suspended=1");
+    else if (status === "expired") {
+      predicate.push("l.status='active' AND l.suspended=0 AND l.expires_at<=?");
+      bindings.push(now());
+    } else if (status === "active") {
+      predicate.push("l.status='active' AND l.suspended=0 AND l.expires_at>?");
+      bindings.push(now());
+    }
+    const licenses = await page(
+      db,
+      env,
+      { resource: "licenses", customerId, kind, status },
+      b.cursor,
+      "SELECT l.id,l.customer_id,l.kind,l.status,l.suspended,l.expires_at,l.seats,l.offline_seconds,l.revision,l.created_at,(SELECT count(*) FROM activations a WHERE a.license_id=l.id AND a.status='active') active_seats FROM licenses l",
+      predicate,
+      bindings,
+      "l",
+    );
+    // Preserve legacy first-page arrays while exposing independent continuations.
+    const scope = { customerId };
+    const [devices, revocations] = await Promise.all([
+      devicePage(db, env, scope, undefined),
+      revocationPage(db, env, scope, undefined),
+    ]);
+    return reply({
+      licenses: licenses.records,
+      activations: devices.records,
+      revocations: revocations.records,
+      nextCursor: licenses.nextCursor,
+      nextCursors: {
+        licenses: licenses.nextCursor,
+        activations: devices.nextCursor,
+        revocations: revocations.nextCursor,
+      },
+    });
   }
   if (route === "licenses/create") {
     policy(b);

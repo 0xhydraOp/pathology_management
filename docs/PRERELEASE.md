@@ -1,5 +1,7 @@
 # 1.1.0-rc.1 — activation-pending evaluation prerelease
 
+This document describes the immutable released build at commit `42db0dc`. Later feature-branch work does not update its binaries, tag or published verification. Subsequent owner pagination, MFA-contract and LFS findings are documented separately in OWNER_ADMINISTRATION.md, MFA_CONTRACT.md and LFS_INSPECTION.md; the release-time limitations below remain historical facts for that build.
+
 **Not for production lab use. Windows binaries are unsigned. No production activation service is configured.** Do not point evaluation builds at real patient data. No development password, licensing bypass, private signing key or synthetic trust configuration is included.
 
 The installer explicitly warns before proceeding; login and the workspace identify the limitation. New registration, result editing and finalization are unavailable. Authenticated existing-record viewing, immutable issued reprinting, backup/export and administrator recovery remain available. This is a reviewed evaluation/recovery build, not a fully activated product.

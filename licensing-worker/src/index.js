@@ -1,5 +1,6 @@
 import { ownerConsoleResponse } from "./ownerConsole.js";
 import { ownerApi, acceptInvitation } from "./ownerApi.js";
+import { hasOwnerMfaEvidence } from "./ownerMfa.js";
 export class RequestDenied extends Error {}
 // D1 emits database errors rather than exposing a typed constraint code.
 // Recognize only our explicit authorization/concurrency guards; infrastructure
@@ -106,8 +107,7 @@ export async function authenticateOwner(
     !Array.isArray(subjects) ||
     subjects.length !== 1 ||
     subjects[0] !== claims.sub ||
-    !Array.isArray(claims.amr) ||
-    !claims.amr.includes("mfa")
+    !hasOwnerMfaEvidence(claims, env.OWNER_MFA_CONTRACT)
   )
     throw new RequestDenied("auth");
   return claims.sub;
