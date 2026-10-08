@@ -824,8 +824,24 @@ class DatabaseManager {
 
   _billingHistoryProtected(orderId) {
     const order = this.get('SELECT status, payment_status, report_status FROM orders WHERE id=?', [orderId]);
-    return Boolean(order && (order.status === 'complete' || order.payment_status === 'paid' ||
-      order.report_status === 'issued' || this.get('SELECT order_id FROM issued_reports WHERE order_id=?', [orderId])));
+    if (!order) return false;
+    if (order.status === 'complete' || order.payment_status === 'paid' || order.report_status === 'issued' ||
+      this.get('SELECT order_id FROM issued_reports WHERE order_id=?', [orderId])) return true;
+    // Mutable payment/completion status cannot unfreeze a previously billed order.
+    // Registration boundary also prevents preserved security audits from affecting
+    // a new order if an identifier is reused in an imported historical database.
+    const events = this.all(`SELECT action,new_value FROM audit_log
+      WHERE table_name='application_security' AND record_id=?
+      AND id>COALESCE((SELECT MAX(id) FROM audit_log WHERE table_name='application_security'
+        AND record_id=? AND action='register-order'),0)
+      AND action IN ('payment-status','save-results','issue-report')`, [orderId,orderId]);
+    return events.some(event => {
+      let value;
+      try { value = JSON.parse(event.new_value); }
+      catch { throw new Error('Billing history requires administrator review.'); }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Billing history requires administrator review.');
+      return event.action === 'issue-report' || value.after === 'paid' || value.before === 'paid' || value.status === 'complete';
+    });
   }
 
   computeOrderBill(orderId) {
@@ -842,10 +858,10 @@ class DatabaseManager {
     let total = 0;
     for (const t of tests) {
       const rate = rateMap[t.parameter_id] ?? DEFAULT_RATE;
-      try { this.run('UPDATE order_tests SET rate = ? WHERE id = ?', [rate, t.id], batch); } catch (_) {}
+      this.run('UPDATE order_tests SET rate = ? WHERE id = ?', [rate, t.id], batch);
       total += rate;
     }
-    try { this.run('UPDATE orders SET total_amount = ? WHERE id = ?', [total, orderId], batch); } catch (_) {}
+    this.run('UPDATE orders SET total_amount = ? WHERE id = ?', [total, orderId], batch);
     this.save();
     return total;
   }

@@ -13,7 +13,7 @@ The installer explicitly warns before proceeding; login and the workspace identi
 - Authenticated encrypted backups, validated restore, safe snapshot replacement and packaged offline recovery.
 - Configurable signed device grants, owner/customer identity separation, invitations, trials and audited licensing administration. Cloudflare deployment remains paused.
 - Polished navy/teal workspace and supported Electron/dependency updates.
-- Recalculation preserves prices/commissions for completed, paid or issued orders. Pending/partial unpaid repricing remains available. This bounded guard is not a full historical-billing amendment model.
+- Recalculation preserves prices/commissions after authenticated payment/completion/issuance, including staff status reversal or clearing a completed draft result. Never-paid/never-completed pending/partial unpaid repricing remains available. Payment status is bookkeeping, not a payment-processing ledger; no duplicate-collection guarantee is claimed. This is not a full billing amendment model.
 
 ## Compatibility and recovery
 
