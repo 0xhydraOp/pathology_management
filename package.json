@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=1 electron .\"",
     "build:icon": "node scripts/build-icon.mjs",
-    "test": "node scripts/test-system.js",
+    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js",
     "release": "node scripts/create-release.js",
     "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/package-install-zip.js",
     "release:clean": "node scripts/clean-release.js",

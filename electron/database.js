@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const { SQL_EXCLUDE_WALK_IN_REFERRALS, normalizeReferrerName } = require('./labRules.cjs');
+const { parseNumericResult } = require('./resultValidation.cjs');
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const SALT = 'mondal-lab-2026';
@@ -16,7 +17,8 @@ class DatabaseManager {
    * @param {string|null} electronUserDataPath - From Electron: `app.getPath('userData')`. One folder for DB,
    *   backups, exports — matches Windows installer uninstall ("remove app data"). If null (CLI/tests), uses legacy path.
    */
-  constructor(electronUserDataPath = null) {
+  constructor(electronUserDataPath = null, { migrateLegacy = true } = {}) {
+    this.migrateLegacy = migrateLegacy;
     if (electronUserDataPath) {
       this.dataRoot = path.normalize(electronUserDataPath);
     } else {
@@ -45,6 +47,7 @@ class DatabaseManager {
 
   /** Copy lab.db from old folder if this install uses Electron userData and DB file not present yet. */
   migrateFromLegacyIfNeeded() {
+    if (!this.migrateLegacy) return;
     if (fs.existsSync(this.dbPath)) return;
     const legacyDb = path.join(DatabaseManager.legacyAppDataDir(), 'lab.db');
     if (!fs.existsSync(legacyDb)) return;
@@ -510,6 +513,107 @@ class DatabaseManager {
 
   query(sql, params = []) {
     return this.run(sql, params);
+  }
+
+  /** Synchronous operation: no IPC calls can interleave result changes and status. */
+  saveOrderResults(orderId, changes) {
+    if (!Number.isSafeInteger(orderId) || !this.get('SELECT id FROM orders WHERE id=?', [orderId])) throw new Error('Order not found');
+    if (!Array.isArray(changes)) throw new Error('Result changes must be an array');
+    const tests = this.all(`SELECT DISTINCT p.* FROM order_tests ot JOIN parameters p ON p.id=ot.parameter_id WHERE ot.order_id=?`, [orderId]);
+    const byId = new Map(tests.map(t => [t.id, t]));
+    const seen = new Set();
+    const edits = changes.map(c => {
+      const t = byId.get(c.parameterId);
+      if (!t || seen.has(t.id) || t.type === 'derived') throw new Error('Invalid or duplicate ordered test');
+      seen.add(t.id);
+      if (!['N','L','H','C'].includes(c.flag || 'N')) throw new Error('Invalid result flag');
+      if (t.type === 'numeric') return { id:t.id, value:parseNumericResult(c.value), text:null, flag:c.flag || 'N' };
+      if (t.type !== 'text' || (c.value != null && typeof c.value !== 'string')) throw new Error('Invalid text result');
+      return { id:t.id, value:null, text:c.value?.trim() || null, flag:c.flag || 'N' };
+    });
+    const before = this.db.export();
+    const temporary = `${this.dbPath}.${crypto.randomUUID()}.tmp`;
+    try {
+      this.db.run('BEGIN TRANSACTION');
+      const put = r => {
+        if (r.value == null && r.text == null) this.db.run('DELETE FROM order_results WHERE order_id=? AND parameter_id=?',[orderId,r.id]);
+        else this.db.run(`INSERT INTO order_results(order_id,parameter_id,result_value,result_text,flag) VALUES(?,?,?,?,?)
+          ON CONFLICT(order_id,parameter_id) DO UPDATE SET result_value=excluded.result_value,result_text=excluded.result_text,flag=excluded.flag`,[orderId,r.id,r.value,r.text,r.flag]);
+      };
+      edits.forEach(put);
+      // Recompute ordered derived tests for both full and batch entry, so old values cannot survive cleared dependencies.
+      const saved = new Map(this.all('SELECT * FROM order_results WHERE order_id=?',[orderId]).map(r => [r.parameter_id,r]));
+      const computed = new Map();
+      const rawComputed = new Map();
+      const visiting = new Set();
+      const derive = t => {
+        if (computed.has(t.id)) return computed.get(t.id);
+        if (visiting.has(t.id)) return null;
+        visiting.add(t.id);
+        let value = null;
+        try {
+          const f = this.get('SELECT formula_expression,dependencies FROM formulas WHERE parameter_id=?',[t.id]);
+          if (f) {
+            let expr = f.formula_expression;
+            const vals = {};
+            for (const code of (f.dependencies || '').split(',').map(s=>s.trim()).filter(Boolean)) {
+              const dep = tests.find(p=>p.code===code);
+              const v = dep?.type === 'derived' ? derive(dep) : parseNumericResult(saved.get(dep?.id)?.result_value);
+              if (v == null) throw new Error('Missing derived dependency');
+              vals[code] = v;
+              const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              expr = expr.replace(new RegExp(`\\b${escaped}\\b`,'g'),String(v));
+            }
+            if ((t.code === 'LDL' && vals.TG > 400) || (t.code === 'AGRATIO' && vals.GLOB === 0)) throw new Error('Not calculable');
+            // This backend path only evaluates substituted arithmetic, never arbitrary catalogue JavaScript.
+            if (expr.length > 10000 || !/^[0-9eE\s.+*/%()\-]+$/.test(expr)) throw new Error('Unsupported formula expression');
+            const n = Function(`"use strict"; return (${expr})`)();
+            if (typeof n === 'number' && Number.isFinite(n)) {
+              value = parseNumericResult(n.toFixed(t.decimal_places ?? 0));
+              rawComputed.set(t.id,n);
+            }
+          }
+        } catch { value = null; }
+        visiting.delete(t.id);
+        computed.set(t.id,value);
+        return value;
+      };
+      const patient = this.get('SELECT p.age,p.sex FROM patients p JOIN orders o ON o.patient_id=p.id WHERE o.id=?',[orderId]);
+      for (const t of tests.filter(t=>t.type==='derived')) {
+        const value = derive(t);
+        const ranges = this.all('SELECT * FROM parameter_ranges WHERE parameter_id=?',[t.id]);
+        const range = ranges.find(r=>(r.sex==='any' || r.sex===(patient?.sex || 'any')) && (patient?.age ?? 30)>=(r.min_age ?? 0) && (patient?.age ?? 30)<=(r.max_age ?? 150));
+        let flag = 'N';
+        if (value != null && range) {
+          const raw = rawComputed.get(t.id);
+          if ((range.critical_low != null && raw < range.critical_low) || (range.critical_high != null && raw > range.critical_high)) flag='C';
+          else if (range.low_value != null && raw < range.low_value) flag='L';
+          else if (range.high_value != null && raw > range.high_value) flag='H';
+        }
+        put({id:t.id,value,text:null,flag});
+      }
+      const rows = new Map(this.all('SELECT * FROM order_results WHERE order_id=?',[orderId]).map(r=>[r.parameter_id,r]));
+      const filled = tests.filter(t=> {
+        const r = rows.get(t.id);
+        if (t.type==='text') return typeof r?.result_text==='string' && r.result_text.trim()!=='';
+        try { return parseNumericResult(r?.result_value)!==null; } catch { return false; }
+      }).length;
+      const status = tests.length>0 && filled===tests.length ? 'complete' : filled>0 ? 'partial' : 'pending';
+      this.db.run('UPDATE orders SET status=? WHERE id=?',[status,orderId]);
+      this.db.run('COMMIT');
+      // sql.js is in memory: persist only the committed snapshot, replacing the file after a flushed write.
+      const fd = fs.openSync(temporary,'wx');
+      try { fs.writeFileSync(fd,Buffer.from(this.db.export())); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+      fs.renameSync(temporary,this.dbPath);
+      return { status, filled, total:tests.length };
+    } catch (error) {
+      try { this.db.run('ROLLBACK'); } catch { /* commit may already have succeeded */ }
+      this.db.close();
+      this.db = new this.SQL.Database(before);
+      throw error;
+    } finally {
+      if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
   }
 
   run(sql, params = [], skipSave = false) {

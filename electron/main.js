@@ -359,6 +359,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('db:get', (_, sql, params = []) => safeDb(db.get.bind(db))(sql, params));
   ipcMain.handle('db:all', (_, sql, params = []) => safeDb(db.all.bind(db))(sql, params));
   ipcMain.handle('db:init', () => db.init());
+  ipcMain.handle('db:saveOrderResults', (_, orderId, changes) => db.saveOrderResults(orderId, changes));
   ipcMain.handle('db:reloadCatalogue', () => db.loadCatalogueFromJson());
   ipcMain.handle('db:nextPatientId', () => {
     const DatabaseManager = require('./database');

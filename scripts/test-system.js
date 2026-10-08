@@ -7,6 +7,13 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// Protect default constructors AND legacy migration from real lab data.
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-system-'));
+process.env.APPDATA = sandbox;
+process.env.USERPROFILE = sandbox;
+process.env.HOME = sandbox;
+process.on('exit', () => fs.rmSync(sandbox, { recursive: true, force: true }));
+
 const root = path.join(__dirname, '..');
 let passed = 0;
 let failed = 0;
@@ -51,7 +58,7 @@ async function main() {
 
   await runAsync('Database init & basic queries', async () => {
     const DatabaseManager = require(path.join(root, 'electron/database.js'));
-    const db = new DatabaseManager();
+    const db = new DatabaseManager(path.join(sandbox, 'basic'), { migrateLegacy: false });
     await db.init();
     const lab = db.get('SELECT name FROM lab WHERE id = 1');
     if (!lab) throw new Error('Lab config missing');
@@ -59,6 +66,7 @@ async function main() {
     if (!paramCount || paramCount.c < 1) throw new Error('Parameters catalogue not loaded');
     const userCount = db.get('SELECT COUNT(*) as c FROM users');
     if (!userCount || userCount.c < 1) throw new Error('No users in DB');
+    db.close();
   });
 
   run('Electron packager includes catalogue JSON files', () => {
@@ -85,7 +93,7 @@ async function main() {
 
   run('computeOrderBillAndCommission exists', () => {
     const DatabaseManager = require(path.join(root, 'electron/database.js'));
-    const db = new DatabaseManager();
+    const db = new DatabaseManager(path.join(sandbox, 'method-check'), { migrateLegacy: false });
     if (typeof db.computeOrderBillAndCommission !== 'function') {
       throw new Error('computeOrderBillAndCommission missing');
     }
@@ -157,7 +165,7 @@ async function main() {
   await runAsync('Temp DB: patient + order_tests + computeOrderBillAndCommission', async () => {
     const DatabaseManager = require(path.join(root, 'electron/database.js'));
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-smoke-'));
-    const dbm = new DatabaseManager(tmp);
+    const dbm = new DatabaseManager(tmp, { migrateLegacy: false });
     try {
       await dbm.init();
       const extId = DatabaseManager.getNextPatientId(dbm);

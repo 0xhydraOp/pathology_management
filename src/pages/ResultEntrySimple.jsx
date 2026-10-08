@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { parseNumericResult, isValidNumericResult } from '../utils/resultValidation';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { formatOrderDateMediumIN } from '../utils/dateDisplay';
 import { showToast } from '../utils/toastBus';
@@ -109,40 +110,17 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
   const saveCurrentAndNext = async () => {
     if (!window.db || !selectedParam || !currentOrder) return;
     const val = values[currentOrder.id];
-    if (val === undefined || val === '' || val == null) {
+    if (val === undefined) {
       setCurrentIdx((i) => Math.min(i + 1, orders.length - 1));
       return;
     }
-    const numVal = parseFloat(val);
-    if (isNaN(numVal)) return;
-    if (selectedParam.min_allowed_value != null && numVal < selectedParam.min_allowed_value) {
-      showToast(`${selectedParam.name}: Value must be >= ${selectedParam.min_allowed_value}`, 'warning');
-      return;
-    }
-    if (selectedParam.max_allowed_value != null && numVal > selectedParam.max_allowed_value) {
-      showToast(`${selectedParam.name}: Value must be <= ${selectedParam.max_allowed_value}`, 'warning');
-      return;
-    }
+    let numVal;
+    try { numVal = parseNumericResult(val); }
+    catch (e) { showToast(e.message, 'warning'); return; }
     setSaving(true);
     try {
       const flag = computeFlag(numVal, getOrderRange(currentOrder, selectedParam.id));
-      await window.db.run(
-        `INSERT INTO order_results (order_id, parameter_id, result_value, result_text, flag) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(order_id, parameter_id) DO UPDATE SET result_value=excluded.result_value, result_text=excluded.result_text, flag=excluded.flag`,
-        [currentOrder.id, selectedParam.id, numVal, null, flag]
-      );
-      const counts = await window.db.get(
-        `SELECT
-           (SELECT COUNT(*) FROM order_tests WHERE order_id = ?) AS total_tests,
-           (SELECT COUNT(*) FROM order_results WHERE order_id = ? AND (
-             result_value IS NOT NULL OR (result_text IS NOT NULL AND TRIM(result_text) != '')
-           )) AS filled_tests`,
-        [currentOrder.id, currentOrder.id]
-      );
-      const total = Number(counts?.total_tests) || 0;
-      const filled = Number(counts?.filled_tests) || 0;
-      const status = filled >= total && total > 0 ? 'complete' : filled > 0 ? 'partial' : 'pending';
-      await window.db.run('UPDATE orders SET status = ? WHERE id = ?', [status, currentOrder.id]);
+      await window.db.saveOrderResults(currentOrder.id, [{ parameterId: selectedParam.id, value: val, flag }]);
       setValues((v) => ({ ...v, [currentOrder.id]: val }));
       if (currentIdx < orders.length - 1) {
         setCurrentIdx((i) => i + 1);
@@ -178,15 +156,6 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
     );
   }
   if (!selectedParam) return <div style={styles.loading}>Loading...</div>;
-  if (orders.length === 0) {
-    return (
-      <div style={styles.container} className="result-entry-page">
-        <h1 style={styles.title}>Batch Entry</h1>
-        <p style={styles.subtitle}>No pending orders have the selected test. Try another test or add orders first.</p>
-        <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
-      </div>
-    );
-  }
 
   return (
     <div style={styles.container} className="result-entry-page">
@@ -199,8 +168,9 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        <span style={{ marginLeft: 16, color: '#666' }}>{currentIdx + 1} / {orders.length}</span>
+        <span style={{ marginLeft: 16, color: '#666' }}>{orders.length ? currentIdx + 1 : 0} / {orders.length}</span>
       </div>
+      {orders.length === 0 && <p>No pending orders have the selected test. Try another test or add orders first.</p>}
       {currentOrder && (
         <div style={styles.card}>
           <div style={styles.patientBar}>
@@ -210,7 +180,8 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
             <label>{selectedParam.name} ({selectedParam.unit || 'â€”'}):</label>
             <input
               ref={inputRef}
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={values[currentOrder.id] ?? ''}
               onChange={(e) => setValues((v) => ({ ...v, [currentOrder.id]: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && saveCurrentAndNext()}
@@ -242,7 +213,8 @@ function getRange(patient, ranges) {
 
 function computeFlag(val, range) {
   if (val == null || val === '' || !range) return 'N';
-  const v = parseFloat(val);
+  if (!isValidNumericResult(val)) return 'N';
+  const v = parseNumericResult(val);
   if (range.criticalLow != null && v < range.criticalLow) return 'C';
   if (range.criticalHigh != null && v > range.criticalHigh) return 'C';
   if (range.low != null && v < range.low) return 'L';
@@ -254,8 +226,8 @@ function evalFormula(formula, valuesByCode) {
   try {
     let expr = formula;
     for (const [code, val] of Object.entries(valuesByCode)) {
-      const n = parseFloat(val);
-      if (isNaN(n)) return null;
+      const n = parseNumericResult(val);
+      if (n === null) return null;
       expr = expr.replace(new RegExp(`\\b${code}\\b`, 'g'), String(n));
     }
     return Function(`"use strict"; return (${expr})`)();
@@ -403,7 +375,7 @@ export default function ResultEntrySimple() {
       );
       const resMap = {};
       (existing || []).forEach((r) => {
-        resMap[r.parameter_id] = { value: r.result_value, text: r.result_text, flag: r.flag };
+        resMap[r.parameter_id] = { value: r.result_value == null ? null : String(r.result_value), text: r.result_text, flag: r.flag };
       });
       if (loadingOrderIdRef.current !== orderId) return;
       setResults(resMap);
@@ -460,7 +432,9 @@ export default function ResultEntrySimple() {
     }
   }, [selectedOrder?.id, loadOrderDetails]);
 
-  const getResultDisplay = (test) => {
+  const getResultDisplay = (test, visiting = new Set()) => {
+    if (visiting.has(test.id)) return { display: '—', flag: 'N', missing: true };
+    visiting = new Set(visiting).add(test.id);
     const r = results[test.id];
     if (test.type === 'derived') {
       const f = formulas[test.id];
@@ -473,22 +447,22 @@ export default function ResultEntrySimple() {
         if (!depTest) return { display: 'â€”', flag: 'N' };
         let v;
         if (depTest.type === 'derived') {
-          const d = getResultDisplay(depTest);
+          const d = getResultDisplay(depTest, visiting);
           if (d.display === 'â€”' || (d.display && d.display.startsWith('Not calculable'))) return { display: 'â€”', flag: 'N' };
-          v = parseFloat(d.display);
-          if (isNaN(v)) return { display: 'â€”', flag: 'N' };
+          v = d.display;
+          if (!isValidNumericResult(v)) return { display: 'â€”', flag: 'N' };
         } else {
           const pid = codeToId[code];
           if (!pid) return { display: 'â€”', flag: 'N' };
           v = results[pid]?.value ?? results[pid]?.text;
         }
-        if (v == null || v === '') return { display: 'â€”', flag: 'N' };
+        if (!isValidNumericResult(v)) return { display: 'â€”', flag: 'N' };
         vals[code] = v;
       }
       if (test.code === 'LDL' && parseFloat(vals.TG) > 400) return { display: 'Not calculable (TG > 400)', flag: 'N' };
       if (test.code === 'AGRATIO' && parseFloat(vals.GLOB) === 0) return { display: 'â€”', flag: 'N' };
       const computed = evalFormula(f.expr, vals);
-      if (computed == null || isNaN(computed)) return { display: 'â€”', flag: 'N' };
+      if (typeof computed !== 'number' || !Number.isFinite(computed)) return { display: 'â€”', flag: 'N' };
       const dec = test.decimal_places ?? 0;
       const display = Number(computed).toFixed(dec);
       const range = getRange(patient, ranges[test.id]);
@@ -502,25 +476,12 @@ export default function ResultEntrySimple() {
   };
 
   const handleChange = (paramId, value, test) => {
-    if (test.type === 'numeric' && value !== '') {
-      const numVal = parseFloat(value);
-      if (!isNaN(numVal)) {
-        if (test.min_allowed_value != null && numVal < test.min_allowed_value) {
-          showToast(`${test.name}: Value must be â‰¥ ${test.min_allowed_value}`, 'warning');
-          return;
-        }
-        if (test.max_allowed_value != null && numVal > test.max_allowed_value) {
-          showToast(`${test.name}: Value must be â‰¤ ${test.max_allowed_value}`, 'warning');
-          return;
-        }
-      }
-    }
     const range = getRange(patient, ranges[paramId]);
     const flag = computeFlag(value, range);
     setResults((prev) => ({
       ...prev,
       [paramId]: {
-        value: test.type === 'numeric' ? (parseFloat(value) ?? value) : null,
+        value: test.type === 'numeric' ? value : null,
         text: test.type === 'text' ? value : null,
         flag,
       },
@@ -543,7 +504,7 @@ export default function ResultEntrySimple() {
   const confirmCritical = () => {
     if (!criticalPending) return;
     const { paramId, value, test } = criticalPending;
-    const numVal = value === '' ? null : parseFloat(value);
+    const numVal = value;
     setResults((prev) => ({
       ...prev,
       [paramId]: {
@@ -575,30 +536,14 @@ export default function ResultEntrySimple() {
     if (!window.db || !order?.id) return;
     setSaving(true);
     try {
-      for (const test of tests) {
+      const changes = tests.filter(t => t.type !== 'derived').map(test => {
         const r = results[test.id];
-        const derived = getResultDisplay(test);
-        const val = test.type === 'derived' ? derived.display : (r?.value ?? r?.text);
-        const flag = test.type === 'derived' ? derived.flag : (r?.flag ?? 'N');
-        const numVal = parseFloat(val);
-        const isNum = (test.type === 'numeric' && val !== '' && !isNaN(numVal)) ||
-          (test.type === 'derived' && val !== 'â€”' && val !== '' && !isNaN(numVal) && !String(val).startsWith('Not calculable'));
-        await window.db.run(
-          `INSERT INTO order_results (order_id, parameter_id, result_value, result_text, flag) VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(order_id, parameter_id) DO UPDATE SET result_value=excluded.result_value, result_text=excluded.result_text, flag=excluded.flag`,
-          [order.id, test.id, isNum ? numVal : null, isNum ? null : (val || null), flag]
-        );
-      }
-      const filled = tests.filter((t) => {
-        const r = results[t.id];
-        const d = getResultDisplay(t);
-        if (t.type === 'derived') return d.display !== 'â€”';
-        if (t.type === 'numeric') return r?.value != null && r.value !== '';
-        if (t.type === 'text') return r?.text != null && String(r.text).trim() !== '';
-        return (r?.value != null && r.value !== '') || (r?.text != null && String(r.text).trim() !== '');
-      }).length;
-      const status = filled >= tests.length ? 'complete' : filled > 0 ? 'partial' : 'pending';
-      await window.db.run('UPDATE orders SET status = ? WHERE id = ?', [status, order.id]);
+        const value = test.type === 'numeric' ? r?.value : r?.text;
+        if (test.type === 'numeric') parseNumericResult(value);
+        return { parameterId: test.id, value: value ?? '', flag: r?.flag ?? 'N' };
+      });
+      const saved = await window.db.saveOrderResults(order.id, changes);
+      setOrder(prev => ({ ...prev, status: saved.status }));
       /* report_print_log: recorded in Reports.jsx (manual Print + ?print=1 auto-print) so each print action logs once. */
       setHasUnsavedChanges(false);
       if (doPrint) {
@@ -622,7 +567,7 @@ export default function ResultEntrySimple() {
       }
     } catch (e) {
       console.error(e);
-      showToast('Error saving. Please try again.', 'error');
+      showToast(e.message || 'Error saving. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -701,7 +646,7 @@ export default function ResultEntrySimple() {
   }, [criticalPending]);
 
   // Step 1: Select patient
-  if (step === 'select' && !order) {
+  if (step === 'select' && !order && !batchMode) {
     return (
       <div style={styles.container} className="result-entry-page">
         <h1 style={styles.title}>Enter Results & Print</h1>
@@ -863,7 +808,7 @@ export default function ResultEntrySimple() {
   const filledCount = tests.filter((t) => {
     const r = results[t.id];
     const d = getResultDisplay(t);
-    return t.type === 'derived' ? d.display !== 'â€”' : (r?.value != null || r?.text != null);
+    return t.type === 'text' ? String(r?.text ?? '').trim() !== '' : isValidNumericResult(t.type === 'derived' ? d.display : r?.value);
   }).length;
 
   const testsBySection = tests.reduce((acc, t) => {
@@ -990,7 +935,8 @@ export default function ResultEntrySimple() {
                           ) : (
                             <input
                               tabIndex={10 + tests.indexOf(test)}
-                              type={test.type === 'numeric' ? 'number' : 'text'}
+                              type="text"
+                              inputMode={test.type === 'numeric' ? 'decimal' : undefined}
                               step={test.decimal_places ? Math.pow(10, -test.decimal_places) : 1}
                               value={results[test.id]?.value ?? results[test.id]?.text ?? ''}
                               onChange={(e) => handleChange(test.id, e.target.value, test)}

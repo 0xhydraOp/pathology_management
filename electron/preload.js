@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('db', {
   get: (sql, params) => ipcRenderer.invoke('db:get', sql, params),
   all: (sql, params) => ipcRenderer.invoke('db:all', sql, params),
   init: () => ipcRenderer.invoke('db:init'),
+  saveOrderResults: (orderId, changes) => ipcRenderer.invoke('db:saveOrderResults', orderId, changes),
   reloadCatalogue: () => ipcRenderer.invoke('db:reloadCatalogue'),
   nextPatientId: () => ipcRenderer.invoke('db:nextPatientId'),
   logPrint: (orderId, printedBy) => ipcRenderer.invoke('db:logPrint', orderId, printedBy),
