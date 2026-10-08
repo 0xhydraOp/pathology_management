@@ -7,10 +7,9 @@ const { SQL_EXCLUDE_WALK_IN_REFERRALS, normalizeReferrerName } = require('./labR
 const { parseNumericResult } = require('./resultValidation.cjs');
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-const SALT = 'mondal-lab-2026';
-function hashPassword(pw) {
-  return crypto.pbkdf2Sync(pw, SALT, 100000, 64, 'sha512').toString('hex');
-}
+const credentials=require('./credentials.cjs');
+const recovery=require('./recovery.cjs');
+const hashPassword=credentials.hash;
 
 class DatabaseManager {
   /**
@@ -55,33 +54,75 @@ class DatabaseManager {
       fs.copyFileSync(legacyDb, this.dbPath);
       console.log('[DB] Migrated lab.db from legacy folder into app userData.');
     } catch (e) {
-      console.error('[DB] Legacy migration failed:', e.message);
+      throw new Error('Legacy database copy failed. Original data was preserved; check permissions and free space.');
     }
   }
 
   async init() {
-    this.migrateFromLegacyIfNeeded();
-    this.SQL = await initSqlJs();
-    if (fs.existsSync(this.dbPath)) {
-      const buf = fs.readFileSync(this.dbPath);
-      this.db = new this.SQL.Database(buf);
-    } else {
-      this.db = new this.SQL.Database();
+    this._initializationFailed = false;
+    try {
+      this.acquireLock();
+      this.migrateFromLegacyIfNeeded();
+      this.SQL = await initSqlJs();
+      const original = fs.existsSync(this.dbPath) ? fs.readFileSync(this.dbPath) : null;
+      if(original) recovery.inspect(this.SQL,original);
+      this._newDatabase = original===null;
+      this.db = original ? new this.SQL.Database(Buffer.from(original)) : new this.SQL.Database();
+      const hasVersions = this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='reference_migrations'");
+      if(original && this.get('PRAGMA user_version').user_version<1)this._backupReferenceUpgrade(original,'before-credential-recovery-upgrade');
+      if (original && (!hasVersions || this.get('SELECT COUNT(*) AS n FROM reference_migrations WHERE version IN (1,2,3)').n!==3)) this._backupReferenceUpgrade(original);
+      this._referenceAtomic(() => {
+        this._initializing = true;
+        try {
+          this.createTables();
+          this.migrate();
+          const count = this.get('SELECT COUNT(*) as c FROM parameters');
+          if (count && count.c === 0) this.loadCatalogueFromJson();
+          this.migrateReferenceIntervals();
+          this.db.run("PRAGMA user_version=1");
+        } finally { this._initializing = false; }
+      });
+    } catch (error) {
+      this._initializationFailed = true;
+      this.releaseLock();
+      throw error;
     }
-    try { this.db.run('PRAGMA journal_mode = WAL'); } catch (_) { /* sql.js may not support WAL */ }
-    this.createTables();
-    this.migrate();
-    const count = this.get('SELECT COUNT(*) as c FROM parameters');
-    if (count && count.c === 0) this.loadCatalogueFromJson();
-    this.save();
   }
 
-  save() {
-    if (this.db) {
-      const data = this.db.export();
-      fs.writeFileSync(this.dbPath, Buffer.from(data));
+  _backupReferenceUpgrade(original,label='before-reference-intervals') {
+    fs.mkdirSync(this._backupDir(), { recursive: true });
+    const backupPath = path.join(this._backupDir(), `${label}-${Date.now()}-${crypto.randomUUID()}.db`);
+    try {
+      const fd = fs.openSync(backupPath, 'wx');
+      try { fs.writeFileSync(fd, original); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+      const bytes = fs.readFileSync(backupPath);
+      if (!bytes.equals(original)) throw new Error('Reference upgrade backup verification failed');
+      const backup = new this.SQL.Database(Buffer.from(bytes));
+      try {
+        if (backup.exec('PRAGMA integrity_check')[0]?.values?.[0]?.[0] !== 'ok') throw new Error('Reference upgrade backup is not usable');
+      } finally { backup.close(); }
+    } catch (error) {
+      if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
+      throw error;
     }
+    return backupPath;
   }
+
+  acquireLock() {
+    if(this._lockFile)return;
+    const file=this.dbPath+'.lock';
+    try { const fd=fs.openSync(file,'wx',0o600);this._lockFile=file;try{fs.writeFileSync(fd,JSON.stringify({pid:process.pid}));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}this._lockFile=file; }
+    catch(e){if(e.code!=='EEXIST')throw e;let pid;try{pid=JSON.parse(fs.readFileSync(file,'utf8')).pid;}catch{}if(Number.isInteger(pid)){try{process.kill(pid,0);}catch(err){if(err.code==='ESRCH'){fs.unlinkSync(file);return this.acquireLock();}}}throw new Error('Database is in use or its ownership lock needs manual recovery. Close other instances.');}
+  }
+  releaseLock(){if(this._lockFile){fs.unlinkSync(this._lockFile);this._lockFile=null;}}
+  save() {
+    if(this._initializing || this._initializationFailed)return;
+    if(this._restoring)throw new Error('Database recovery is in progress.');
+    if(this.db){try{recovery.replace(this.dbPath,Buffer.from(this.db.export()));}catch(e){if(fs.existsSync(this.dbPath)){this.db.close();this.db=new this.SQL.Database(fs.readFileSync(this.dbPath));}throw e;}}
+  }
+  credentialState(){return {setupRequired:this.get('SELECT COUNT(*) AS n FROM users').n===0};}
+  setupAdmin(username,password){if(this.get('SELECT COUNT(*) AS n FROM patients').n>0 && this.credentialState().setupRequired)throw new Error('Existing lab data without accounts requires offline administrator recovery.');if(!this.credentialState().setupRequired)throw new Error('Administrator setup is already complete');if(typeof username!=='string'||!/^[A-Za-z0-9._-]{1,100}$/.test(username))throw new Error('Invalid username');credentials.validate(password);return this._referenceAtomic(()=>{if(!this.credentialState().setupRequired)throw new Error('Setup is complete');this.db.run("INSERT INTO users(username,password_hash,role,display_name) VALUES(?,?,'admin',?)",[username,hashPassword(password),username]);const actor=this.get('SELECT id,username FROM users WHERE username=?',[username]);require('./applicationOperations.cjs').audit(this,actor,'administrator-setup',actor.id);return {ok:true};});}
+  restoreValidated(bytes,actor){const summary=recovery.inspect(this.SQL,bytes,{current:true,expected:this.db});if(!summary.users)throw new Error('Backup must contain an administrator');if(this._restoring)throw new Error('Recovery already in progress');const original=Buffer.from(this.db.export());const recoveryPath=this._backupReferenceUpgrade(original,'before-restore');this._restoring=true;let candidate;try{candidate=new this.SQL.Database(Buffer.from(bytes));const previous=this.db;this.db=candidate;try{require('./applicationOperations.cjs').audit(this,actor,'database-restored',null,{recoverySnapshot:true});}finally{this.db=previous;}const committed=Buffer.from(candidate.export());recovery.inspect(this.SQL,committed,{current:true,expected:previous});recovery.replace(this.dbPath,committed);previous.close();this.db=candidate;candidate=null;return {ok:true,recoveryPath};}finally{candidate?.close();this._restoring=false;}}
 
   migrate() {
     const alters = [
@@ -92,6 +133,7 @@ class DatabaseManager {
       'ALTER TABLE parameters ADD COLUMN max_allowed_value REAL',
       'ALTER TABLE order_tests ADD COLUMN rate REAL',
       'ALTER TABLE lab ADD COLUMN commission_default_percent REAL',
+      'ALTER TABLE order_results ADD COLUMN raw_result_value REAL',
     ];
     alters.forEach((sql) => { try { this.db.run(sql); } catch (_) {} });
     try { this.run('UPDATE lab SET commission_default_percent = 45 WHERE id = 1 AND commission_default_percent IS NULL'); } catch (_) {}
@@ -109,7 +151,7 @@ class DatabaseManager {
       this.db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_access_code ON orders(access_code)');
     } catch (_) {}
     this.backfillOrderAccessCodes();
-    this.migrateParameterNames();
+    // Preserve existing local names; startup is not catalogue synchronization.
   }
 
   /** Unique barcode / scan value per order (bill). Uppercase A–Z and 2–9 only — scanner-friendly. */
@@ -172,6 +214,7 @@ class DatabaseManager {
   }
 
   createTables() {
+    const freshUsers=!this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS lab (
         id INTEGER PRIMARY KEY DEFAULT 1,
@@ -364,28 +407,26 @@ class DatabaseManager {
 
       INSERT OR IGNORE INTO lab (id) VALUES (1);
 
-      INSERT OR IGNORE INTO users (id, username, password_hash, role, display_name) VALUES
-        (1, 'admin', '${hashPassword('admin123')}', 'admin', 'Admin');
     `);
-    this.ensureUsersExist();
-  }
 
-  ensureUsersExist() {
-    const count = this.get('SELECT COUNT(*) as c FROM users');
-    if (count && count.c === 0) {
-      this.run('INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)', ['admin', hashPassword('admin123'), 'admin', 'Admin']);
-    }
   }
 
   verifyUser(username, password) {
     const user = this.get('SELECT id, username, password_hash, role, display_name FROM users WHERE username = ?', [username]);
     if (!user) return null;
-    const hash = hashPassword(password);
-    return hash === user.password_hash ? { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.username } : null;
+    if(!credentials.verify(password,user.password_hash))return null;
+    const requiresPasswordChange=credentials.isDefault(user.password_hash);
+    if(!requiresPasswordChange && /^[a-f0-9]{128}$/.test(user.password_hash))this._referenceAtomic(()=>{this.db.run('UPDATE users SET password_hash=? WHERE id=?',[hashPassword(password),user.id]);require('./applicationOperations.cjs').audit(this,user,'password-hash-upgrade',user.id);});
+    return true ? { id: user.id, username: user.username, role: user.role, displayName: user.display_name || user.username, requiresPasswordChange } : null;
   }
 
   /** Load investigation catalogue / rates / profiles from bundled JSON (not patient or order data). */
   loadCatalogueFromJson() {
+    const existing = this.get('SELECT COUNT(*) AS n FROM parameters');
+    const dependents = this.get('SELECT (SELECT COUNT(*) FROM order_tests) + (SELECT COUNT(*) FROM order_results) AS n');
+    const hasVersions = this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='reference_interval_sets'");
+    const versions = hasVersions ? this.get('SELECT COUNT(*) AS n FROM reference_interval_sets').n : 0;
+    if (existing.n || dependents.n || versions) throw new Error('Catalogue initialization only: existing parameter identities are protected');
     const projectRoot = path.join(__dirname, '..');
     const paramsPath = path.join(projectRoot, 'pathology_parameters.json');
     const profilesPath = path.join(projectRoot, 'test_profiles.json');
@@ -516,7 +557,9 @@ class DatabaseManager {
   }
 
   /** Synchronous operation: no IPC calls can interleave result changes and status. */
-  saveOrderResults(orderId, changes) {
+  saveOrderResults(orderId, changes, actor = null) {
+    const user=actor?this._referenceActor(actor):null;
+    if (this.get('SELECT order_id FROM issued_reports WHERE order_id=?',[orderId])) throw new Error('This report is issued; results are read-only');
     if (!Number.isSafeInteger(orderId) || !this.get('SELECT id FROM orders WHERE id=?', [orderId])) throw new Error('Order not found');
     if (!Array.isArray(changes)) throw new Error('Result changes must be an array');
     const tests = this.all(`SELECT DISTINCT p.* FROM order_tests ot JOIN parameters p ON p.id=ot.parameter_id WHERE ot.order_id=?`, [orderId]);
@@ -581,16 +624,16 @@ class DatabaseManager {
       const patient = this.get('SELECT p.age,p.sex FROM patients p JOIN orders o ON o.patient_id=p.id WHERE o.id=?',[orderId]);
       for (const t of tests.filter(t=>t.type==='derived')) {
         const value = derive(t);
-        const ranges = this.all('SELECT * FROM parameter_ranges WHERE parameter_id=?',[t.id]);
-        const range = ranges.find(r=>(r.sex==='any' || r.sex===(patient?.sex || 'any')) && (patient?.age ?? 30)>=(r.min_age ?? 0) && (patient?.age ?? 30)<=(r.max_age ?? 150));
-        let flag = 'N';
-        if (value != null && range) {
-          const raw = rawComputed.get(t.id);
-          if ((range.critical_low != null && raw < range.critical_low) || (range.critical_high != null && raw > range.critical_high)) flag='C';
-          else if (range.low_value != null && raw < range.low_value) flag='L';
-          else if (range.high_value != null && raw > range.high_value) flag='H';
-        }
+        const ref = this.referenceFor(t.id,patient || {},t.unit || '');
+        const flag = require('./referenceIntervals.cjs').rules.classify(rawComputed.get(t.id) ?? value,ref.interval,ref.critical);
         put({id:t.id,value,text:null,flag});
+        this.db.run('UPDATE order_results SET raw_result_value=? WHERE order_id=? AND parameter_id=?',[rawComputed.get(t.id) ?? null,orderId,t.id]);
+      }
+      for (const t of tests.filter(t=>t.type!=='derived')) {
+        const result = this.get('SELECT result_value FROM order_results WHERE order_id=? AND parameter_id=?',[orderId,t.id]);
+        const ref = this.referenceFor(t.id,patient || {},t.unit || '');
+        const flag = require('./referenceIntervals.cjs').rules.classify(result?.result_value,ref.interval,ref.critical);
+        this.db.run('UPDATE order_results SET flag=? WHERE order_id=? AND parameter_id=?',[flag,orderId,t.id]);
       }
       const rows = new Map(this.all('SELECT * FROM order_results WHERE order_id=?',[orderId]).map(r=>[r.parameter_id,r]));
       const filled = tests.filter(t=> {
@@ -600,6 +643,7 @@ class DatabaseManager {
       }).length;
       const status = tests.length>0 && filled===tests.length ? 'complete' : filled>0 ? 'partial' : 'pending';
       this.db.run('UPDATE orders SET status=? WHERE id=?',[status,orderId]);
+      if(user)require('./applicationOperations.cjs').audit(this,user,'save-results',orderId,{changedTestCount:edits.length,status});
       this.db.run('COMMIT');
       // sql.js is in memory: persist only the committed snapshot, replacing the file after a flushed write.
       const fd = fs.openSync(temporary,'wx');
@@ -617,6 +661,7 @@ class DatabaseManager {
   }
 
   run(sql, params = [], skipSave = false) {
+    if(this._restoring)throw new Error('Database recovery is in progress');
     const stmt = this.db.prepare(sql);
     if (params && params.length > 0) stmt.bind(params);
     stmt.step();
@@ -654,6 +699,7 @@ class DatabaseManager {
       this.db.close();
       this.db = null;
     }
+    this.releaseLock();
   }
 
   logPrint(orderId, printedBy) {
@@ -664,13 +710,8 @@ class DatabaseManager {
   }
 
   backup() {
-    const backupDir = this._backupDir();
-    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const backupPath = path.join(backupDir, `lab_backup_${timestamp}.db`);
     this.save();
-    fs.copyFileSync(this.dbPath, backupPath);
-    return backupPath;
+    return this._backupReferenceUpgrade(Buffer.from(this.db.export()),'local-recovery');
   }
 
   /** Flush in-memory DB to disk, then copy to a user-chosen path (Desktop, USB, etc.). */
@@ -680,7 +721,8 @@ class DatabaseManager {
     if (!dest.toLowerCase().endsWith('.db')) dest += '.db';
     const dir = path.dirname(dest);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.copyFileSync(this.dbPath, dest);
+    if(path.resolve(dest)===path.resolve(this.dbPath))throw new Error('Cannot overwrite active database');
+    recovery.replace(dest,fs.readFileSync(this.dbPath));
     return dest;
   }
 
@@ -717,12 +759,7 @@ class DatabaseManager {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const backupPath = path.join(backupDir, `lab_backup_${timestamp}.db.enc`);
     this.save();
-    const key = crypto.scryptSync(password || 'mondal-default', SALT, 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    const data = fs.readFileSync(this.dbPath);
-    const encrypted = Buffer.concat([iv, cipher.update(data), cipher.final()]);
-    fs.writeFileSync(backupPath, encrypted);
+    recovery.replace(backupPath,recovery.encrypt(Buffer.from(this.db.export()),password));
     return backupPath;
   }
 
@@ -736,12 +773,8 @@ class DatabaseManager {
     }
     const dir = path.dirname(dest);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const key = crypto.scryptSync(password || 'mondal-default', SALT, 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    const data = fs.readFileSync(this.dbPath);
-    const encrypted = Buffer.concat([iv, cipher.update(data), cipher.final()]);
-    fs.writeFileSync(dest, encrypted);
+    if(path.resolve(dest)===path.resolve(this.dbPath))throw new Error('Cannot overwrite active database');
+    recovery.replace(dest,recovery.encrypt(Buffer.from(this.db.export()),password));
     return dest;
   }
 
@@ -789,7 +822,16 @@ class DatabaseManager {
     return outPath;
   }
 
+  _billingHistoryProtected(orderId) {
+    const order = this.get('SELECT status, payment_status, report_status FROM orders WHERE id=?', [orderId]);
+    return Boolean(order && (order.status === 'complete' || order.payment_status === 'paid' ||
+      order.report_status === 'issued' || this.get('SELECT order_id FROM issued_reports WHERE order_id=?', [orderId])));
+  }
+
   computeOrderBill(orderId) {
+    if (this._billingHistoryProtected(orderId)) {
+      return this.get('SELECT total_amount FROM orders WHERE id=?', [orderId])?.total_amount ?? 0;
+    }
     const DEFAULT_RATE = 50;
     const batch = true;
     const tests = this.all('SELECT id, parameter_id FROM order_tests WHERE order_id = ?', [orderId]);
@@ -809,6 +851,7 @@ class DatabaseManager {
   }
 
   updateOrderCommission(orderId) {
+    if (this._billingHistoryProtected(orderId)) return;
     const order = this.get('SELECT o.total_amount, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?', [orderId]);
     if (!order) return;
     const refName = normalizeReferrerName(order.referred_by);
@@ -836,7 +879,8 @@ class DatabaseManager {
   /** Remove all patients, orders, results, print/commission logs, and patient ID sequence. Keeps users, lab config, catalogue, rates, referrer commission rules. */
   clearAllPatients() {
     const batch = true;
-    this.run('DELETE FROM audit_log', [], batch);
+    // Preserve configuration, issuance and security audit history during an authorized wipe.
+    this.run('DELETE FROM issued_reports', [], batch);
     this.run('DELETE FROM order_commission_log', [], batch);
     this.run('DELETE FROM report_print_log', [], batch);
     this.run('DELETE FROM order_results', [], batch);
@@ -863,4 +907,7 @@ class DatabaseManager {
   }
 }
 
+Object.assign(DatabaseManager.prototype, require('./referenceIntervals.cjs'));
+Object.assign(DatabaseManager.prototype, require('./printProfile.cjs').methods);
+DatabaseManager.hashPassword = hashPassword;
 module.exports = DatabaseManager;

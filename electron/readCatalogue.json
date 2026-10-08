@@ -1,0 +1,197 @@
+{
+  "catalogue.referenceParameters": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT id,code,name,type,unit FROM parameters ORDER BY section,display_order"
+  },
+  "billing.orders": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT o.id, o.order_date, o.status, o.total_amount, o.payment_status, o.referring_doctor, o.access_code, p.patient_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE date(o.order_date) >= ? AND date(o.order_date) <= ? ORDER BY o.order_date DESC, o.id DESC"
+  },
+  "billing.testCount": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT COUNT(*) as c FROM order_tests WHERE order_id = ?"
+  },
+  "billing.invoiceTests": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT ot.parameter_id, ot.rate, ot.display_order, p.name as test_name FROM order_tests ot JOIN parameters p ON p.id = ot.parameter_id WHERE ot.order_id = ? ORDER BY ot.display_order"
+  },
+  "billing.rates": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT parameter_id, rate FROM test_rates"
+  },
+  "billing.accessCode": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT access_code FROM orders WHERE id = ?"
+  },
+  "billing.recalculationOrders": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT id FROM orders WHERE date(order_date) >= ? AND date(order_date) <= ?"
+  },
+  "billing.order": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT o.id, o.order_date, o.status, o.total_amount, o.payment_status, o.referring_doctor, o.access_code, p.patient_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?"
+  },
+  "dashboard.todayPatients": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT COUNT(*) as c FROM patients WHERE date(created_at) = ?"
+  },
+  "dashboard.periodPatients": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT COUNT(*) as c FROM patients WHERE date(created_at) >= ? AND date(created_at) <= ?"
+  },
+  "dashboard.pendingCount": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT COUNT(*) as c FROM orders WHERE status IN ('pending','partial')"
+  },
+  "dashboard.topReferrers": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count FROM patients p JOIN orders o ON o.patient_id = p.id WHERE p.referred_by IS NOT NULL AND p.referred_by != '' AND LOWER(TRIM(p.referred_by)) NOT IN ('self', 'walk in', 'walkin', 'walk-in', 'direct') AND date(o.order_date) >= ? AND date(o.order_date) <= ? GROUP BY p.referred_by ORDER BY count DESC LIMIT 10"
+  },
+  "dashboard.pendingOrders": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT o.id, o.order_date, p.patient_id, p.name FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.status IN ('pending','partial') ORDER BY o.order_date DESC, o.id DESC LIMIT 8"
+  },
+  "catalogue.registrationParameters": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT id, code, name, section, display_order, type FROM parameters ORDER BY section, display_order"
+  },
+  "registration.referrerSuggestions": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT name FROM ( SELECT DISTINCT referred_by as name FROM patients WHERE referred_by LIKE ? AND referred_by != '' UNION SELECT referrer_name as name FROM referrer_commission_pct WHERE referrer_name LIKE ? ) ORDER BY name LIMIT 15"
+  },
+  "catalogue.rates": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT p.id, p.code, p.name, p.section, p.display_order, COALESCE(tr.rate, 0) as rate FROM parameters p LEFT JOIN test_rates tr ON tr.parameter_id = p.id WHERE p.type != 'derived' ORDER BY p.section, p.display_order, p.name"
+  },
+  "referrals.ranking": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count FROM patients p JOIN orders o ON o.patient_id = p.id WHERE p.referred_by IS NOT NULL AND p.referred_by != '' AND LOWER(TRIM(p.referred_by)) NOT IN ('self', 'walk in', 'walkin', 'walk-in', 'direct') AND date(o.order_date) >= ? AND date(o.order_date) <= ? GROUP BY p.referred_by ORDER BY count DESC"
+  },
+  "referrals.dayPerformance": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count FROM patients p JOIN orders o ON o.patient_id = p.id WHERE p.referred_by IS NOT NULL AND p.referred_by != '' AND LOWER(TRIM(p.referred_by)) NOT IN ('self', 'walk in', 'walkin', 'walk-in', 'direct') AND date(o.order_date) = ? GROUP BY p.referred_by"
+  },
+  "referrals.periodPerformance": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count FROM patients p JOIN orders o ON o.patient_id = p.id WHERE p.referred_by IS NOT NULL AND p.referred_by != '' AND LOWER(TRIM(p.referred_by)) NOT IN ('self', 'walk in', 'walkin', 'walk-in', 'direct') AND date(o.order_date) >= ? AND date(o.order_date) <= ? GROUP BY p.referred_by"
+  },
+  "referrals.commissions": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT ocl.referrer_name as name, SUM(ocl.commission_amount) as commission FROM order_commission_log ocl JOIN orders o ON o.id = ocl.order_id WHERE date(o.order_date) >= ? AND date(o.order_date) <= ? GROUP BY ocl.referrer_name"
+  },
+  "referrals.patients": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT p.patient_id, p.name, p.age, p.sex, o.order_date FROM patients p JOIN orders o ON o.patient_id = p.id WHERE p.referred_by = ? AND date(o.order_date) >= ? AND date(o.order_date) <= ? ORDER BY o.order_date DESC"
+  },
+  "referrals.invoiceOrders": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT o.id, o.order_date, o.total_amount, p.patient_id, p.name as patient_name, ocl.commission_amount, ocl.commission_percent, ocl.order_amount FROM orders o JOIN patients p ON o.patient_id = p.id LEFT JOIN order_commission_log ocl ON ocl.order_id = o.id WHERE p.referred_by = ? AND date(o.order_date) >= ? AND date(o.order_date) <= ? ORDER BY o.order_date DESC, o.id DESC"
+  },
+  "referrals.rate": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT commission_percent FROM referrer_commission_pct WHERE referrer_name = ?"
+  },
+  "configuration.defaultCommission": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT commission_default_percent FROM lab WHERE id = 1"
+  },
+  "referrals.names": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT DISTINCT p.referred_by as name FROM patients p WHERE p.referred_by IS NOT NULL AND p.referred_by != '' AND LOWER(TRIM(p.referred_by)) NOT IN ('self', 'walk in', 'walkin', 'walk-in', 'direct') ORDER BY p.referred_by"
+  },
+  "configuration.commissions": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT referrer_name, commission_percent FROM referrer_commission_pct"
+  },
+  "reports.byBarcode": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE UPPER(TRIM(COALESCE(o.access_code, ''))) = ?"
+  },
+  "reports.order": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?"
+  },
+  "catalogue.numericParameters": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT id, code, name, unit, decimal_places, min_allowed_value, max_allowed_value FROM parameters WHERE type='numeric' ORDER BY section, display_order"
+  },
+  "results.batchOrders": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT o.id, o.order_date, p.patient_id, p.name as patient_name, p.age, p.sex FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.status IN ('pending','partial') ORDER BY o.order_date DESC, o.id DESC"
+  },
+  "results.ordersForParameter": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT o.id FROM order_tests ot JOIN orders o ON ot.order_id = o.id WHERE ot.parameter_id = ? AND o.status IN ('pending','partial')"
+  },
+  "results.patientSearch": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT id, patient_id, name, age, sex, referred_by FROM patients WHERE name LIKE ? OR patient_id LIKE ? OR phone LIKE ? ORDER BY created_at DESC LIMIT 30"
+  },
+  "results.patientOrders": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT o.id, o.order_date, o.status, o.created_at FROM orders o WHERE o.patient_id = ? ORDER BY o.created_at DESC LIMIT 20"
+  },
+  "results.order": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?"
+  },
+  "results.issuedMarker": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT order_id FROM issued_reports WHERE order_id=?"
+  },
+  "results.orderedTests": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT pr.id, pr.code, pr.name, pr.unit, pr.decimal_places, pr.type, pr.section, pr.min_allowed_value, pr.max_allowed_value, ot.display_order FROM order_tests ot JOIN parameters pr ON ot.parameter_id = pr.id WHERE ot.order_id = ? ORDER BY pr.section, pr.display_order, ot.display_order"
+  },
+  "results.savedValues": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT parameter_id, result_value, result_text, flag FROM order_results WHERE order_id = ?"
+  },
+  "catalogue.formulas": {
+    "permission": "staff",
+    "mode": "all",
+    "sql": "SELECT parameter_id, formula_expression, dependencies FROM formulas"
+  },
+  "results.nextOrder": {
+    "permission": "staff",
+    "mode": "get",
+    "sql": "SELECT o.id FROM orders o WHERE o.status IN ('pending','partial') AND o.id != ? ORDER BY o.order_date DESC, o.id DESC LIMIT 1"
+  }
+}

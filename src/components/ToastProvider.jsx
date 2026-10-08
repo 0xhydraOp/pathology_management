@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { subscribeToast } from '../utils/toastBus';
+import { subscribeToast, showToast } from '../utils/toastBus';
 
 const VARIANT_STYLES = {
   info: { bg: '#1e3a5f', border: 'rgba(255,255,255,0.2)' },
@@ -47,7 +47,8 @@ export default function ToastProvider({ children }) {
           return (
             <div
               key={t.id}
-              role="status"
+              className="workspace-toast" data-variant={t.variant}
+              role={t.variant==='error'?'alert':'status'}
               style={{
                 pointerEvents: 'auto',
                 color: '#fff',

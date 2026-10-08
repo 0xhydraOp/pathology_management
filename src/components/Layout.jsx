@@ -1,3 +1,6 @@
+import { APP_NAME, APP_VERSION } from '../utils/product';
+import WorkspaceIcon from './WorkspaceIcon';
+import LicenceBanner from './LicenceBanner';
 ﻿import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
@@ -18,6 +21,7 @@ const TITLE_MAP = {
   '/referrer-commission': 'Referrer Commission',
   '/rate-chart': 'Test Prices',
   '/settings': 'Settings',
+  '/activation': 'Licence & activation',
 };
 
 function HotkeyHandler() {
@@ -36,19 +40,10 @@ function HotkeyHandler() {
 }
 
 function TitleUpdater() {
-  const location = useLocation();
-  const [labName, setLabName] = useState('MONDAL DIAGNOSTIC CENTRE');
-  useEffect(() => {
-    if (window.db?.getLabConfig) {
-      window.db.getLabConfig().then((c) => c?.name && setLabName(c.name)).catch(() => {});
-    }
-  }, []);
-  useEffect(() => {
-    const page = TITLE_MAP[location.pathname] || 'MONDAL DIAGNOSTIC CENTRE';
-    const title = `${labName} - ${page}`;
-    if (window.electronApp?.setTitle) window.electronApp.setTitle(title);
-    else document.title = title;
-  }, [location.pathname, labName]);
+  const location=useLocation();
+  const [version,setVersion]=useState(APP_VERSION);
+  useEffect(()=>{window.electronApp?.getVersion?.().then(setVersion).catch(()=>{});},[]);
+  useEffect(()=>{const title=`${APP_NAME} — v${version} · ${TITLE_MAP[location.pathname] || 'Dashboard'}`;if(window.electronApp?.setTitle)window.electronApp.setTitle(title).catch(()=>{});else document.title=title;},[location.pathname,version]);
   return null;
 }
 
@@ -119,34 +114,35 @@ export default function Layout({ children, onLogout }) {
   const toggleAlwaysOnTop = () => {
     const next = !alwaysOnTop;
     setAlwaysOnTop(next);
-    window.electronApp?.setAlwaysOnTop(next);
+    window.electronApp?.setAlwaysOnTop(next)?.catch(()=>{});
   };
 
   return (
-    <div style={styles.layout} className="app-layout">
+    <div data-ui="layout" style={styles.layout} className="app-layout">
+      <LicenceBanner />
       {!dbReady && (
-        <div style={styles.dbBanner} className="no-print">
+        <div data-ui="dbBanner" style={styles.dbBanner} className="no-print">
           Database not available. Run <strong>npm run electron:dev</strong> (not npm run dev). Buttons will not work in browser-only mode.
         </div>
       )}
-      <header style={styles.header} className="no-print">
-        <div style={styles.headerLeft}>
-          <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
-          <span style={styles.labName}>{labName}</span>
+      <header data-ui="header" style={styles.header} className="no-print">
+        <div data-ui="headerLeft" style={styles.headerLeft}>
+          <img data-ui="logo" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
+          <span data-ui="labName" style={styles.labName}>{APP_NAME} · v{appVersion || APP_VERSION}</span>
         </div>
-        <div style={styles.headerRight}>
-          <span style={styles.clock}>{clock}</span>
+        <div data-ui="headerRight" style={styles.headerRight}>
+          <span data-ui="clock" style={styles.clock}>{clock}</span>
           {window.electronApp && (
-            <button
+            <button data-ui={['logoutBtn',(alwaysOnTop)?'pinActive':''].filter(Boolean).join(' ')}
               type="button"
               onClick={toggleAlwaysOnTop}
               style={{ ...styles.logoutBtn, ...(alwaysOnTop ? styles.pinActive : {}) }}
               title={alwaysOnTop ? 'Unpin from top' : 'Keep on top'}
             >
-              {alwaysOnTop ? 'ðŸ“Œ On top' : 'Pin'}
+              {alwaysOnTop ? 'On top' : 'Pin'}
             </button>
           )}
-          <button
+          <button data-ui="logoutBtn"
             type="button"
             onClick={() => onLogout?.()}
             style={styles.logoutBtn}
@@ -157,8 +153,8 @@ export default function Layout({ children, onLogout }) {
         </div>
       </header>
 
-      <div style={styles.body} className="layout-body">
-        <aside style={styles.sidebar} className="no-print">
+      <div data-ui="body" style={styles.body} className="layout-body">
+        <aside aria-label="Primary navigation" data-ui="sidebar" style={styles.sidebar} className="no-print">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -168,22 +164,22 @@ export default function Layout({ children, onLogout }) {
                 ...(isActive ? styles.navItemActive : {}),
               })}
             >
-              {item.label}
+              <WorkspaceIcon name={item.to==='/'?'dashboard':({'/new-registration':'registration','/result-entry':'results','/reports':'reports','/billing':'billing','/referrals':'referrals','/referrer-commission':'referrals','/rate-chart':'prices','/settings':'settings'}[item.to])}/>{item.label}
             </NavLink>
           ))}
         </aside>
 
-        <main style={styles.main} className="main-content">
-          <div style={styles.mainInner}>
+        <main data-ui="main" style={styles.main} className="main-content">
+          <div className="workspace-content" data-ui="mainInner" style={styles.mainInner}>
             <HotkeyHandler />
             <TitleUpdater />
             <Outlet />
           </div>
-          <footer style={styles.footer} className="no-print">
+          <footer data-ui="footer" style={styles.footer} className="no-print">
             {appVersion ? (
-              <span style={styles.footerVersion}>v{appVersion}</span>
+              <span data-ui="footerVersion" style={styles.footerVersion}>v{appVersion}</span>
             ) : null}
-            Developed by <strong>Robiul Islam Molla</strong> Â· <a href="mailto:iamrobiul94@gmail.com" style={styles.footerLink}>iamrobiul94@gmail.com</a> Â· <a href="tel:+917029655755" style={styles.footerLink}>+91 7029655755</a>
+            Developed by <strong>Robiul Islam Molla</strong> · <a data-ui="footerLink" href="mailto:iamrobiul94@gmail.com" style={styles.footerLink}>iamrobiul94@gmail.com</a> · <a data-ui="footerLink" href="tel:+917029655755" style={styles.footerLink}>+91 7029655755</a>
           </footer>
         </main>
       </div>

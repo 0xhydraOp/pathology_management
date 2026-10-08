@@ -1,3 +1,5 @@
+@import './workspace-theme.css';
+
 * {
   margin: 0;
   padding: 0;
@@ -502,3 +504,22 @@ input, select, textarea {
 :root[data-ui-font-scale="lg"] .reports-page {
   font-size: 16px;
 }
+/* Reference settings extend the existing settings cards and remain usable on narrow screens. */
+.reference-editor { grid-column: 1 / -1; background: #fff; padding: 28px; border: 1px solid #e2e8f0; border-radius: 14px; color: #334155; }
+.reference-editor h3 { margin-top: 0; color: #1e3a5f; }
+.reference-editor p { font-size: 13px; line-height: 1.6; }
+.reference-editor fieldset { border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; }
+.reference-editor legend { font-size: 12px; padding: 0 6px; }
+.reference-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 12px; }
+.reference-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; margin: 10px 0; }
+.reference-field input,.reference-field select,.reference-field textarea { min-width: 0; padding: 9px 12px; border: 1px solid #94a3b8; border-radius: 7px; background: #fff; color: #1e293b; font: inherit; }
+.reference-field textarea { min-height: 60px; resize: vertical; }
+.reference-rule { padding: 14px; margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+.reference-rule-heading,.reference-actions,.reference-boundaries { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.reference-rule-heading { justify-content: space-between; }
+.reference-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.reference-editor button { border: 1px solid #0d7377; border-radius: 7px; padding: 9px 14px; color: #07585b; background: #fff; cursor: pointer; }
+.reference-editor button:disabled { opacity: .5; cursor: default; }
+.reference-editor button:focus-visible,.reference-editor input:focus-visible,.reference-editor select:focus-visible,.reference-editor textarea:focus-visible { outline: 3px solid #14a3a8; outline-offset: 2px; }
+.reference-warning { color: #92400e; }
+.reference-history { padding: 10px 0; font-size: 12px; border-bottom: 1px solid #e2e8f0; overflow-wrap: anywhere; }

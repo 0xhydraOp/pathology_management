@@ -15,13 +15,7 @@ export default function RateChart() {
     }
     setLoading(true);
     try {
-      const rows = await window.db.all(
-        `SELECT p.id, p.code, p.name, p.section, p.display_order, COALESCE(tr.rate, 0) as rate
-         FROM parameters p
-         LEFT JOIN test_rates tr ON tr.parameter_id = p.id
-         WHERE p.type != 'derived'
-         ORDER BY p.section, p.display_order, p.name`
-      );
+      const rows = await window.db.read('catalogue.rates', []);
       setTests(rows || []);
       const ratesMap = {};
       (rows || []).forEach((r) => { ratesMap[r.id] = parseFloat(r.rate) || 0; });
@@ -48,14 +42,7 @@ export default function RateChart() {
     setSaving(true);
     setMessage('');
     try {
-      for (const [paramId, rate] of Object.entries(rates)) {
-        const pid = parseInt(paramId, 10);
-        const r = parseFloat(rate) || 0;
-        await window.db.run(
-          'INSERT OR REPLACE INTO test_rates (parameter_id, rate, updated_at) VALUES (?, ?, datetime("now"))',
-          [pid, r]
-        );
-      }
+      await window.db.setRates(Object.entries(rates).map(([parameterId,rate])=>({parameterId:Number(parameterId),rate:Number(rate)})));
       setMessage('Saved');
       setTimeout(() => setMessage(''), 2500);
     } catch (e) {
@@ -88,47 +75,48 @@ export default function RateChart() {
   }));
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Test Prices</h1>
-        <p style={styles.subtitle}>Edit test rates to increase or decrease prices. Changes apply to new orders.</p>
+    <div data-ui="container" style={styles.container} className="ui-page ui-ratechart ">
+      <div data-ui="header" style={styles.header}>
+        <h1 data-ui="title" style={styles.title}>Test Prices</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>Edit test rates to increase or decrease prices. Changes apply to new orders.</p>
       </div>
 
-      <div style={styles.toolbar}>
-        <input
+      <div data-ui="toolbar" style={styles.toolbar}>
+        <input data-ui="searchInput"
           type="text"
           placeholder="Search test name or code..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={styles.searchInput}
         />
-        <button type="button" style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+        <button data-ui="saveBtn" type="button" style={styles.saveBtn} onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save All'}
         </button>
-        <button type="button" style={styles.resetBtn} onClick={handleReset} disabled={saving}>
+        <button data-ui="resetBtn" type="button" style={styles.resetBtn} onClick={handleReset} disabled={saving}>
           Reset
         </button>
-        {message && <span style={styles.message}>{message}</span>}
+        {message && <span data-message-type={message.startsWith('Error')?'error':'status'} role={message.startsWith('Error')?'alert':'status'} data-ui="message" style={styles.message}>{message}</span>}
       </div>
 
       {loading ? (
-        <div style={styles.loading}>Loading...</div>
+        <div data-ui="loading" style={styles.loading}>Loading...</div>
       ) : (
-        <div style={styles.tableWrap}>
-          <div style={styles.tableHeader}>
+        <div data-ui="tableWrap" style={styles.tableWrap}>
+          <div data-ui="tableHeader" style={styles.tableHeader}>
             <span>Test</span>
             <span>Code</span>
             <span style={{ textAlign: 'right' }}>Rate (₹)</span>
           </div>
           {groupedBySection.map(({ section, items }) => (
             <div key={section}>
-              <div style={styles.sectionHeader}>{section}</div>
+              <div data-ui="sectionHeader" style={styles.sectionHeader}>{section}</div>
               {items.map((t) => (
-                <div key={t.id} style={styles.tableRow}>
-                  <span style={styles.nameCell}>{t.name}</span>
-                  <span style={styles.codeCell}>{t.code}</span>
-                  <span style={styles.inpWrap}>
-                    <input
+                <div data-ui="tableRow" key={t.id} style={styles.tableRow}>
+                  <span data-ui="nameCell" style={styles.nameCell}>{t.name}</span>
+                  <span data-ui="codeCell" style={styles.codeCell}>{t.code}</span>
+                  <span data-ui="inpWrap" style={styles.inpWrap}>
+                    <input data-ui="rateInput"
+                      aria-label={`${t.name} rate`}
                       type="number"
                       min={0}
                       step={1}
@@ -142,7 +130,7 @@ export default function RateChart() {
             </div>
           ))}
           {filteredTests.length === 0 && (
-            <div style={styles.empty}>No tests found</div>
+            <div data-ui="empty" style={styles.empty}>No tests found</div>
           )}
         </div>
       )}

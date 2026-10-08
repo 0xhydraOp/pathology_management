@@ -1,0 +1,40 @@
+.mm-print-layout,.mm-calibration-root { font-family: Arial, sans-serif; font-size: var(--mm-font,3.2mm); line-height: 1.35; }
+.mm-measure { position: fixed; left: -10000px; top: 0; visibility: hidden; pointer-events: none; }
+.mm-report-pages { display: flex; flex-direction: column; gap: 16px; width: max-content; }
+.mm-print-layout { overflow-x: auto; max-width: 100%; }
+.mm-report-page { background: white; position: relative; box-sizing: border-box; flex: none; box-shadow: 0 2px 8px #0002; }
+.mm-patient { display: flex; flex-direction: column; gap: .6mm; overflow-wrap: anywhere; }
+.mm-patient strong { font-size: 1.1em; }
+.mm-draft { color: #a11919; }
+.mm-lab-header { display: flex; gap: 3mm; align-items: start; overflow-wrap: anywhere; }
+.mm-lab-header img { width: 14mm; height: 14mm; object-fit: contain; }
+.mm-lab-header div,.mm-lab-footer { display: flex; flex-direction: column; }
+.mm-lab-header strong { font-size: 1.35em; }
+.mm-table { table-layout: fixed; border-collapse: collapse; font: inherit; line-height: 1.35; }
+.mm-table th,.mm-table td { padding: var(--mm-spacing) 1mm; vertical-align: top; border-bottom: .2mm solid #cbd5e1; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.mm-table th { text-align: left; background: #f1f5f9; }
+.mm-positioned-table,.mm-patient-position,.mm-header-region,.mm-footer-region,.mm-page-number { position: absolute; }
+.mm-page-number { font-size: .8em; text-align: right; }
+.mm-continued { font-size: .8em; font-weight: bold; }
+.mm-calibration-root { position: fixed; inset: 0; z-index: 10000; background: #e2e8f0; overflow: auto; padding: 20px; }
+.mm-calibration-controls { display: flex; gap: 12px; padding: 12px; }
+.mm-calibration-page { position: relative; background: white; margin: auto; }
+@media print {
+ .mm-measure { display: none !important; }
+ .mm-print-layout { overflow: visible !important; }
+ .mm-report-pages { display: block; gap: 0; }
+ .report-print.mm-report-page { page: pathology-report; break-after: page; break-inside: avoid; box-shadow: none !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; font-family: Arial,sans-serif !important; }
+ .mm-report-page:last-child { break-after: auto; }
+ body[data-print-target="calibration"] > :not(.mm-calibration-root) { display: none !important; }
+ .mm-calibration-root { position: static; background: white; padding: 0; overflow: visible; }
+ .mm-calibration-page { page: pathology-report; margin: 0; }
+ .mm-calibration-controls { display: none !important; }
+}
+
+.finalize-dialog { max-width: min(760px,90vw); max-height: 85vh; overflow: auto; border: 1px solid #94a3b8; border-radius: 12px; padding: 24px; }
+.finalize-dialog::backdrop { background: #0f172a80; }
+.finalize-dialog button { margin-right: 12px; padding: 10px 16px; }
+.finalize-dialog li { margin-bottom: 16px; }
+
+.finalize-dialog { margin: auto; width: min(640px,90vw); }
+.print-profile-settings .reference-field input,.print-profile-settings .reference-field select { margin-top: auto; }

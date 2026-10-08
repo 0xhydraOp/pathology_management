@@ -14,7 +14,7 @@ async function fixture(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-results-'));
   let db = new Database(dir, { migrateLegacy: false });
   try {
-    await db.init();
+    await db.init();if(db.credentialState().setupRequired)db.setupAdmin('admin','synthetic-admin-password');
     db.run("INSERT INTO patients(id,patient_id,name) VALUES(9001,'SYNTHETIC','Synthetic Patient')");
     db.run("INSERT INTO orders(id,patient_id,status) VALUES(9001,9001,'pending')");
     for (const [id, type] of [[9001,'numeric'],[9002,'numeric'],[9003,'text'],[9004,'derived'],[9005,'numeric']]) {
@@ -107,6 +107,8 @@ test('SQL failure rolls back values and status, including on reopen', () => fixt
   db.saveOrderResults(9001,[change(9001,'1')]);
   db.run("CREATE TRIGGER fail_result BEFORE INSERT ON order_results WHEN NEW.parameter_id=9002 BEGIN SELECT RAISE(ABORT,'synthetic failure'); END");
   assert.throws(() => db.saveOrderResults(9001,[change(9001,'9'),change(9002,'2')]), /synthetic failure/);
+  assert.equal(db.get('SELECT result_value FROM order_results WHERE parameter_id=9001').result_value,1);
+  db.run('DROP TRIGGER fail_result');
   db = await reopen();
   assert.equal(status(db),'partial');
   assert.equal(db.get('SELECT result_value FROM order_results WHERE parameter_id=9001').result_value,1);
@@ -129,6 +131,8 @@ test('status update failure rolls back all related result changes', () => fixtur
   db.saveOrderResults(9001,[change(9001,'1')]);
   db.run("CREATE TRIGGER fail_status BEFORE UPDATE OF status ON orders BEGIN SELECT RAISE(ABORT,'synthetic status failure'); END");
   assert.throws(()=>db.saveOrderResults(9001,[change(9001,''),change(9002,'2')]),/synthetic status failure/);
+  assert.equal(status(db),'partial');
+  db.run('DROP TRIGGER fail_status');
   db=await reopen();
   assert.equal(status(db),'partial');
   assert.equal(db.get('SELECT result_value FROM order_results WHERE parameter_id=9001').result_value,1);
@@ -153,6 +157,10 @@ test('abnormal results ignore bounds and derived flags use unrounded calculation
   db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,9004)');
   db.run("INSERT INTO formulas(parameter_id,formula_expression,dependencies) VALUES(9004,'SYN9001 / SYN9002','SYN9001,SYN9002')");
   db.run("INSERT INTO parameter_ranges(parameter_id,sex,min_age,max_age,high_value) VALUES(9004,'any',0,150,1.003)");
+  db.run('UPDATE patients SET age=30 WHERE id=9001');
+  const actor={id:1};
+  const draft=db.saveReferenceDraft(actor,9004,[{sex:'any',min_age:0,max_age:150,min_age_inclusive:true,max_age_inclusive:true,low_value:null,high_value:1.003,low_inclusive:true,high_inclusive:true,unit:'',reference_text:''}],null);
+  db.approveReferenceDraft(actor,draft.id);
   db.saveOrderResults(9001,[change(9001,'1.004'),change(9002,'1')]);
   assert.equal(status(db),'complete');
   const result=db.get('SELECT result_value,flag FROM order_results WHERE parameter_id=9004');

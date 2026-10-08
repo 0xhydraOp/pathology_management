@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
+import RecoverySettings from '../components/RecoverySettings';
+import LicenceSettings from '../components/LicenceSettings';
+import ReferenceIntervalEditor from '../components/ReferenceIntervalEditor';
+import PrintProfileSettings from '../components/PrintProfileSettings';
 import { getUiFontScale, setUiFontScale } from '../utils/uiFontScale';
 
 export default function Settings() {
   const [configMessage, setConfigMessage] = useState('');
-  const [catalogueMessage, setCatalogueMessage] = useState('');
   const [backupMessage, setBackupMessage] = useState('');
   const [labConfig, setLabConfig] = useState({
     name: 'MONDAL DIAGNOSTIC CENTRE',
@@ -44,9 +47,11 @@ export default function Settings() {
         const v = await window.electronApp.getVersion();
         setAppVersion(v);
       }
-      if (window.electronApp?.getPath) {
+      if (window.electronApp?.getPath && (await window.db?.getSession?.())?.role==='admin') {
         const p = await window.electronApp.getPath('userData');
         setUserDataPath(p);
+      } else if(window.electronApp?.getPath) {
+        setUserDataPath('Admin authorization required');
       }
     } catch (_) {
       /* ignore */
@@ -199,101 +204,87 @@ export default function Settings() {
     }
   };
 
-  const handleReloadCatalog = async () => {
-    if (window.db) {
-      try {
-        await window.db.reloadCatalogue();
-        setCatalogueMessage('Saved');
-        setTimeout(() => setCatalogueMessage(''), 2500);
-      } catch (e) {
-        setCatalogueMessage('Error: ' + e.message);
-      }
-    } else {
-      setCatalogueMessage('Database not available (run in Electron).');
-    }
-  };
-
   return (
-    <div style={styles.container} className="settings-page">
-      <div style={styles.header}>
-        <div style={styles.headerIconWrap}>
-          <span style={styles.headerIcon}>⚙</span>
+    <div data-ui="container" style={styles.container} className="ui-page ui-settings settings-page">
+      <div data-ui="header" style={styles.header}>
+        <div data-ui="headerIconWrap" style={styles.headerIconWrap}>
+          <span data-ui="headerIcon" style={styles.headerIcon}>⚙</span>
         </div>
-        <div style={styles.headerContent}>
-          <h1 style={styles.title}>Settings</h1>
-          <p style={styles.subtitle}>
+        <div data-ui="headerContent" style={styles.headerContent}>
+          <h1 data-ui="title" style={styles.title}>Settings</h1>
+          <p data-ui="subtitle" style={styles.subtitle}>
             Configure your lab and manage data
             {appVersion ? (
-              <span style={styles.versionBadge}> · App v{appVersion}</span>
+              <span data-ui="versionBadge" style={styles.versionBadge}> · App v{appVersion}</span>
             ) : null}
           </p>
         </div>
       </div>
 
-      <div style={styles.grid}>
-        <div style={{ ...styles.section, ...styles.sectionLab }} className="settings-section">
-          <div style={styles.sectionIconBadge}>
-            <span style={styles.sectionIcon}>🔬</span>
+      <div data-ui="grid" style={styles.grid}>
+<LicenceSettings />
+<div data-ui="section sectionLab" style={{ ...styles.section, ...styles.sectionLab }} className="settings-section">
+          <div data-ui="sectionIconBadge" style={styles.sectionIconBadge}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>🔬</span>
           </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Lab Profile & Configuration</h3>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Lab Profile & Configuration</h3>
           </div>
-          <p style={styles.desc}>Lab details as shown on report pad header</p>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Lab Name</label>
-            <input tabIndex={0} value={labConfig.name} onChange={(e) => setLabConfig({ ...labConfig, name: e.target.value })} style={styles.input} placeholder="MONDAL DIAGNOSTIC CENTRE" />
+          <p data-ui="desc" style={styles.desc}>Lab details as shown on report pad header</p>
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-1" style={styles.label}>Lab Name</label>
+            <input data-ui="input" id="settings-field-1" tabIndex={0} value={labConfig.name} onChange={(e) => setLabConfig({ ...labConfig, name: e.target.value })} style={styles.input} placeholder="MONDAL DIAGNOSTIC CENTRE" />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Address</label>
-            <textarea value={labConfig.address} onChange={(e) => setLabConfig({ ...labConfig, address: e.target.value })} style={{ ...styles.input, minHeight: 60 }} placeholder="Full address" rows={2} />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-2" style={styles.label}>Address</label>
+            <textarea data-ui="input" id="settings-field-2" value={labConfig.address} onChange={(e) => setLabConfig({ ...labConfig, address: e.target.value })} style={{ ...styles.input, minHeight: 60 }} placeholder="Full address" rows={2} />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Phone</label>
-            <input value={labConfig.phone} onChange={(e) => setLabConfig({ ...labConfig, phone: e.target.value })} style={styles.input} placeholder="Phone number" />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-3" style={styles.label}>Phone</label>
+            <input data-ui="input" id="settings-field-3" value={labConfig.phone} onChange={(e) => setLabConfig({ ...labConfig, phone: e.target.value })} style={styles.input} placeholder="Phone number" />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Email</label>
-            <input type="email" value={labConfig.email} onChange={(e) => setLabConfig({ ...labConfig, email: e.target.value })} style={styles.input} placeholder="Email" />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-4" style={styles.label}>Email</label>
+            <input data-ui="input" id="settings-field-4" type="email" value={labConfig.email} onChange={(e) => setLabConfig({ ...labConfig, email: e.target.value })} style={styles.input} placeholder="Email" />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Registration No.</label>
-            <input value={labConfig.registration_no} onChange={(e) => setLabConfig({ ...labConfig, registration_no: e.target.value })} style={styles.input} placeholder="Lab registration number (if any)" />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-5" style={styles.label}>Registration No.</label>
+            <input data-ui="input" id="settings-field-5" value={labConfig.registration_no} onChange={(e) => setLabConfig({ ...labConfig, registration_no: e.target.value })} style={styles.input} placeholder="Lab registration number (if any)" />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Pathologist (Read by)</label>
-            <input tabIndex={1} value={labConfig.pathologist_name} onChange={(e) => setLabConfig({ ...labConfig, pathologist_name: e.target.value })} style={styles.input} />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-6" style={styles.label}>Pathologist (Read by)</label>
+            <input data-ui="input" id="settings-field-6"  value={labConfig.pathologist_name} onChange={(e) => setLabConfig({ ...labConfig, pathologist_name: e.target.value })} style={styles.input} />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Default Printed by</label>
-            <input tabIndex={2} value={labConfig.default_printed_by} onChange={(e) => setLabConfig({ ...labConfig, default_printed_by: e.target.value })} style={styles.input} />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-7" style={styles.label}>Default Printed by</label>
+            <input data-ui="input" id="settings-field-7"  value={labConfig.default_printed_by} onChange={(e) => setLabConfig({ ...labConfig, default_printed_by: e.target.value })} style={styles.input} />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Staff list (comma-separated)</label>
-            <input tabIndex={3} value={labConfig.staff_list} onChange={(e) => setLabConfig({ ...labConfig, staff_list: e.target.value })} style={styles.input} placeholder="Staff names, comma-separated" />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-8" style={styles.label}>Staff list (comma-separated)</label>
+            <input data-ui="input" id="settings-field-8"  value={labConfig.staff_list} onChange={(e) => setLabConfig({ ...labConfig, staff_list: e.target.value })} style={styles.input} placeholder="Staff names, comma-separated" />
           </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Clinical correlation (footer text)</label>
-            <input value={labConfig.clinical_correlation_text} onChange={(e) => setLabConfig({ ...labConfig, clinical_correlation_text: e.target.value })} style={styles.input} placeholder="Please correlate clinically" />
+          <div data-ui="formRow" style={styles.formRow}>
+            <label data-ui="label" htmlFor="settings-field-9" style={styles.label}>Clinical correlation (footer text)</label>
+            <input data-ui="input" id="settings-field-9" value={labConfig.clinical_correlation_text} onChange={(e) => setLabConfig({ ...labConfig, clinical_correlation_text: e.target.value })} style={styles.input} placeholder="Please correlate clinically" />
           </div>
-          <button type="button" tabIndex={4} style={styles.btn} onClick={handleSaveLabConfig} className="settings-btn">Save Configuration</button>
-          {configMessage && <p style={{ ...styles.message, color: configMessage.startsWith('Error') ? '#c00' : '#0d7377' }}>{configMessage}</p>}
+          <button data-ui="btn" type="button"  style={styles.btn} onClick={handleSaveLabConfig} className="settings-btn">Save Configuration</button>
+          {configMessage && <p data-ui="message" style={{ ...styles.message, color: configMessage.startsWith('Error') ? '#c00' : '#0d7377' }}>{configMessage}</p>}
         </div>
-
-        <div style={{ ...styles.section, ...styles.sectionDisplay }} className="settings-section">
-          <div style={{ ...styles.sectionIconBadge, ...styles.badgeTeal }}>
-            <span style={styles.sectionIcon}>Aa</span>
+<div data-ui="section sectionDisplay" style={{ ...styles.section, ...styles.sectionDisplay }} className="settings-section">
+          <div data-ui="sectionIconBadge badgeTeal" style={{ ...styles.sectionIconBadge, ...styles.badgeTeal }}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>Aa</span>
           </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Display</h3>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Display</h3>
           </div>
-          <p style={styles.desc}>Larger or smaller text on <strong>Result entry</strong> and <strong>Reports</strong> (saved on this device).</p>
-          <div style={styles.fontScaleRow} role="group" aria-label="Text size">
+          <p data-ui="desc" style={styles.desc}>Larger or smaller text on <strong>Result entry</strong> and <strong>Reports</strong> (saved on this device).</p>
+          <div data-ui="fontScaleRow" style={styles.fontScaleRow} role="group" aria-label="Text size">
             {[
               { id: 'sm', label: 'Smaller' },
               { id: 'default', label: 'Default' },
               { id: 'lg', label: 'Larger' },
             ].map((opt) => (
-              <button
+              <button data-ui={['fontScaleBtn',(uiFontScale === opt.id)?'fontScaleBtnActive':''].filter(Boolean).join(' ')}
                 key={opt.id}
                 type="button"
                 style={{
@@ -311,34 +302,31 @@ export default function Settings() {
             ))}
           </div>
         </div>
-
-        <div style={{ ...styles.section, ...styles.sectionCatalogue }} className="settings-section">
-          <div style={{ ...styles.sectionIconBadge, ...styles.badgePurple }}>
-            <span style={styles.sectionIcon}>📋</span>
+<div data-ui="section sectionCatalogue" style={{ ...styles.section, ...styles.sectionCatalogue }} className="settings-section">
+          <div data-ui="sectionIconBadge badgePurple" style={{ ...styles.sectionIconBadge, ...styles.badgePurple }}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>📋</span>
           </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Investigation Catalogue</h3>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Investigation Catalogue</h3>
           </div>
-          <p style={styles.desc}>Reload parameters from JSON.</p>
-          <button type="button" style={styles.btn} onClick={handleReloadCatalog} className="settings-btn">
-            Reload Catalogue
+          <p data-ui="desc" style={styles.desc}>Catalogue reload is locked to preserve parameter IDs and local reference settings. Use the reference-interval editor in Advanced configuration.</p>
+          <button data-ui="btn" type="button" style={styles.btn} disabled className="settings-btn">
+            Catalogue IDs protected
           </button>
-          {catalogueMessage && <p style={{ ...styles.message, color: catalogueMessage.startsWith('Error') ? '#c00' : '#0d7377' }}>{catalogueMessage}</p>}
         </div>
-
-        <div style={{ ...styles.section, ...styles.sectionBackup }} className="settings-section">
-          <div style={{ ...styles.sectionIconBadge, ...styles.badgeGreen }}>
-            <span style={styles.sectionIcon}>💾</span>
+<div data-ui="section sectionBackup" style={{ ...styles.section, ...styles.sectionBackup }} className="settings-section">
+          <div data-ui="sectionIconBadge badgeGreen" style={{ ...styles.sectionIconBadge, ...styles.badgeGreen }}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>💾</span>
           </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Backup</h3>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Backup</h3>
           </div>
-          <p style={styles.desc}>
+          <p data-ui="desc" style={styles.desc}>
             Quick backup saves under the app data folder. You can also save a copy anywhere on this PC (Desktop, Documents, USB drive).
           </p>
-          <p style={{ ...styles.desc, fontSize: 13, color: '#555' }}>Quick backups use the <code style={{ fontSize: 12 }}>backups</code> folder under the path shown in Support (same place as your database).</p>
+          <p data-ui="desc" style={{ ...styles.desc, fontSize: 13, color: '#555' }}>Quick backups use the <code style={{ fontSize: 12 }}>backups</code> folder under the path shown in Support (same place as your database).</p>
           {lastBackupDate ? (
-            <p style={{ ...styles.desc, marginBottom: 4 }}>
+            <p data-ui="desc" style={{ ...styles.desc, marginBottom: 4 }}>
               Last backup: {new Date(lastBackupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               {(() => {
                 const days = Math.floor((Date.now() - new Date(lastBackupDate)) / 86400000);
@@ -346,38 +334,55 @@ export default function Settings() {
               })()}
             </p>
           ) : (
-            <p style={{ ...styles.desc, marginBottom: 4, color: '#888' }}>No backup recorded yet on this computer.</p>
+            <p data-ui="desc" style={{ ...styles.desc, marginBottom: 4, color: '#888' }}>No backup recorded yet on this computer.</p>
           )}
           {dbSize != null && (
-            <p style={{ ...styles.desc, marginBottom: 8, fontSize: 13 }}>Database size: {(dbSize / 1024 / 1024).toFixed(2)} MB</p>
+            <p data-ui="desc" style={{ ...styles.desc, marginBottom: 8, fontSize: 13 }}>Database size: {(dbSize / 1024 / 1024).toFixed(2)} MB</p>
           )}
-          <div style={styles.btnGroup}>
-            <button type="button" style={styles.btn} onClick={handleBackup} disabled={!window.db} className="settings-btn">Backup to app folder</button>
-            <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupToPc} disabled={!window.db?.backupChooseLocation} className="settings-btn">Save to PC…</button>
-            <div style={styles.encryptRow}>
-              <input type="password" value={encryptPassword} onChange={(e) => setEncryptPassword(e.target.value)} placeholder="Password for encrypted backup" style={{ ...styles.input, maxWidth: 220 }} />
-              <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncrypted} disabled={!window.db?.backupEncrypted} className="settings-btn">Encrypted (app folder)</button>
-              <button type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncryptedToPc} disabled={!window.db?.backupEncryptedChooseLocation} className="settings-btn">Encrypted to PC…</button>
+          <div data-ui="btnGroup" style={styles.btnGroup}>
+            <button data-ui="btn" type="button" style={styles.btn} onClick={handleBackup} disabled={!window.db} className="settings-btn">Backup to app folder</button>
+            <button data-ui="btn btnSecondary" type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupToPc} disabled={!window.db?.backupChooseLocation} className="settings-btn">Save to PC…</button>
+            <div data-ui="encryptRow" style={styles.encryptRow}>
+              <input data-ui="input" type="password" value={encryptPassword} onChange={(e) => setEncryptPassword(e.target.value)} aria-label="Backup encryption passphrase" placeholder="Passphrase (12+ characters)" style={{ ...styles.input, maxWidth: 220 }} />
+              <button data-ui="btn btnSecondary" type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncrypted} disabled={!window.db?.backupEncrypted} className="settings-btn">Encrypted (app folder)</button>
+              <button data-ui="btn btnSecondary" type="button" style={{ ...styles.btn, ...styles.btnSecondary }} onClick={handleBackupEncryptedToPc} disabled={!window.db?.backupEncryptedChooseLocation} className="settings-btn">Encrypted to PC…</button>
             </div>
           </div>
-          {backupMessage && <p style={styles.message}>{backupMessage}</p>}
+          <p data-ui="desc">Encrypted backups require your own passphrase. Store it separately: a lost passphrase cannot recover a backup. Quick local recovery copies are unencrypted and require protected storage.</p>
+          {backupMessage && <p data-ui="message" style={styles.message}>{backupMessage}</p>}
         </div>
-
-        <div style={{ ...styles.section, ...styles.sectionDanger }} className="settings-section">
-          <div style={{ ...styles.sectionIconBadge, ...styles.badgeDanger }}>
-            <span style={styles.sectionIcon}>⚠</span>
+<div data-ui="section sectionExport" style={{ ...styles.section, ...styles.sectionExport }} className="settings-section">
+          <div data-ui="sectionIconBadge badgeCoral" style={{ ...styles.sectionIconBadge, ...styles.badgeCoral }}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>📊</span>
           </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Remove all patient data</h3>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Excel Export</h3>
           </div>
-          <p style={styles.desc}>
+          <p data-ui="desc" style={styles.desc}>Export orders to Excel. Files are saved under the <code style={{ fontSize: 12 }}>exports</code> folder in your app data path (see Support).</p>
+          <div data-ui="dateRow" style={styles.dateRow}>
+            <input data-ui="input"  type="date" value={exportDateFrom} onChange={(e) => setExportDateFrom(e.target.value)} style={styles.input} placeholder="From" />
+            <span data-ui="dateSep" style={styles.dateSep}>→</span>
+            <input data-ui="input"  type="date" value={exportDateTo} onChange={(e) => setExportDateTo(e.target.value)} style={styles.input} placeholder="To" />
+          </div>
+          <button data-ui="btn" type="button" style={styles.btn} onClick={handleExportExcel} disabled={!window.db?.exportOrdersExcel} className="settings-btn">Export Orders to Excel</button>
+        </div>
+<details className="advanced-settings"><summary>Reference intervals & approval<small>Parameter rules, local approval history and clinical review.</small></summary><ReferenceIntervalEditor /></details>
+<details className="advanced-settings"><summary>Paper & preprinted-pad profile<small>Paper geometry, offsets and patient-free calibration.</small></summary><PrintProfileSettings /></details>
+<details className="advanced-settings advanced-danger"><summary>Patient data removal<small>Destructive administration · existing confirmation is required.</small></summary><div data-ui="section sectionDanger" style={{ ...styles.section, ...styles.sectionDanger }} className="settings-section">
+          <div data-ui="sectionIconBadge badgeDanger" style={{ ...styles.sectionIconBadge, ...styles.badgeDanger }}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>⚠</span>
+          </div>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Remove all patient data</h3>
+          </div>
+          <p data-ui="desc" style={styles.desc}>
             Deletes every <strong>patient</strong>, <strong>order</strong>, <strong>result</strong>, print log entry, and commission log row.
             Resets patient ID numbering (next registration starts from PT01 for the current month).
           </p>
-          <p style={{ ...styles.desc, color: '#991b1b', fontWeight: 600 }}>
+          <p data-ui="desc" style={{ ...styles.desc, color: '#991b1b', fontWeight: 600 }}>
             Does not delete: login users, lab profile, investigation catalogue, test rates, or referrer commission settings.
           </p>
-          <button
+          <button data-ui="btn btnDanger"
             type="button"
             style={{ ...styles.btn, ...styles.btnDanger }}
             onClick={handleClearAllPatientData}
@@ -387,55 +392,39 @@ export default function Settings() {
             {wipePatientBusy ? 'Removing…' : 'Delete all patients & orders…'}
           </button>
           {wipePatientMessage && (
-            <p style={{ ...styles.message, color: wipePatientMessage.startsWith('Error') ? '#c00' : '#0d7377', marginTop: 12 }}>
+            <p data-ui="message" style={{ ...styles.message, color: wipePatientMessage.startsWith('Error') ? '#c00' : '#0d7377', marginTop: 12 }}>
               {wipePatientMessage}
             </p>
           )}
-        </div>
-
-        <div style={{ ...styles.section, ...styles.sectionExport }} className="settings-section">
-          <div style={{ ...styles.sectionIconBadge, ...styles.badgeCoral }}>
-            <span style={styles.sectionIcon}>📊</span>
+        </div></details>
+<RecoverySettings/>
+<details className="advanced-settings"><summary>Support & storage<small>App version, database location and backup information.</small></summary><div data-ui="section sectionSupport" style={{ ...styles.section, ...styles.sectionSupport }} className="settings-section">
+          <div data-ui="sectionIconBadge badgeSlate" style={{ ...styles.sectionIconBadge, ...styles.badgeSlate }}>
+            <span data-ui="sectionIcon" style={styles.sectionIcon}>ℹ</span>
           </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Excel Export</h3>
+          <div data-ui="sectionHeader" style={styles.sectionHeader}>
+            <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Support &amp; diagnostics</h3>
           </div>
-          <p style={styles.desc}>Export orders to Excel. Files are saved under the <code style={{ fontSize: 12 }}>exports</code> folder in your app data path (see Support).</p>
-          <div style={styles.dateRow}>
-            <input tabIndex={5} type="date" value={exportDateFrom} onChange={(e) => setExportDateFrom(e.target.value)} style={styles.input} placeholder="From" />
-            <span style={styles.dateSep}>→</span>
-            <input tabIndex={6} type="date" value={exportDateTo} onChange={(e) => setExportDateTo(e.target.value)} style={styles.input} placeholder="To" />
-          </div>
-          <button type="button" style={styles.btn} onClick={handleExportExcel} disabled={!window.db?.exportOrdersExcel} className="settings-btn">Export Orders to Excel</button>
-        </div>
-
-        <div style={{ ...styles.section, ...styles.sectionSupport }} className="settings-section">
-          <div style={{ ...styles.sectionIconBadge, ...styles.badgeSlate }}>
-            <span style={styles.sectionIcon}>ℹ</span>
-          </div>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Support &amp; diagnostics</h3>
-          </div>
-          <p style={styles.desc}>Use this when IT asks for version or data location. Help → About also shows the app version.</p>
-          <div style={styles.supportGrid}>
+          <p data-ui="desc" style={styles.desc}>Use this when IT asks for version or data location. Help → About also shows the app version.</p>
+          <div data-ui="supportGrid" style={styles.supportGrid}>
             <div>
-              <span style={styles.supportLabel}>App version</span>
-              <p style={styles.supportValue}>{appVersion ?? (window.electronApp?.getVersion ? '…' : 'Browser preview (Electron only)')}</p>
+              <span data-ui="supportLabel" style={styles.supportLabel}>App version</span>
+              <p data-ui="supportValue" style={styles.supportValue}>{appVersion ?? (window.electronApp?.getVersion ? '…' : 'Browser preview (Electron only)')}</p>
             </div>
             <div>
-              <span style={styles.supportLabel}>Database</span>
-              <p style={styles.supportValue}>
+              <span data-ui="supportLabel" style={styles.supportLabel}>Database</span>
+              <p data-ui="supportValue" style={styles.supportValue}>
                 {dbSize != null ? `${(dbSize / 1024 / 1024).toFixed(2)} MB` : '—'}
               </p>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <span style={styles.supportLabel}>User data folder (backups, DB)</span>
-              <p style={{ ...styles.supportValue, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}>
+              <span data-ui="supportLabel" style={styles.supportLabel}>User data folder (backups, DB)</span>
+              <p data-ui="supportValue" style={{ ...styles.supportValue, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}>
                 {userDataPath ?? '—'}
               </p>
             </div>
           </div>
-          <button
+          <button data-ui="btn btnGhost"
             type="button"
             style={{ ...styles.btn, ...styles.btnGhost }}
             onClick={refreshSupportStats}
@@ -444,8 +433,8 @@ export default function Settings() {
           >
             {supportRefreshing ? 'Refreshing…' : 'Refresh storage info'}
           </button>
-        </div>
-      </div>
+        </div></details>
+</div>
     </div>
   );
 }

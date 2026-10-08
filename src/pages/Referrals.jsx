@@ -1,6 +1,6 @@
+import useModalFocus from '../components/useModalFocus';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SQL_EXCLUDE_WALK_IN_REFERRALS } from '../utils/labRules';
 
 const money = (n) => (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -108,16 +108,7 @@ export default function Referrals() {
     setLoadError(null);
     try {
       const [start, end] = getDateRange(filter, customFrom, customTo);
-      const rows = await window.db.all(
-        `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count 
-         FROM patients p
-         JOIN orders o ON o.patient_id = p.id
-         WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-         ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-         AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-         GROUP BY p.referred_by ORDER BY count DESC`,
-        [start, end]
-      );
+      const rows = await window.db.read('referrals.ranking', [start, end]);
       if (reqId !== loadReferrersRequestRef.current) return;
       setReferrers(rows || []);
 
@@ -126,42 +117,10 @@ export default function Referrals() {
       const [monthStart, monthEnd] = getDateRange('month', null, null);
       const [lastMonthStart, lastMonthEnd] = getDateRange('lastmonth', null, null);
       const [todayRows, weekRows, monthRows, lastMonthRows] = await Promise.all([
-        window.db.all(
-          `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
-           FROM patients p JOIN orders o ON o.patient_id = p.id
-           WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-           AND date(o.order_date) = ?
-           GROUP BY p.referred_by`,
-          [todayStr]
-        ),
-        window.db.all(
-          `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
-           FROM patients p JOIN orders o ON o.patient_id = p.id
-           WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-           AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-           GROUP BY p.referred_by`,
-          [weekStart, weekEnd]
-        ),
-        window.db.all(
-          `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
-           FROM patients p JOIN orders o ON o.patient_id = p.id
-           WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-           AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-           GROUP BY p.referred_by`,
-          [monthStart, monthEnd]
-        ),
-        window.db.all(
-          `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
-           FROM patients p JOIN orders o ON o.patient_id = p.id
-           WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-           AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-           GROUP BY p.referred_by`,
-          [lastMonthStart, lastMonthEnd]
-        ),
+        window.db.read('referrals.dayPerformance', [todayStr]),
+        window.db.read('referrals.periodPerformance', [weekStart, weekEnd]),
+        window.db.read('referrals.periodPerformance', [monthStart, monthEnd]),
+        window.db.read('referrals.periodPerformance', [lastMonthStart, lastMonthEnd]),
       ]);
       if (reqId !== loadReferrersRequestRef.current) return;
       const perfMap = {};
@@ -171,14 +130,7 @@ export default function Referrals() {
       (lastMonthRows || []).forEach((r) => { perfMap[r.name] = { ...(perfMap[r.name] || {}), lastMonth: r.count || 0 }; });
       setReferrerPerformance(perfMap);
 
-      const commissionRows = await window.db.all(
-        `SELECT ocl.referrer_name as name, SUM(ocl.commission_amount) as commission
-         FROM order_commission_log ocl
-         JOIN orders o ON o.id = ocl.order_id
-         WHERE date(o.order_date) >= ? AND date(o.order_date) <= ?
-         GROUP BY ocl.referrer_name`,
-        [start, end]
-      );
+      const commissionRows = await window.db.read('referrals.commissions', [start, end]);
       const commMap = {};
       (commissionRows || []).forEach((r) => { commMap[r.name] = parseFloat(r.commission) || 0; });
       setReferrerCommission(commMap);
@@ -222,13 +174,7 @@ export default function Referrals() {
     setLoadingPatients(true);
     try {
       const [start, end] = getDateRange(filter, customFrom, customTo);
-      const rows = await window.db.all(
-        `SELECT p.patient_id, p.name, p.age, p.sex, o.order_date
-         FROM patients p JOIN orders o ON o.patient_id = p.id
-         WHERE p.referred_by = ? AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-         ORDER BY o.order_date DESC`,
-        [referrerName, start, end]
-      );
+      const rows = await window.db.read('referrals.patients', [referrerName, start, end]);
       if (loadPatientsRequestRef.current !== referrerName) return;
       setPatientList(rows || []);
       setSelectedReferrer(referrerName);
@@ -249,29 +195,13 @@ export default function Referrals() {
     setInvoiceData(null);
     try {
       const [start, end] = getDateRange(filter, customFrom, customTo);
-      const ordersRows = await window.db.all(
-        `SELECT o.id, o.order_date, o.total_amount, p.patient_id, p.name as patient_name,
-                ocl.commission_amount, ocl.commission_percent, ocl.order_amount
-         FROM orders o
-         JOIN patients p ON o.patient_id = p.id
-         LEFT JOIN order_commission_log ocl ON ocl.order_id = o.id
-         WHERE p.referred_by = ?
-         AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-         ORDER BY o.order_date DESC, o.id DESC`,
-        [referrerName, start, end]
-      );
+      const ordersRows = await window.db.read('referrals.invoiceOrders', [referrerName, start, end]);
       const orderIds = (ordersRows || []).map((r) => r.id);
       const testsByOrder = {};
       if (orderIds.length > 0) {
-        const ph = orderIds.map(() => '?').join(',');
-        const testRows = await window.db.all(
-          `SELECT ot.order_id, pr.name as test_name, ot.display_order
-           FROM order_tests ot
-           JOIN parameters pr ON pr.id = ot.parameter_id
-           WHERE ot.order_id IN (${ph})
-           ORDER BY ot.order_id, ot.display_order`,
-          orderIds
-        );
+        const batches=[];
+        for(let index=0;index<orderIds.length;index+=1000)batches.push(orderIds.slice(index,index+1000));
+        const testRows=(await Promise.all(batches.map(ids=>window.db.read('referrals.invoiceTests',ids)))).flat();
         (testRows || []).forEach((t) => {
           if (!testsByOrder[t.order_id]) testsByOrder[t.order_id] = [];
           testsByOrder[t.order_id].push(t.test_name);
@@ -296,11 +226,8 @@ export default function Referrals() {
       });
       const totalBill = lines.reduce((s, l) => s + l.billAmount, 0);
       const totalCommission = lines.reduce((s, l) => s + l.commissionAmount, 0);
-      const pctRow = await window.db.get(
-        'SELECT commission_percent FROM referrer_commission_pct WHERE referrer_name = ?',
-        [referrerName]
-      );
-      const labRow = await window.db.get('SELECT commission_default_percent FROM lab WHERE id = 1');
+      const pctRow = await window.db.read('referrals.rate', [referrerName]);
+      const labRow = await window.db.read('configuration.defaultCommission', []);
       const defaultPct = parseFloat(pctRow?.commission_percent ?? labRow?.commission_default_percent ?? 45);
       const pctVals = lines.map((l) => l.commissionPct).filter((x) => x != null && !Number.isNaN(x));
       const pctSet = new Set(pctVals);
@@ -380,6 +307,8 @@ export default function Referrals() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [filter, customFrom, customTo, search]);
 
+  const invoiceFocus=useModalFocus(Boolean(invoiceReferrer),closeInvoiceModal);
+  const patientFocus=useModalFocus(Boolean(selectedReferrer),()=>setSelectedReferrer(null));
   const handleExportExcel = async () => {
     if (!window.db?.exportReferralsExcel) return;
     try {
@@ -435,21 +364,21 @@ export default function Referrals() {
   const [start, end] = getDateRange(filter, customFrom, customTo);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Referral Report</h1>
-        <p style={styles.subtitle}>
+    <div data-ui="container" style={styles.container} className="ui-page ui-referrals ">
+      <div data-ui="header" style={styles.header}>
+        <h1 data-ui="title" style={styles.title}>Referral Report</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>
           Track doctors and clinics who refer patients to your lab
         </p>
       </div>
 
-      <div style={styles.commissionBanner}>
+      <div data-ui="commissionBanner" style={styles.commissionBanner}>
         <strong>Commission</strong> — Per referrer rate (default 45%). Edit in Referrer tab.
       </div>
 
-      <div style={styles.periodRow}>
+      <div data-ui="periodRow" style={styles.periodRow}>
         {PERIODS.map((p) => (
-          <button
+          <button data-ui={['periodBtn',(filter === p.id)?'periodBtnActive':''].filter(Boolean).join(' ')}
             key={p.id}
             type="button"
             style={{
@@ -464,19 +393,19 @@ export default function Referrals() {
       </div>
 
       {filter === 'custom' && (
-        <div style={styles.customRow}>
-          <div style={styles.dateCol}>
-            <label style={styles.dateLabel}>From</label>
-            <input
+        <div data-ui="customRow" style={styles.customRow}>
+          <div data-ui="dateCol" style={styles.dateCol}>
+            <label data-ui="dateLabel" htmlFor="referrals-field-1" style={styles.dateLabel}>From</label>
+            <input data-ui="dateInput" id="referrals-field-1"
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
               style={styles.dateInput}
             />
           </div>
-          <div style={styles.dateCol}>
-            <label style={styles.dateLabel}>To</label>
-            <input
+          <div data-ui="dateCol" style={styles.dateCol}>
+            <label data-ui="dateLabel" htmlFor="referrals-field-2" style={styles.dateLabel}>To</label>
+            <input data-ui="dateInput" id="referrals-field-2"
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
@@ -486,51 +415,51 @@ export default function Referrals() {
         </div>
       )}
 
-      <p style={styles.dateRangeLabel}>Showing: {formatDisplayDate(start)} – {formatDisplayDate(end)}</p>
+      <p data-ui="dateRangeLabel" style={styles.dateRangeLabel}>Showing: {formatDisplayDate(start)} – {formatDisplayDate(end)}</p>
 
-      <div style={styles.toolbar}>
-        <button style={styles.refreshBtn} onClick={loadReferrers} disabled={loading}>
+      <div data-ui="toolbar" style={styles.toolbar}>
+        <button data-ui="refreshBtn" style={styles.refreshBtn} onClick={loadReferrers} disabled={loading}>
           ↻ Refresh
         </button>
         {window.db?.exportReferralsExcel && (
-          <button style={styles.exportBtn} onClick={handleExportExcel} disabled={loading}>
+          <button data-ui="exportBtn" style={styles.exportBtn} onClick={handleExportExcel} disabled={loading}>
             Export to Excel
           </button>
         )}
-        {exportFeedback && <span style={styles.exportFeedback}>{exportFeedback}</span>}
+        {exportFeedback && <span data-ui="exportFeedback" style={styles.exportFeedback}>{exportFeedback}</span>}
       </div>
 
       {loadError && (
-        <div style={styles.loadError}>
+        <div data-ui="loadError" style={styles.loadError}>
           {loadError}
-          <button style={styles.retryBtn} onClick={loadReferrers}>Retry</button>
+          <button data-ui="retryBtn" style={styles.retryBtn} onClick={loadReferrers}>Retry</button>
         </div>
       )}
       {loading ? (
-        <div style={styles.loading}>Loading...</div>
+        <div data-ui="loading" style={styles.loading}>Loading...</div>
       ) : (
         <>
-          <div style={styles.statsRow}>
-            <div style={styles.statCard}>
-              <div style={styles.statValue}>{referrers.length}</div>
-              <div style={styles.statLabel}>Referrers</div>
+          <div data-ui="statsRow" style={styles.statsRow}>
+            <div data-ui="statCard" style={styles.statCard}>
+              <div data-ui="statValue" style={styles.statValue}>{referrers.length}</div>
+              <div data-ui="statLabel" style={styles.statLabel}>Referrers</div>
             </div>
-            <div style={styles.statCard}>
-              <div style={styles.statValue}>{totalPatients}</div>
-              <div style={styles.statLabel}>Total Patients</div>
+            <div data-ui="statCard" style={styles.statCard}>
+              <div data-ui="statValue" style={styles.statValue}>{totalPatients}</div>
+              <div data-ui="statLabel" style={styles.statLabel}>Total Patients</div>
             </div>
-            <div style={styles.statCardHighlight}>
-              <div style={styles.statValueHighlight}>
+            <div data-ui="statCardHighlight" style={styles.statCardHighlight}>
+              <div data-ui="statValueHighlight" style={styles.statValueHighlight}>
                 {topReferrer ? topReferrer.name || '—' : '—'}
               </div>
-              <div style={styles.statLabelHighlight}>
+              <div data-ui="statLabelHighlight" style={styles.statLabelHighlight}>
                 Top referrer {topReferrer ? `(${topReferrer.count} patients)` : ''}
               </div>
             </div>
           </div>
 
-          <div style={styles.searchRow}>
-            <input
+          <div data-ui="searchRow" style={styles.searchRow}>
+            <input data-ui="searchInput"
               type="text"
               placeholder="Search referrer by name..."
               value={search}
@@ -539,24 +468,24 @@ export default function Referrals() {
             />
           </div>
 
-          <div style={styles.referrerCardSection}>
+          <div data-ui="referrerCardSection" style={styles.referrerCardSection}>
             {filteredReferrers.length === 0 ? (
-              <div style={styles.emptyWrap}>
-                <div style={styles.empty}>
+              <div data-ui="emptyWrap" style={styles.emptyWrap}>
+                <div data-ui="empty" style={styles.empty}>
                   {search.trim()
                     ? 'No referrers match your search'
                     : 'No referral data for this period'}
                 </div>
                 {search.trim() ? (
-                  <button style={styles.emptyBtn} onClick={() => setSearch('')}>Clear search</button>
+                  <button data-ui="emptyBtn" style={styles.emptyBtn} onClick={() => setSearch('')}>Clear search</button>
                 ) : (
-                  <button style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+                  <button data-ui="emptyBtn" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
                 )}
               </div>
             ) : (
               <>
-                <p style={styles.clickHint}>Click: patient list · Double-click: referrer payment invoice (uses period above)</p>
-                <div style={styles.referrerCardGrid}>
+                <p data-ui="clickHint" style={styles.clickHint}>Click: patient list · Double-click: referrer payment invoice (uses period above)</p>
+                <div data-ui="referrerCardGrid" style={styles.referrerCardGrid}>
                 {filteredReferrers.map((r, i) => {
                   const rank = referrers.findIndex((x) => x.name === r.name);
                   const badge = getRankBadge(rank);
@@ -564,7 +493,7 @@ export default function Referrals() {
                   const perf = referrerPerformance[r.name] || {};
                   const commission = referrerCommission[r.name] ?? 0;
                   return (
-                    <div
+                    <div data-ui="referrerCard"
                       key={i}
                       style={styles.referrerCard}
                       className="referrer-card-clickable"
@@ -587,7 +516,7 @@ export default function Referrals() {
                       }}
                     >
                       {badge && (
-                        <span
+                        <span data-ui="referrerCardBadge"
                           style={{
                             ...styles.referrerCardBadge,
                             background: badge.bg,
@@ -596,32 +525,32 @@ export default function Referrals() {
                           {badge.label}
                         </span>
                       )}
-                      <div style={styles.referrerCardName}>{r.name || '—'}</div>
-                      <div style={styles.referrerCardMeta}>
-                        <span style={styles.referrerCardCount}>{r.count}</span>
-                        <span style={styles.referrerCardLabel}>patients</span>
-                        <span style={styles.referrerCardPct}>{pct}%</span>
+                      <div data-ui="referrerCardName" style={styles.referrerCardName}>{r.name || '—'}</div>
+                      <div data-ui="referrerCardMeta" style={styles.referrerCardMeta}>
+                        <span data-ui="referrerCardCount" style={styles.referrerCardCount}>{r.count}</span>
+                        <span data-ui="referrerCardLabel" style={styles.referrerCardLabel}>patients</span>
+                        <span data-ui="referrerCardPct" style={styles.referrerCardPct}>{pct}%</span>
                       </div>
-                      <div style={styles.referrerCardPerf}>
-                        <div style={styles.referrerCardPerfRow}>
-                          <span style={styles.referrerCardPerfLabel}>Today</span>
-                          <span style={styles.referrerCardPerfVal}>{perf.today ?? 0}</span>
+                      <div data-ui="referrerCardPerf" style={styles.referrerCardPerf}>
+                        <div data-ui="referrerCardPerfRow" style={styles.referrerCardPerfRow}>
+                          <span data-ui="referrerCardPerfLabel" style={styles.referrerCardPerfLabel}>Today</span>
+                          <span data-ui="referrerCardPerfVal" style={styles.referrerCardPerfVal}>{perf.today ?? 0}</span>
                         </div>
-                        <div style={styles.referrerCardPerfRow}>
-                          <span style={styles.referrerCardPerfLabel}>This Week</span>
-                          <span style={styles.referrerCardPerfVal}>{perf.week ?? 0}</span>
+                        <div data-ui="referrerCardPerfRow" style={styles.referrerCardPerfRow}>
+                          <span data-ui="referrerCardPerfLabel" style={styles.referrerCardPerfLabel}>This Week</span>
+                          <span data-ui="referrerCardPerfVal" style={styles.referrerCardPerfVal}>{perf.week ?? 0}</span>
                         </div>
-                        <div style={styles.referrerCardPerfRow}>
-                          <span style={styles.referrerCardPerfLabel}>This Month</span>
-                          <span style={styles.referrerCardPerfVal}>{perf.month ?? 0}</span>
+                        <div data-ui="referrerCardPerfRow" style={styles.referrerCardPerfRow}>
+                          <span data-ui="referrerCardPerfLabel" style={styles.referrerCardPerfLabel}>This Month</span>
+                          <span data-ui="referrerCardPerfVal" style={styles.referrerCardPerfVal}>{perf.month ?? 0}</span>
                         </div>
-                        <div style={styles.referrerCardPerfRow}>
-                          <span style={styles.referrerCardPerfLabel}>Last Month</span>
-                          <span style={styles.referrerCardPerfVal}>{perf.lastMonth ?? 0}</span>
+                        <div data-ui="referrerCardPerfRow" style={styles.referrerCardPerfRow}>
+                          <span data-ui="referrerCardPerfLabel" style={styles.referrerCardPerfLabel}>Last Month</span>
+                          <span data-ui="referrerCardPerfVal" style={styles.referrerCardPerfVal}>{perf.lastMonth ?? 0}</span>
                         </div>
-                        <div style={{ ...styles.referrerCardPerfRow, marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8ecef' }}>
-                          <span style={styles.referrerCardPerfLabel}>Commission</span>
-                          <span style={{ ...styles.referrerCardPerfVal, color: '#166534' }}>₹{commission.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                        <div data-ui="referrerCardPerfRow" style={{ ...styles.referrerCardPerfRow, marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8ecef' }}>
+                          <span data-ui="referrerCardPerfLabel" style={styles.referrerCardPerfLabel}>Commission</span>
+                          <span data-ui="referrerCardPerfVal" style={{ ...styles.referrerCardPerfVal, color: '#166534' }}>₹{commission.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                         </div>
                       </div>
                     </div>
@@ -635,71 +564,71 @@ export default function Referrals() {
       )}
 
       {invoiceReferrer && (
-        <div className="referrer-invoice-overlay" style={styles.invoiceOverlay} onClick={closeInvoiceModal}>
-          <div
+        <div data-ui="invoiceOverlay" className="referrer-invoice-overlay" style={styles.invoiceOverlay} onClick={closeInvoiceModal}>
+          <div ref={invoiceFocus} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Referrer payment invoice" data-ui="invoiceSheet"
             className="referrer-payment-print"
             style={styles.invoiceSheet}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="no-print" style={styles.invoiceToolbar}>
+            <div data-ui="invoiceToolbar" className="no-print" style={styles.invoiceToolbar}>
               <div>
-                <h3 style={styles.invoiceToolbarTitle}>Referrer payment invoice</h3>
-                {invoicePrintHint && <p style={styles.invoicePrintHint}>{invoicePrintHint}</p>}
+                <h3 data-ui="invoiceToolbarTitle" style={styles.invoiceToolbarTitle}>Referrer payment invoice</h3>
+                {invoicePrintHint && <p data-ui="invoicePrintHint" style={styles.invoicePrintHint}>{invoicePrintHint}</p>}
               </div>
-              <div style={styles.modalHeaderActions}>
-                <button type="button" style={styles.printBtn} onClick={runReferrerInvoicePrint}>
-                  🖨 Print invoice
+              <div data-ui="modalHeaderActions" style={styles.modalHeaderActions}>
+                <button data-ui="printBtn" type="button" style={styles.printBtn} onClick={runReferrerInvoicePrint}>
+                  Print invoice
                 </button>
-                <button type="button" style={styles.modalClose} onClick={closeInvoiceModal}>×</button>
+                <button data-ui="modalClose" aria-label="Close invoice" type="button" style={styles.modalClose} onClick={closeInvoiceModal}>×</button>
               </div>
             </div>
             {loadingInvoice ? (
-              <div style={styles.modalLoading}>Loading invoice…</div>
+              <div data-ui="modalLoading" style={styles.modalLoading}>Loading invoice…</div>
             ) : invoiceData ? (
-              <div className="referrer-invoice-body invoice-sheet-body" style={styles.invoiceBody}>
+              <div data-ui="invoiceBody" className="referrer-invoice-body invoice-sheet-body" style={styles.invoiceBody}>
                 {/* On-screen header; hidden when printing — print uses table thead banner */}
                 <div className="referrer-screen-header">
-                  <div style={styles.invHero}>
-                    <div style={styles.invHeroInner}>
-                      <div style={styles.invMonogram} aria-hidden>
+                  <div data-ui="invHero" style={styles.invHero}>
+                    <div data-ui="invHeroInner" style={styles.invHeroInner}>
+                      <div data-ui="invMonogram" style={styles.invMonogram} aria-hidden>
                         {(labConfig.name || 'M').trim().charAt(0).toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={styles.invLabName}>{labConfig.name}</div>
-                        <div style={styles.invContactRow}>
+                        <div data-ui="invLabName" style={styles.invLabName}>{labConfig.name}</div>
+                        <div data-ui="invContactRow" style={styles.invContactRow}>
                           {labConfig.email ? (
-                            <span style={styles.invChip}>✉ {labConfig.email}</span>
+                            <span data-ui="invChip" style={styles.invChip}>✉ {labConfig.email}</span>
                           ) : null}
                           {labConfig.phone ? (
-                            <span style={styles.invChip}>☎ {labConfig.phone}</span>
+                            <span data-ui="invChip" style={styles.invChip}>☎ {labConfig.phone}</span>
                           ) : null}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div style={styles.invDocTitle}>Payment invoice</div>
-                  <div style={styles.invMetaGrid}>
+                  <div data-ui="invDocTitle" style={styles.invDocTitle}>Payment invoice</div>
+                  <div data-ui="invMetaGrid" style={styles.invMetaGrid}>
                     <div>
-                      <span style={styles.invMetaK}>Referrer</span>
-                      <span style={styles.invMetaV}>{invoiceData.referrerName}</span>
+                      <span data-ui="invMetaK" style={styles.invMetaK}>Referrer</span>
+                      <span data-ui="invMetaV" style={styles.invMetaV}>{invoiceData.referrerName}</span>
                     </div>
                     <div>
-                      <span style={styles.invMetaK}>Period</span>
-                      <span style={styles.invMetaV}>{invoiceData.periodLabel}</span>
+                      <span data-ui="invMetaK" style={styles.invMetaK}>Period</span>
+                      <span data-ui="invMetaV" style={styles.invMetaV}>{invoiceData.periodLabel}</span>
                     </div>
                     <div>
-                      <span style={styles.invMetaK}>Orders in period</span>
-                      <span style={styles.invMetaV}>{invoiceData.orderCount}</span>
+                      <span data-ui="invMetaK" style={styles.invMetaK}>Orders in period</span>
+                      <span data-ui="invMetaV" style={styles.invMetaV}>{invoiceData.orderCount}</span>
                     </div>
                   </div>
                 </div>
 
                 {invoiceData.lines.length === 0 ? (
-                  <p style={styles.modalEmpty}>No orders for this referrer in the selected period.</p>
+                  <p data-ui="modalEmpty" style={styles.modalEmpty}>No orders for this referrer in the selected period.</p>
                 ) : (
                   <>
-                    <div style={styles.invTableWrap}>
+                    <div data-ui="invTableWrap" style={styles.invTableWrap}>
                       <table className="referrer-a4-table" style={{ width: '100%' }}>
                         <colgroup>
                           <col style={{ width: '17%' }} />
@@ -752,20 +681,20 @@ export default function Referrals() {
                       </table>
                     </div>
 
-                    <div className="referrer-invoice-summary-block" style={styles.invSummaryBox}>
-                      <div style={styles.invSummaryLeft}>
-                        <div style={styles.invSummaryLine}>
+                    <div data-ui="invSummaryBox" className="referrer-invoice-summary-block" style={styles.invSummaryBox}>
+                      <div data-ui="invSummaryLeft" style={styles.invSummaryLeft}>
+                        <div data-ui="invSummaryLine" style={styles.invSummaryLine}>
                           <span>Total patient billing</span>
                           <strong>₹{money(invoiceData.totalBill)}</strong>
                         </div>
                         {invoiceData.rateNote && (
-                          <p style={styles.invRateNote}>{invoiceData.rateNote}</p>
+                          <p data-ui="invRateNote" style={styles.invRateNote}>{invoiceData.rateNote}</p>
                         )}
                       </div>
-                      <div style={styles.invSummaryRight}>
-                        <div style={styles.invGrandLabel}>Grand total (payable)</div>
-                        <div style={styles.invGrandAmount}>₹{money(invoiceData.totalCommission)}</div>
-                        <div style={styles.invPctBelow}>
+                      <div data-ui="invSummaryRight" style={styles.invSummaryRight}>
+                        <div data-ui="invGrandLabel" style={styles.invGrandLabel}>Grand total (payable)</div>
+                        <div data-ui="invGrandAmount" style={styles.invGrandAmount}>₹{money(invoiceData.totalCommission)}</div>
+                        <div data-ui="invPctBelow" style={styles.invPctBelow}>
                           {invoiceData.displayPct != null
                             ? `Commission rate: ${invoiceData.displayPct}%`
                             : `Default rate: ${invoiceData.defaultPct}%`}
@@ -773,7 +702,7 @@ export default function Referrals() {
                       </div>
                     </div>
 
-                    <div className="referrer-invoice-footer-print" style={styles.invFooter}>
+                    <div data-ui="invFooter" className="referrer-invoice-footer-print" style={styles.invFooter}>
                       Printed by <strong>{labConfig.default_printed_by}</strong>
                       {' · '}
                       {formatDate(new Date())}
@@ -782,20 +711,20 @@ export default function Referrals() {
                 )}
               </div>
             ) : (
-              <div style={styles.modalEmpty}>Could not load invoice.</div>
+              <div data-ui="modalEmpty" style={styles.modalEmpty}>Could not load invoice.</div>
             )}
           </div>
         </div>
       )}
 
       {selectedReferrer && (
-        <div style={styles.modalOverlay} onClick={() => setSelectedReferrer(null)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Patients referred by {selectedReferrer}</h3>
-              <div style={styles.modalHeaderActions}>
+        <div data-ui="modalOverlay" style={styles.modalOverlay} onClick={() => setSelectedReferrer(null)}>
+          <div ref={patientFocus} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Referred patients" data-ui="modal" style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div data-ui="modalHeader" style={styles.modalHeader}>
+              <h3 data-ui="modalTitle" style={styles.modalTitle}>Patients referred by {selectedReferrer}</h3>
+              <div data-ui="modalHeaderActions" style={styles.modalHeaderActions}>
                 {patientList.length > 0 && (
-                  <button
+                  <button data-ui="copyBtn"
                     style={styles.copyBtn}
                     onClick={() => {
                       const header = 'Patient ID\tName\tAge\tSex\tOrder Date';
@@ -808,18 +737,18 @@ export default function Referrals() {
                     Copy
                   </button>
                 )}
-                <button style={styles.modalClose} onClick={() => setSelectedReferrer(null)}>×</button>
+                <button data-ui="modalClose" aria-label="Close patient list" style={styles.modalClose} onClick={() => setSelectedReferrer(null)}>×</button>
               </div>
             </div>
             {loadingPatients ? (
-              <div style={styles.modalLoading}>Loading...</div>
+              <div data-ui="modalLoading" style={styles.modalLoading}>Loading...</div>
             ) : (
-              <div style={styles.modalBody}>
+              <div data-ui="modalBody" style={styles.modalBody}>
                 {patientList.length === 0 ? (
-                  <p style={styles.modalEmpty}>No patients found</p>
+                  <p data-ui="modalEmpty" style={styles.modalEmpty}>No patients found</p>
                 ) : (
-                  <div style={styles.patientTable}>
-                    <div style={styles.patientRowHeader}>
+                  <div data-ui="patientTable" style={styles.patientTable}>
+                    <div data-ui="patientRowHeader" style={styles.patientRowHeader}>
                       <span>Patient ID</span>
                       <span>Name</span>
                       <span>Age</span>
@@ -827,7 +756,7 @@ export default function Referrals() {
                       <span>Order Date</span>
                     </div>
                     {patientList.map((pt, idx) => (
-                      <div key={idx} style={styles.patientRow}>
+                      <div data-ui="patientRow" key={idx} style={styles.patientRow}>
                         <span>{pt.patient_id || '—'}</span>
                         <span>{pt.name || '—'}</span>
                         <span>{pt.age ?? '—'}</span>

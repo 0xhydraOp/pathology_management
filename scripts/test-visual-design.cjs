@@ -1,0 +1,52 @@
+const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+// Real UI + real preload API + authenticated IPC. Only explicit synthetic temporary DBs.
+const fs=require('fs'),os=require('os'),path=require('path'),assert=require('node:assert/strict'),{EventEmitter}=require('events');
+const Database=require('../electron/database'),{registerApplicationIpc,registerAppIpc}=require('../electron/applicationIpc.cjs');
+async function main(){
+ const {chromium}=require(process.env.T001_PLAYWRIGHT_PATH || 'playwright'),{createServer}=await import('vite');
+ const root=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'lab-auth-ui-')),harness=path.join(root,`.auth-ui-${process.pid}.html`),db=new Database(dir,{migrateLegacy:false});let server,browser;
+ const phase=process.env.DESIGN_PHASE || 'after';const artifacts=path.join(process.env.DESIGN_ARTIFACT_DIR || dir,phase);fs.mkdirSync(artifacts,{recursive:true});
+ try{
+  await db.init();if(db.credentialState().setupRequired)db.setupAdmin('admin','synthetic-admin-password');db.run("UPDATE lab SET name='Synthetic Laboratory',pathologist_name='Synthetic reviewer',clinical_correlation_text='Synthetic report footer' WHERE id=1");db.run("INSERT INTO users(id,username,password_hash,role,display_name) SELECT 9001,'synthetic-staff',password_hash,'staff','Synthetic Staff' FROM users WHERE id=1");
+  db.run("INSERT INTO parameters(id,code,name,type,unit,section,decimal_places) VALUES(9001,'SYNUI','Synthetic measurement','numeric','mg/L','Synthetic',2)");db.run("INSERT INTO patients(id,patient_id,name,age,sex) VALUES(9001,'SYN-UI-9001','Synthetic Patient',30,'female')");db.run("INSERT INTO orders(id,patient_id,order_date,status) VALUES(9001,9001,date('now'),'pending')");db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,9001)');db.saveOrderResults(9001,[{parameterId:9001,value:3}]);
+  for(let i=2;i<=8;i++){db.run('INSERT INTO patients(id,patient_id,name,age,sex,referred_by) VALUES(?,?,?,?,?,?)',[9000+i,'SYN-UI-'+(9000+i),'Synthetic Patient '+String.fromCharCode(64+i),28+i,i%2?'male':'female','Synthetic referrer']);db.run("INSERT INTO orders(id,patient_id,order_date,status,payment_status) VALUES(?,?,?,'pending',?)",[9000+i,9000+i,'2026-10-08',i%2?'paid':'unpaid']);db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(?,9001)',[9000+i]);db.computeOrderBillAndCommission(9000+i);}
+  db.run("INSERT INTO parameters(id,code,name,type,unit,section,decimal_places) VALUES(9002,'SYNTEXT','Synthetic qualitative result','text','','Synthetic',0)");db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,9002)');
+  const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:1})};const {authorization:auth}=await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{withLicenceIpc:true});let previewCount=0;
+  registerAppIpc({handle:(name,fn)=>handlers.set(name,fn)},auth,{print:()=>({ok:false,cancelled:true}),printPreview:()=>{previewCount++;return {ok:true};},getVersion:()=> 'synthetic-test',getPath:()=>dir,setTitle:()=>{},setAlwaysOnTop:()=>{},getAlwaysOnTop:()=>false});
+  fs.writeFileSync(harness,`<div id="root"></div><script type="module">import React from 'react';import {createRoot} from 'react-dom/client';import App from '/src/App.jsx';import '/src/index.css';createRoot(document.getElementById('root')).render(React.createElement(App));</script>`);
+  server=await createServer({root,server:{host:'127.0.0.1',port:0}});await server.listen();browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.exposeFunction('authUiInvoke',({channel,args})=>{assert.ok(handlers.has(channel),channel);return handlers.get(channel)(event,...args);});
+  await page.addInitScript(({source})=>{const listeners={};const electron={contextBridge:{exposeInMainWorld:(name,api)=>window[name]=api},ipcRenderer:{invoke:(channel,...args)=>window.authUiInvoke({channel,args}),on:(name,fn)=>listeners[name]=fn,removeListener:name=>delete listeners[name]}};Function('require',source)(()=>electron);},{source:fs.readFileSync(path.join(root,'electron/preload.js'),'utf8')});
+  const url=server.resolvedUrls.local[0]+path.basename(harness);await page.clock.setFixedTime(new Date('2026-10-08T04:30:00Z'));await page.goto(url);
+  const login=async(username='admin')=>{await page.getByPlaceholder('Enter username').fill(username);await page.getByPlaceholder('Enter password').fill('synthetic-admin-password');await page.getByRole('button',{name:'Login',exact:true}).click();await page.getByRole('button',{name:'Logout',exact:true}).waitFor();};
+  for(const [width,height]of [[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const capture=async(name)=>{await page.evaluate(async()=>{await document.fonts.ready;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});await page.screenshot({path:path.join(artifacts,name+'-'+width+'.png')});if(phase==='after'){assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No body overflow: '+name);}};
+   const nav=async(route)=>{await page.getByRole('link',{name:route,exact:true}).click();await page.waitForTimeout(150);await page.evaluate(()=>{window.scrollTo(0,0);const main=document.querySelector('.main-content');if(main)main.scrollTop=0;});};
+   if(await page.getByRole('button',{name:'Logout',exact:true}).count()){await page.getByRole('button',{name:'Logout',exact:true}).click();await page.getByPlaceholder('Enter username').waitFor();}
+   await capture('login');
+   if(phase==='after'){await page.getByLabel('Username',{exact:true}).focus();await page.keyboard.press('Tab');assert.equal(await page.getByLabel('Password',{exact:true}).evaluate(e=>e===document.activeElement),true);assert.ok(await page.getByLabel('Password',{exact:true}).evaluate(e=>Number.parseFloat(getComputedStyle(e).outlineWidth)>=3));}
+   await login();await nav('Dashboard');await capture('dashboard');
+   await nav('New Registration');await page.getByRole('button',{name:'+ Add patient',exact:true}).click();await page.getByPlaceholder('Patient full name').fill('Synthetic New Patient');await capture('registration');
+   await nav('Enter Results & Print');await page.waitForTimeout(150);await capture('patient-list');
+   await page.evaluate(()=>{location.hash='/result-entry?order=9001';});await page.locator('table input').first().waitFor();await capture('result-entry');
+   if(phase==='after'){const input=page.locator('table input').first();await input.focus();await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>document.activeElement && document.activeElement!==document.body),'Keyboard tab remains operable');}
+   await nav('Reports');await page.evaluate(()=>{location.hash='/reports?order=9001';});await page.locator('.mm-print-layout[data-print-ready=true]').waitFor();await capture('reports');await page.getByRole('button',{name:'Finalize report',exact:true}).click();await page.getByRole('dialog').waitFor();await capture('finalization');await page.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(db.getReport(9001).issued,false);
+   await nav('Billing');await capture('billing');await page.getByRole('button',{name:/View/}).first().click();await page.getByText('Bill Invoice',{exact:true}).waitFor();await capture('invoice');
+   if(phase==='after'){const dialog=page.getByRole('dialog',{name:'Bill Invoice',exact:true});await page.keyboard.press('Shift+Tab');assert.ok(await dialog.evaluate(e=>e.contains(document.activeElement)));await page.keyboard.press('Tab');assert.ok(await dialog.evaluate(e=>e.contains(document.activeElement)));const invoiceBody=page.locator('.invoice-sheet-body');await invoiceBody.evaluate(e=>e.scrollTop=e.scrollHeight);assert.equal(await page.locator('[data-ui~=invoicePrintedBy]').evaluate(e=>{const b=e.getBoundingClientRect(),p=e.closest('.invoice-sheet-body').getBoundingClientRect();return b.bottom<=p.bottom+1;}),true);}
+   await page.getByRole('button',{name:'Close invoice',exact:true}).click();
+   await nav('Referrals');await capture('referrals');await nav('Referrer');await capture('commissions');await nav('Test Prices');await capture('rates');
+   await nav('Settings');await page.getByRole('heading',{name:'Settings',exact:true}).waitFor();await capture('settings');
+   if(phase==='after')assert.ok(await page.locator('.advanced-settings').evaluateAll(nodes=>nodes.every(n=>!n.open)),'Advanced settings start collapsed');
+   const advanced=page.locator('details').filter({has:page.locator('.print-profile-settings')});if(await advanced.count())await advanced.locator('summary').first().click();
+   await page.locator('.print-profile-settings').screenshot({path:path.join(artifacts,'print-settings-'+width+'.png')});
+   if(phase==='after'){
+    const pairs=await page.evaluate(()=>{const style=getComputedStyle(document.documentElement);return [['primary',style.getPropertyValue('--ui-accent').trim(),'#FFFFFF'],['secondary',style.getPropertyValue('--ui-muted').trim(),'#FFFFFF'],['navigation','#D6E0EC',style.getPropertyValue('--ui-nav').trim()],['error',style.getPropertyValue('--ui-danger').trim(),'#FFFFFF'],['review',style.getPropertyValue('--ui-review').trim(),style.getPropertyValue('--ui-review-soft').trim()]];});
+    const luminance=hex=>{const rgb=hex.replace('#','').match(/../g).map(n=>parseInt(n,16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};for(const [name,fg,bg]of pairs){const a=luminance(fg),b=luminance(bg),contrast=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);assert.ok(contrast>=4.5,name+' text contrast '+contrast);}
+    await page.getByRole('button',{name:'Logout',exact:true}).click();await page.getByPlaceholder('Enter username').waitFor();await login('synthetic-staff');await nav('Test Prices');await page.getByRole('button',{name:'Save All',exact:true}).click();await page.getByText(/Error: Permission denied: Admin authorization/).waitFor();await capture('permission-feedback');
+   }
+  }
+  assert.deepEqual(errors,[]);console.log(phase+' visual fixtures passed at 1366×768 and 1920×1080; no page errors. Screenshots: '+artifacts);
+ }finally{await browser?.close();await server?.close();db.close();fs.unlinkSync(harness);fs.rmSync(dir,{recursive:true,force:true});}
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

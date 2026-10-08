@@ -1,0 +1,11 @@
+CREATE TABLE customers(id TEXT PRIMARY KEY,display_name TEXT NOT NULL,email TEXT NOT NULL UNIQUE,status TEXT NOT NULL CHECK(status IN('active','disabled')),identity_subject TEXT UNIQUE,created_at INTEGER NOT NULL);
+ALTER TABLE licenses ADD COLUMN customer_id TEXT REFERENCES customers(id);
+ALTER TABLE licenses ADD COLUMN kind TEXT NOT NULL DEFAULT 'licence' CHECK(kind IN('trial','licence'));
+ALTER TABLE licenses ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0 CHECK(suspended IN(0,1));
+CREATE INDEX customer_licenses ON licenses(customer_id);
+CREATE TABLE invitations(id TEXT PRIMARY KEY,customer_id TEXT NOT NULL REFERENCES customers(id),token_hash TEXT NOT NULL UNIQUE,email TEXT NOT NULL,expires_at INTEGER NOT NULL,consumed_at INTEGER,created_at INTEGER NOT NULL);
+CREATE INDEX customer_invitations ON invitations(customer_id,consumed_at);
+CREATE TABLE owner_audit(id TEXT PRIMARY KEY,actor TEXT NOT NULL,action TEXT NOT NULL,customer_id TEXT REFERENCES customers(id),license_id TEXT REFERENCES licenses(id),created_at INTEGER NOT NULL,details TEXT NOT NULL);
+CREATE INDEX owner_audit_time ON owner_audit(created_at);
+CREATE TABLE owner_guard(id TEXT NOT NULL PRIMARY KEY);
+CREATE TRIGGER customer_activation_valid BEFORE INSERT ON activations WHEN (SELECT suspended FROM licenses WHERE id=NEW.license_id)=1 OR EXISTS(SELECT 1 FROM licenses l JOIN customers c ON c.id=l.customer_id WHERE l.id=NEW.license_id AND c.status!='active') BEGIN SELECT RAISE(ABORT,'license unavailable'); END;

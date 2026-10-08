@@ -1,6 +1,6 @@
+import WorkspaceIcon from '../components/WorkspaceIcon';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SQL_EXCLUDE_WALK_IN_REFERRALS } from '../utils/labRules';
 import { formatOrderDateShortIN } from '../utils/dateDisplay';
 import { keyboardActivateHandler } from '../utils/keyboardClick';
 
@@ -70,34 +70,11 @@ export default function Dashboard() {
       const todayRange = getDateRange('today');
 
       const [todayCount, periodCount, pending, referrers, pendingList] = await Promise.all([
-        window.db.get(
-          `SELECT COUNT(*) as c FROM patients WHERE date(created_at) = ?`,
-          [todayRange[0]]
-        ),
-        window.db.get(
-          `SELECT COUNT(*) as c FROM patients WHERE date(created_at) >= ? AND date(created_at) <= ?`,
-          [start, end]
-        ),
-        window.db.get(
-          `SELECT COUNT(*) as c FROM orders WHERE status IN ('pending','partial')`,
-          []
-        ),
-        window.db.all(
-          `SELECT p.referred_by as name, COUNT(DISTINCT p.id) as count
-           FROM patients p JOIN orders o ON o.patient_id = p.id
-           WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-           AND date(o.order_date) >= ? AND date(o.order_date) <= ?
-           GROUP BY p.referred_by ORDER BY count DESC LIMIT 10`,
-          [start, end]
-        ),
-        window.db.all(
-          `SELECT o.id, o.order_date, p.patient_id, p.name
-           FROM orders o JOIN patients p ON o.patient_id = p.id
-           WHERE o.status IN ('pending','partial')
-           ORDER BY o.order_date DESC, o.id DESC LIMIT 8`,
-          []
-        ),
+        window.db.read('dashboard.todayPatients', [todayRange[0]]),
+        window.db.read('dashboard.periodPatients', [start, end]),
+        window.db.read('dashboard.pendingCount', []),
+        window.db.read('dashboard.topReferrers', [start, end]),
+        window.db.read('dashboard.pendingOrders', []),
       ]);
 
       if (reqId !== loadDataRequestRef.current) return;
@@ -110,7 +87,7 @@ export default function Dashboard() {
     } catch (e) {
       if (reqId === loadDataRequestRef.current) {
         console.error(e);
-        setLoadError('Could not load dashboard data. Check the database or restart the app.');
+        setLoadError(e.message || 'Could not load dashboard data. Check the database or restart the app.');
       }
     } finally {
       if (reqId === loadDataRequestRef.current) setLoading(false);
@@ -141,16 +118,16 @@ export default function Dashboard() {
   ];
 
   return (
-    <div style={styles.container}>
-      <div style={styles.welcome}>
-        <h1 style={styles.title}>{getGreeting()}, welcome to {labName}</h1>
-        <p style={styles.subtitle}>Quick access to your daily lab workflow</p>
+    <div data-ui="container" style={styles.container} className="ui-page ui-dashboard ">
+      <div data-ui="welcome" style={styles.welcome}>
+        <h1 data-ui="title" style={styles.title}>Dashboard</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>Daily overview · Patient registration, results and reports</p>
       </div>
 
-      <div style={styles.toolbar}>
-        <div style={styles.periodRow}>
+      <div data-ui="toolbar" style={styles.toolbar}>
+        <div data-ui="periodRow" style={styles.periodRow}>
           {PERIODS.map((p) => (
-            <button
+            <button data-ui={['periodBtn',(period === p.id)?'periodBtnActive':''].filter(Boolean).join(' ')}
               key={p.id}
               type="button"
               style={{ ...styles.periodBtn, ...(period === p.id ? styles.periodBtnActive : {}) }}
@@ -160,23 +137,23 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-        <button type="button" style={styles.refreshBtn} onClick={loadData} disabled={loading}>
+        <button data-ui="refreshBtn" type="button" style={styles.refreshBtn} onClick={loadData} disabled={loading}>
           ↻ Refresh
         </button>
       </div>
 
       {loadError && (
-        <div style={styles.errorBanner} role="alert">
+        <div data-ui="errorBanner" style={styles.errorBanner} role="alert">
           {loadError}
-          <button type="button" style={styles.errorRetry} onClick={() => loadData()}>
+          <button data-ui="errorRetry" type="button" style={styles.errorRetry} onClick={() => loadData()}>
             Retry
           </button>
         </div>
       )}
 
-      <div style={styles.quickActions}>
+      <div data-ui="quickActions" style={styles.quickActions}>
         {quickActions.map((action) => (
-          <div
+          <div data-ui={['actionCard',(action.primary)?'actionCardPrimary':''].filter(Boolean).join(' ')}
             key={action.path}
             role="button"
             tabIndex={0}
@@ -185,20 +162,20 @@ export default function Dashboard() {
             onClick={() => navigate(action.path)}
             onKeyDown={keyboardActivateHandler(() => navigate(action.path))}
           >
-            <div style={styles.actionIcon}>{action.icon}</div>
-            <div style={styles.actionContent}>
-              <div style={styles.actionLabel}>{action.label}</div>
-              <div style={styles.actionDesc}>{action.desc}</div>
+            <div data-ui="actionIcon" style={styles.actionIcon}><WorkspaceIcon name={action.path.includes('registration')?'registration':action.path.includes('result')?'results':'reports'}/></div>
+            <div data-ui="actionContent" style={styles.actionContent}>
+              <div data-ui="actionLabel" style={styles.actionLabel}>{action.label}</div>
+              <div data-ui="actionDesc" style={styles.actionDesc}>{action.desc}</div>
             </div>
-            <span style={styles.actionArrow}>→</span>
+            <span data-ui="actionArrow" style={styles.actionArrow}>→</span>
           </div>
         ))}
       </div>
 
-      <p style={styles.shortcutHint}>Ctrl+N New Reg · Ctrl+E Results · Ctrl+P Reports</p>
+      <p data-ui="shortcutHint" style={styles.shortcutHint}>Ctrl+N New Reg · Ctrl+E Results · Ctrl+P Reports</p>
 
-      <div style={styles.statsSection}>
-        <div
+      <div data-ui="statsSection" style={styles.statsSection}>
+        <div data-ui="statCard"
           className="dashboard-card-hover"
           role="button"
           tabIndex={0}
@@ -206,16 +183,16 @@ export default function Dashboard() {
           onClick={() => navigate('/new-registration')}
           onKeyDown={keyboardActivateHandler(() => navigate('/new-registration'))}
         >
-          <div style={styles.statIcon}>👥</div>
-          <div style={styles.statContent}>
-            <div style={styles.statValue}>
-              {loading ? <span className="dashboard-skeleton" style={styles.skeletonNum} /> : periodPatients}
+          <div data-ui="statIcon" style={styles.statIcon}><WorkspaceIcon name="patient"/></div>
+          <div data-ui="statContent" style={styles.statContent}>
+            <div data-ui="statValue" style={styles.statValue}>
+              {loading ? <span data-ui="skeletonNum" className="dashboard-skeleton" style={styles.skeletonNum} /> : periodPatients}
             </div>
-            <div style={styles.statLabel}>Patients {periodLabel}</div>
+            <div data-ui="statLabel" style={styles.statLabel}>Patients {periodLabel}</div>
           </div>
         </div>
 
-        <div
+        <div data-ui="statCard"
           className="dashboard-card-hover"
           role="button"
           tabIndex={0}
@@ -223,16 +200,16 @@ export default function Dashboard() {
           onClick={() => navigate('/new-registration')}
           onKeyDown={keyboardActivateHandler(() => navigate('/new-registration'))}
         >
-          <div style={styles.statIcon}>📅</div>
-          <div style={styles.statContent}>
-            <div style={styles.statValue}>
-              {loading ? <span className="dashboard-skeleton" style={styles.skeletonNum} /> : todayPatients}
+          <div data-ui="statIcon" style={styles.statIcon}><WorkspaceIcon name="calendar"/></div>
+          <div data-ui="statContent" style={styles.statContent}>
+            <div data-ui="statValue" style={styles.statValue}>
+              {loading ? <span data-ui="skeletonNum" className="dashboard-skeleton" style={styles.skeletonNum} /> : todayPatients}
             </div>
-            <div style={styles.statLabel}>Today's patients</div>
+            <div data-ui="statLabel" style={styles.statLabel}>Today's patients</div>
           </div>
         </div>
 
-        <div
+        <div data-ui="statCard"
           className="dashboard-card-hover"
           role="button"
           tabIndex={0}
@@ -240,33 +217,33 @@ export default function Dashboard() {
           onClick={() => navigate('/result-entry')}
           onKeyDown={keyboardActivateHandler(() => navigate('/result-entry'))}
         >
-          <div style={styles.statIcon}>⏳</div>
-          <div style={styles.statContent}>
-            <div style={{ ...styles.statValue, color: pendingCount > 0 ? '#c45c26' : '#0d7377' }}>
-              {loading ? <span className="dashboard-skeleton" style={styles.skeletonNum} /> : pendingCount}
+          <div data-ui="statIcon" style={styles.statIcon}><WorkspaceIcon name="clock"/></div>
+          <div data-ui="statContent" style={styles.statContent}>
+            <div data-ui="statValue" style={{ ...styles.statValue, color: pendingCount > 0 ? '#c45c26' : '#0d7377' }}>
+              {loading ? <span data-ui="skeletonNum" className="dashboard-skeleton" style={styles.skeletonNum} /> : pendingCount}
             </div>
-            <div style={styles.statLabel}>Pending reports</div>
+            <div data-ui="statLabel" style={styles.statLabel}>Pending reports</div>
           </div>
         </div>
       </div>
 
-      <div style={styles.twoCol}>
-        <div style={styles.pendingCard}>
-          <div style={styles.pendingHeader}>
-            <span style={styles.pendingTitle}>Orders awaiting results</span>
-            <button type="button" style={styles.viewAllBtn} onClick={() => navigate('/result-entry')}>
+      <div data-ui="twoCol" style={styles.twoCol}>
+        <div data-ui="pendingCard" style={styles.pendingCard}>
+          <div data-ui="pendingHeader" style={styles.pendingHeader}>
+            <span data-ui="pendingTitle" style={styles.pendingTitle}>Orders awaiting results</span>
+            <button data-ui="viewAllBtn" type="button" style={styles.viewAllBtn} onClick={() => navigate('/result-entry')}>
               Enter results →
             </button>
           </div>
-          <div style={styles.pendingList}>
+          <div data-ui="pendingList" style={styles.pendingList}>
             {pendingOrders.length === 0 && !loading && (
-              <div style={styles.emptyWrap}>
-                <div style={styles.empty}>No pending orders</div>
-                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+              <div data-ui="emptyWrap" style={styles.emptyWrap}>
+                <div data-ui="empty" style={styles.empty}>No pending orders</div>
+                <button data-ui="emptyBtn" type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
               </div>
             )}
             {pendingOrders.map((o) => (
-              <div
+              <div data-ui="pendingRow"
                 key={o.id}
                 role="button"
                 tabIndex={0}
@@ -276,9 +253,9 @@ export default function Dashboard() {
                 onClick={() => navigate(`/result-entry?order=${o.id}`)}
                 onKeyDown={keyboardActivateHandler(() => navigate(`/result-entry?order=${o.id}`))}
               >
-                <span style={styles.pendingId}>#{o.id}</span>
-                <span style={styles.pendingName}>{o.name || '—'}</span>
-                <span style={styles.pendingDate}>
+                <span data-ui="pendingId" style={styles.pendingId}>#{o.id}</span>
+                <span data-ui="pendingName" style={styles.pendingName}>{o.name || '—'}</span>
+                <span data-ui="pendingDate" style={styles.pendingDate}>
                   {formatOrderDateShortIN(o.order_date)}
                 </span>
               </div>
@@ -286,33 +263,33 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div style={styles.referrersCard}>
-          <div style={styles.referrersHeader}>
-            <span style={styles.referrersTitle}>Top Referrers</span>
-            <button type="button" style={styles.viewAllBtn} onClick={() => navigate('/referrals')}>
+        <div data-ui="referrersCard" style={styles.referrersCard}>
+          <div data-ui="referrersHeader" style={styles.referrersHeader}>
+            <span data-ui="referrersTitle" style={styles.referrersTitle}>Top Referrers</span>
+            <button data-ui="viewAllBtn" type="button" style={styles.viewAllBtn} onClick={() => navigate('/referrals')}>
               View all →
             </button>
           </div>
-          <div style={styles.referrerList}>
+          <div data-ui="referrerList" style={styles.referrerList}>
             {loading && (
               <>
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} style={styles.skeletonRefRow}>
-                    <span className="dashboard-skeleton" style={styles.skeletonCircle} />
-                    <span className="dashboard-skeleton" style={{ ...styles.skeletonLine, flex: 1 }} />
-                    <span className="dashboard-skeleton" style={{ ...styles.skeletonLine, width: 40 }} />
+                  <div data-ui="skeletonRefRow" key={i} style={styles.skeletonRefRow}>
+                    <span data-ui="skeletonCircle" className="dashboard-skeleton" style={styles.skeletonCircle} />
+                    <span data-ui="skeletonLine" className="dashboard-skeleton" style={{ ...styles.skeletonLine, flex: 1 }} />
+                    <span data-ui="skeletonLine" className="dashboard-skeleton" style={{ ...styles.skeletonLine, width: 40 }} />
                   </div>
                 ))}
               </>
             )}
             {!loading && topReferrers.length === 0 && (
-              <div style={styles.emptyWrap}>
-                <div style={styles.empty}>No referral data</div>
-                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+              <div data-ui="emptyWrap" style={styles.emptyWrap}>
+                <div data-ui="empty" style={styles.empty}>No referral data</div>
+                <button data-ui="emptyBtn" type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
               </div>
             )}
             {!loading && topReferrers.slice(0, 5).map((r, i) => (
-              <div
+              <div data-ui="referrerRow"
                 key={`${r.name || ''}-${i}`}
                 role="button"
                 tabIndex={0}
@@ -321,23 +298,23 @@ export default function Dashboard() {
                 onClick={() => navigate('/referrals')}
                 onKeyDown={keyboardActivateHandler(() => navigate('/referrals'))}
               >
-                <span style={styles.refRank}>{i + 1}</span>
-                <span style={styles.refName}>{r.name || '—'}</span>
-                <div style={styles.refBarTrack}>
-                  <div style={{ ...styles.refBarFill, width: `${(r.count / maxRefCount) * 100}%` }} />
+                <span data-ui="refRank" style={styles.refRank}>{i + 1}</span>
+                <span data-ui="refName" style={styles.refName}>{r.name || '—'}</span>
+                <div data-ui="refBarTrack" style={styles.refBarTrack}>
+                  <div data-ui="refBarFill" style={{ ...styles.refBarFill, width: `${(r.count / maxRefCount) * 100}%` }} />
                 </div>
-                <span style={styles.refCount}>{r.count}</span>
+                <span data-ui="refCount" style={styles.refCount}>{r.count}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div style={styles.shortcutsSection}>
-        <div style={styles.shortcutsTitle}>Quick Links</div>
-        <div style={styles.shortcutsGrid}>
+      <div data-ui="shortcutsSection" style={styles.shortcutsSection}>
+        <div data-ui="shortcutsTitle" style={styles.shortcutsTitle}>Quick Links</div>
+        <div data-ui="shortcutsGrid" style={styles.shortcutsGrid}>
           {shortcuts.map((s) => (
-            <div
+            <div data-ui="shortcutCard"
               key={s.path}
               role="button"
               tabIndex={0}
@@ -346,8 +323,8 @@ export default function Dashboard() {
               onClick={() => navigate(s.path)}
               onKeyDown={keyboardActivateHandler(() => navigate(s.path))}
             >
-              <span style={styles.shortcutLabel}>{s.label}</span>
-              <span style={styles.shortcutDesc}>{s.desc}</span>
+              <span data-ui="shortcutLabel" style={styles.shortcutLabel}>{s.label}</span>
+              <span data-ui="shortcutDesc" style={styles.shortcutDesc}>{s.desc}</span>
             </div>
           ))}
         </div>

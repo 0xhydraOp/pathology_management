@@ -1,0 +1,198 @@
+{
+  "lab": [
+    "id",
+    "name",
+    "address",
+    "phone",
+    "email",
+    "registration_no",
+    "logo_path",
+    "margin_top",
+    "margin_left",
+    "margin_right",
+    "margin_bottom",
+    "clinical_correlation_text",
+    "report_watermark_text",
+    "printer_name",
+    "pathologist_name",
+    "default_printed_by",
+    "staff_list",
+    "created_at",
+    "commission_default_percent"
+  ],
+  "users": [
+    "id",
+    "username",
+    "password_hash",
+    "role",
+    "display_name",
+    "created_at"
+  ],
+  "patients": [
+    "id",
+    "patient_id",
+    "name",
+    "age",
+    "sex",
+    "phone",
+    "address",
+    "referred_by",
+    "created_at"
+  ],
+  "parameters": [
+    "id",
+    "code",
+    "name",
+    "section",
+    "display_order",
+    "unit",
+    "decimal_places",
+    "type",
+    "min_allowed_value",
+    "max_allowed_value"
+  ],
+  "parameter_ranges": [
+    "id",
+    "parameter_id",
+    "sex",
+    "min_age",
+    "max_age",
+    "low_value",
+    "high_value",
+    "critical_low",
+    "critical_high"
+  ],
+  "test_profiles": [
+    "id",
+    "name",
+    "section",
+    "display_order"
+  ],
+  "profile_parameters": [
+    "id",
+    "profile_id",
+    "parameter_id",
+    "display_order"
+  ],
+  "formulas": [
+    "id",
+    "parameter_id",
+    "formula_expression",
+    "dependencies"
+  ],
+  "patient_sequence": [
+    "month",
+    "year",
+    "last_number"
+  ],
+  "orders": [
+    "id",
+    "patient_id",
+    "referring_doctor",
+    "order_date",
+    "report_date",
+    "status",
+    "total_amount",
+    "payment_status",
+    "created_at",
+    "access_code",
+    "report_status"
+  ],
+  "order_tests": [
+    "id",
+    "order_id",
+    "parameter_id",
+    "display_order",
+    "rate"
+  ],
+  "order_results": [
+    "id",
+    "order_id",
+    "parameter_id",
+    "result_value",
+    "result_text",
+    "flag",
+    "notes",
+    "created_at",
+    "raw_result_value"
+  ],
+  "report_print_log": [
+    "id",
+    "order_id",
+    "printed_by",
+    "printed_at",
+    "copy_number"
+  ],
+  "audit_log": [
+    "id",
+    "table_name",
+    "record_id",
+    "action",
+    "old_value",
+    "new_value",
+    "changed_at",
+    "changed_by"
+  ],
+  "test_rates": [
+    "parameter_id",
+    "rate",
+    "updated_at"
+  ],
+  "referrer_commission": [
+    "id",
+    "referrer_name",
+    "parameter_id",
+    "commission_percent",
+    "updated_at"
+  ],
+  "order_commission_log": [
+    "id",
+    "order_id",
+    "referrer_name",
+    "order_amount",
+    "commission_amount",
+    "commission_percent",
+    "created_at"
+  ],
+  "referrer_commission_pct": [
+    "referrer_name",
+    "commission_percent",
+    "updated_at"
+  ],
+  "reference_interval_sets": [
+    "id",
+    "parameter_id",
+    "previous_id",
+    "rules",
+    "status",
+    "edited_by",
+    "edited_at",
+    "approved_by",
+    "approved_at"
+  ],
+  "parameter_critical_rules": [
+    "id",
+    "parameter_id",
+    "sex",
+    "min_age",
+    "max_age",
+    "critical_low",
+    "critical_high",
+    "unit"
+  ],
+  "issued_reports": [
+    "order_id",
+    "payload",
+    "issued_by",
+    "issued_at",
+    "provenance"
+  ],
+  "reference_migrations": [
+    "version",
+    "applied_at"
+  ],
+  "lab_print_profile": [
+    "id",
+    "payload"
+  ]
+}

@@ -1,0 +1,190 @@
+/* Screen-only workspace system. Report/invoice/calibration print rules remain independent. */
+@media screen {
+ .licence-banner {display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:#FFF7E6;color:#704709;border-bottom:1px solid #E8D6B4;font-size:13px;line-height:1.4;}
+ .licence-banner span {flex:1;min-width:240px;}
+ .licence-banner a {font-weight:600;color:#08717C;white-space:nowrap;}
+ .licence-settings {border:1px solid #DCE3EB;border-radius:10px;background:white;padding:20px;margin:18px 0;max-width:920px;}
+ .licence-settings h2 {font-size:19px;margin:0 0 12px;}
+ .licence-settings p {line-height:1.5;}
+ .licence-settings dl {display:grid;grid-template-columns:160px 1fr;gap:8px;margin:16px 0;}
+ .licence-settings dt {color:#526174;}.licence-settings dd {margin:0;}
+ .licence-settings input {display:block;width:min(100%,520px);margin:8px 0 12px;}
+ .licence-settings button {margin:4px 12px 8px 0;}
+ .licence-settings [role="alert"] {color:#A32936;}.licence-support-id code {overflow-wrap:anywhere;font-size:12px;}
+}
+@media screen {
+ :root {
+  --ui-canvas:#F5F7FA; --ui-surface:#FFFFFF; --ui-nav:#14283F; --ui-accent:#087F8C;
+  --ui-text:#18283B; --ui-muted:#526174; --ui-border:#DCE3EB; --ui-soft:#EDF4F5;
+  --ui-danger:#A32936; --ui-danger-soft:#FFF1F2; --ui-review:#85520A; --ui-review-soft:#FFF7E6;
+  --ui-font:'Aptos','Segoe UI Variable Text','Segoe UI',sans-serif;
+  --ui-display:'Segoe UI Variable Display','Segoe UI',sans-serif;
+  --ui-mono:'Cascadia Code','Consolas',monospace;
+  --ui-space-1:4px; --ui-space-2:8px; --ui-space-3:12px; --ui-space-4:16px; --ui-space-6:24px; --ui-space-8:32px;
+  --ui-radius:8px; --ui-shadow:0 2px 8px #14283F08;
+ }
+ html body {background:var(--ui-canvas);color:var(--ui-text);font-family:var(--ui-font);font-size:14px;line-height:1.45;}
+ .app-layout header button {background:white!important;color:var(--ui-text)!important;border:1px solid #AAB7C5!important;font-size:12px!important;box-shadow:none!important;}
+ .app-layout header button[data-ui~="pinActive"] {background:var(--ui-soft)!important;color:var(--ui-accent)!important;}
+ .app-layout {height:100vh;min-height:0!important;overflow:hidden;}
+ .app-layout > header {height:60px;padding:10px 24px!important;background:var(--ui-surface)!important;color:var(--ui-text)!important;border-bottom:1px solid var(--ui-border);box-shadow:none!important;flex:none;}
+ .app-layout header img {height:34px!important;}
+ .app-layout header [data-ui~="labName"] {font-size:16px!important;font-weight:650!important;}
+ .app-layout header [data-ui~="clock"] {font-size:12px!important;color:var(--ui-muted);}
+ .app-layout .layout-body {min-height:0;}
+ .app-layout aside {width:204px!important;flex:none;background:var(--ui-nav)!important;padding:24px 12px!important;box-shadow:none!important;gap:4px!important;overflow:auto;}
+ .app-layout aside::before {content:'LAB WORKSPACE';color:#BDC9D7;font-size:10px;font-weight:700;letter-spacing:.16em;margin:0 12px 16px;}
+ .app-layout aside a {color:#D6E0EC!important;border-radius:6px!important;padding:11px 12px!important;display:flex;align-items:center;gap:10px;font-size:13px!important;border-left:3px solid transparent;}
+ .app-layout aside a[aria-current="page"] {color:white!important;background:#234158!important;border-left-color:#4AC1C4;font-weight:650;}
+ .app-layout aside a:hover {background:#1D354D!important;color:white!important;}
+ .ui-icon {width:18px;height:18px;flex:none;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+ .main-content {min-width:0;min-height:0;background:var(--ui-canvas)!important;}
+ .workspace-content {padding:26px 32px!important;min-height:0;scrollbar-gutter:stable;}
+ .app-layout footer {font-size:11px!important;color:var(--ui-muted)!important;padding:8px 24px!important;box-shadow:none!important;background:var(--ui-canvas)!important;}
+ .app-layout footer a {color:var(--ui-muted)!important;}
+ .app-layout [data-ui~="footerVersion"] {background:transparent!important;border:none!important;color:var(--ui-muted)!important;padding:0!important;}
+ .ui-page {max-width:1280px!important;width:100%;padding-bottom:24px;}
+ .ui-page h1 {font-family:var(--ui-display);font-size:25px!important;line-height:1.25;font-weight:650!important;color:var(--ui-text)!important;letter-spacing:-.025em;margin-bottom:6px!important;}
+ .ui-page h2,.ui-page h3 {font-family:var(--ui-display);color:var(--ui-text);font-weight:650;}
+ .ui-page :is([data-ui~="subtitle"],[data-ui~="desc"],[data-ui~="hint"],[data-ui~="pendingHint"],[data-ui~="keyboardHint"],[data-ui~="shortcutHint"],[data-ui~="dateRangeLabel"],[data-ui~="cardMeta"],[data-ui~="cardReferrer"],[data-ui~="pendingDate"],[data-ui~="tdMuted"],[data-ui~="codeCell"],[data-ui~="supportLabel"]) {color:var(--ui-muted)!important;opacity:1!important;font-size:13px!important;line-height:1.5;}
+ .ui-page :is([data-ui~="pageHeader"],[data-ui~="header"],[data-ui~="welcome"]) {background:transparent!important;color:var(--ui-text)!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin-bottom:22px!important;}
+ .ui-page :is([data-ui~="pageHeaderIcon"],[data-ui~="headerIconWrap"],[data-ui~="sectionIconBadge"],[data-ui~="statIcon"]) {display:none!important;}
+ .ui-page :is([data-ui~="card"],[data-ui~="section"],[data-ui~="statCard"],[data-ui~="actionCard"],[data-ui~="pendingCard"],[data-ui~="referrersCard"],[data-ui~="billingCard"],[data-ui~="referrerCard"],[data-ui~="tableWrap"],[data-ui~="registerCard"]) {background:var(--ui-surface)!important;border:1px solid var(--ui-border)!important;border-radius:var(--ui-radius)!important;box-shadow:var(--ui-shadow)!important;color:var(--ui-text)!important;transform:none!important;transition:none!important;}
+ .ui-page :is([data-ui~="card"],[data-ui~="section"],[data-ui~="statCard"],[data-ui~="actionCard"],[data-ui~="pendingCard"],[data-ui~="referrersCard"],[data-ui~="billingCard"],[data-ui~="referrerCard"]) {padding:18px!important;}
+ .ui-page :is([data-ui~="actionCard"],[data-ui~="statCard"],[data-ui~="billingCard"],[data-ui~="referrerCard"]):hover {border-color:#9DAFBE!important;background:#FAFCFD!important;}
+ .ui-page :is([data-ui~="actionLabel"],[data-ui~="pendingTitle"],[data-ui~="cardTitle"],[data-ui~="sectionTitle"]) {color:var(--ui-text)!important;font-size:15px!important;}
+ .ui-page [data-ui~="actionIcon"] {background:var(--ui-soft)!important;color:var(--ui-accent)!important;width:36px!important;height:36px!important;border-radius:8px!important;}
+ .ui-page [data-ui~="actionDesc"] {color:var(--ui-muted)!important;opacity:1!important;}
+ .ui-page [data-ui~="statValue"] {color:var(--ui-text)!important;font-size:29px!important;font-weight:600!important;font-variant-numeric:tabular-nums;}
+ .ui-page [data-ui~="statsSection"] {gap:12px!important;}
+ .ui-page [data-ui~="statsSticky"] {background:var(--ui-canvas)!important;}
+ .ui-page :is(button,[role="button"],input,select,textarea,summary,a) {transition:none!important;}
+ .ui-page button,.login-page button,.mm-calibration-controls button {min-height:34px;padding:7px 14px!important;border:1px solid var(--ui-border)!important;border-radius:6px!important;background:var(--ui-surface)!important;color:var(--ui-text)!important;box-shadow:none!important;transform:none!important;font-size:13px!important;font-weight:600!important;}
+ .ui-page button:hover:not(:disabled),.login-page button:hover:not(:disabled) {background:var(--ui-soft)!important;border-color:#9DAFBE!important;}
+ .ui-page :is([data-ui~="btnPrimary"],[data-ui~="saveBtn"],[data-ui~="newBillBtnHero"],[data-ui~="btn"],[data-ui~="btnConfirm"]),.login-btn {background:var(--ui-accent)!important;border-color:var(--ui-accent)!important;color:white!important;}
+ .ui-page :is([data-ui~="btnPrimary"],[data-ui~="saveBtn"],[data-ui~="newBillBtnHero"],[data-ui~="btn"]):hover:not(:disabled),.login-btn:hover:not(:disabled) {background:#066A76!important;color:white!important;}
+ .ui-page :is([data-ui~="periodBtnActive"],[data-ui~="viewBtnActive"],[data-ui~="fontScaleBtnActive"],[data-ui~="paymentFilterActive"]),.reports-preset-active {background:var(--ui-soft)!important;border-color:var(--ui-accent)!important;color:#066A76!important;box-shadow:none!important;}
+ .ui-page :is([data-ui~="btnDanger"],[data-ui~="btnConfirm"]) {background:var(--ui-danger)!important;border-color:var(--ui-danger)!important;color:white!important;}
+ .ui-page button:disabled {opacity:1!important;color:#657286!important;background:#F0F3F6!important;border-color:var(--ui-border)!important;}
+ .ui-page :is(input,select,textarea),.login-page :is(input,select,textarea) {font-family:var(--ui-font)!important;font-size:14px!important;line-height:1.3;min-height:36px;border:1px solid #AAB7C5!important;border-radius:6px!important;background:var(--ui-surface)!important;color:var(--ui-text)!important;padding:7px 10px!important;box-shadow:none!important;}
+ .ui-page :is(input[type="checkbox"],input[type="radio"]) {min-height:16px;width:16px;height:16px;accent-color:var(--ui-accent);padding:0!important;flex:none;}
+ .ui-page input:disabled {background:#F0F3F6!important;color:var(--ui-muted)!important;}
+ .ui-page input::placeholder,.login-page input::placeholder {color:var(--ui-muted)!important;opacity:1;}
+ :is(button,input,select,textarea,a,summary,[tabindex]):focus-visible {outline:3px solid var(--ui-accent)!important;outline-offset:3px!important;box-shadow:none!important;}
+ .app-layout aside a:focus-visible {outline-color:#7CDEE0!important;outline-offset:-2px!important;}
+ .ui-page label,.login-page label {font-size:12px!important;font-weight:600!important;color:var(--ui-muted)!important;letter-spacing:0!important;text-transform:none!important;}
+ .ui-page :is([data-ui~="label"],[data-ui~="dateLabel"],[data-ui~="statLabel"]) {color:var(--ui-muted)!important;}
+ .ui-page table:not(.mm-table):not(.referrer-a4-table) {font-size:14px!important;color:var(--ui-text);font-variant-numeric:tabular-nums;}
+ .ui-page table:not(.mm-table):not(.referrer-a4-table) :is(th,td) {text-align:left;padding:9px 12px!important;border-bottom:1px solid var(--ui-border)!important;line-height:1.45;vertical-align:middle;}
+ .ui-page table:not(.mm-table):not(.referrer-a4-table) th,[data-ui~="tableHeader"] {background:#EFF3F7!important;color:var(--ui-muted)!important;font-size:12px!important;font-weight:650!important;text-transform:none!important;letter-spacing:0!important;}
+ .ui-page :is([data-ui~="tableRow"],[data-ui~="pendingRow"],[data-ui~="pendingItem"],[data-ui~="patientItem"]) {padding:10px 14px!important;border-bottom:1px solid var(--ui-border)!important;font-size:14px!important;transform:none!important;background:var(--ui-surface)!important;}
+ .ui-page :is([data-ui~="pendingItem"],[data-ui~="patientItem"],[data-ui~="pendingRow"]):hover {background:var(--ui-soft)!important;}
+ .ui-page [data-ui~="sectionHeader"] {background:#EFF3F7!important;font-size:12px!important;letter-spacing:.03em;color:var(--ui-muted)!important;}
+ .ui-page [data-ui~="ref"] {font-size:13px!important;color:var(--ui-muted)!important;min-width:160px;max-width:400px;white-space:normal;}
+ .ui-page [data-ui~="ref"] small {font-size:12px;color:var(--ui-review);margin-top:3px;}
+ .ui-page [data-ui~="patientBar"] {background:var(--ui-surface)!important;border:1px solid var(--ui-border);border-left:3px solid var(--ui-accent);padding:14px 18px!important;margin-bottom:16px!important;border-radius:var(--ui-radius)!important;line-height:1.65;}
+ .clinical-state {display:inline-flex;align-items:center;gap:6px;margin-left:12px;padding:3px 9px;border:1px solid var(--ui-border);border-radius:4px;font-size:12px;font-weight:650;background:var(--ui-soft);color:var(--ui-text);}
+ .clinical-flag {font-weight:700;color:var(--ui-danger);}
+ .clinical-legend {font-size:12px;color:var(--ui-muted);margin:8px 0 12px;}
+ .result-entry-page {--ui-clinical-size:14px;}
+ :root[data-ui-font-scale="sm"] .result-entry-page {--ui-clinical-size:12px;}
+ :root[data-ui-font-scale="lg"] .result-entry-page {--ui-clinical-size:16px;}
+ .result-entry-page table:not(.mm-table),.result-entry-page table input,.result-entry-page [data-ui~="ref"] {font-size:var(--ui-clinical-size)!important;}
+ .ui-page [data-ui~="actions"] {display:flex;flex-wrap:wrap;gap:8px!important;padding:12px 0!important;margin-top:12px!important;background:transparent!important;border:none!important;box-shadow:none!important;}
+ .ui-page [data-ui~="progressTrack"] {height:4px!important;background:var(--ui-border)!important;}
+ .ui-page [data-ui~="progressFill"] {background:var(--ui-accent)!important;transition:none!important;}
+ .ui-page :is([data-ui~="empty"],[data-ui~="loading"],[data-ui~="emptyHint"],[data-ui~="hint"],[data-ui~="pendingPtId"],[data-ui~="pendingRef"]) {color:var(--ui-muted)!important;font-size:13px!important;}
+ .ui-page :is([data-ui~="errorBanner"],[data-ui~="loadError"]) {background:var(--ui-danger-soft)!important;border:1px solid #E8B6BE!important;color:var(--ui-danger)!important;}
+ .ui-page [data-ui~="pendingStatus"],.ui-page [data-ui~="chipDue"] {color:var(--ui-review)!important;background:var(--ui-review-soft)!important;border:1px solid #DAC59F!important;}
+ .ui-page [data-ui~="chipPaid"] {color:var(--ui-text)!important;background:#EFF3F7!important;border:1px solid var(--ui-border)!important;}
+ .reports-page [data-ui~="presetCardGrid"] {display:flex!important;flex-wrap:wrap;gap:6px!important;margin-bottom:14px!important;}
+ .reports-page [data-ui~="presetCard"] {min-height:34px!important;padding:7px 14px!important;border-radius:6px!important;}
+ .reports-page [data-ui~="filterRow"] {gap:14px!important;}
+ .reports-page [data-ui~="filterCol"]:last-child {flex:1;}
+ .reports-page [data-ui~="card"] {padding:16px 18px!important;}
+ .reports-page [data-ui~="printBtn"],.reports-page [data-ui~="previewBtn"] {background:var(--ui-surface)!important;color:var(--ui-text)!important;}
+ .reports-page .finalize-action {background:var(--ui-nav)!important;color:white!important;border-color:var(--ui-nav)!important;}
+ .reports-page .mm-print-layout {padding:10px;background:#E9EEF3;border:1px solid var(--ui-border);border-radius:8px;}
+ .report-identity {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 0;font-size:13px;color:var(--ui-muted);}
+ .report-identity strong {font-size:15px;color:var(--ui-text);}
+ .report-identity .clinical-state {margin-left:auto;}
+ .ui-page [data-ui~="barFill"] {background:var(--ui-accent)!important;}
+ .finalize-dialog {font-family:var(--ui-font);border:1px solid var(--ui-border)!important;border-radius:10px!important;box-shadow:0 20px 60px #14283F24;padding:24px!important;}
+ .finalize-dialog h2 {margin-bottom:8px;}
+ .finalize-dialog ul {padding-left:20px;margin:16px 0;}
+ .finalize-dialog li {padding:12px 0;border-top:1px solid var(--ui-border);margin:0!important;line-height:1.6;}
+ .finalize-dialog::backdrop {background:#14283F66;}
+ .finalize-dialog .confirm-action {background:var(--ui-accent)!important;color:white!important;}
+ .ui-page :is([data-ui~="modalContent"],[data-ui~="invoiceModal"]) {border:1px solid var(--ui-border)!important;border-radius:10px!important;box-shadow:0 20px 60px #14283F24!important;}
+ .ui-page [data-ui~="invoiceBody"] {background:white!important;}
+ .ui-page :is([data-ui~="invoiceHero"],[data-ui~="invoiceGrandTotalInner"]) {background:var(--ui-nav)!important;box-shadow:none!important;}
+ .ui-page [data-ui~="invoiceHeroAccent"] {display:none!important;}
+ .settings-page [data-ui~="grid"] {display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:18px!important;}
+ .settings-page [data-ui~="grid"] {align-items:start;}
+ .ui-page [data-ui~="quickLinkDesc"] {color:var(--ui-muted)!important;}
+ .ui-page [data-ui~="shortcutDesc"] {color:var(--ui-muted)!important;}
+ .settings-page [data-ui~="input"] {max-width:none!important;}
+ .settings-page [data-ui~="sectionLab"] {border-left:1px solid var(--ui-border)!important;}
+ .advanced-settings {grid-column:1/-1;background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:8px;overflow:hidden;}
+ .advanced-settings summary {padding:17px 20px;cursor:pointer;color:var(--ui-text);font-weight:650;font-size:14px;}
+ .advanced-settings summary small {display:block;font-size:12px;font-weight:400;color:var(--ui-muted);margin:4px 0 0 16px;}
+ .advanced-settings[open] summary {border-bottom:1px solid var(--ui-border);}
+ .advanced-settings .reference-editor {border:0!important;box-shadow:none!important;padding:20px!important;}
+ .advanced-settings .reference-editor {transform:none!important;transition:none!important;}
+ .ui-page :is([data-ui~="invoicePatientGrid"],[data-ui~="invoiceTestRow"],[data-ui~="invoiceV"],[data-ui~="invMetaV"]) {font-size:13px!important;}
+ .ui-page [data-ui~="invoicePatientGrid"] {grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px 14px!important;}
+ .ui-page [data-ui~="invoicePrintedBy"] {font-size:12px!important;}
+ .ui-page [data-message-type="error"],.ui-page [role="alert"] {color:var(--ui-danger)!important;}
+ .ui-page :is([data-ui~="invoiceK"],[data-ui~="invoicePatientCardTitle"],[data-ui~="referrerCardPerfLabel"],[data-ui~="referrerCardLabel"]) {font-size:12px!important;color:var(--ui-muted)!important;}
+ .reference-editor {color:var(--ui-text);}
+ .reference-editor p {font-size:13px;line-height:1.5;color:var(--ui-muted);}
+ .reference-fields {gap:14px!important;}
+ .reference-editor fieldset {border:1px solid var(--ui-border)!important;border-radius:6px;}
+ .reference-editor legend {color:var(--ui-muted);}
+ .login-page {background:var(--ui-canvas)!important;padding:40px!important;}
+ .login-page [data-ui~="card"] {box-shadow:0 8px 32px #14283F0A!important;border:1px solid var(--ui-border);border-top:4px solid var(--ui-nav);border-radius:12px!important;padding:36px!important;max-width:430px!important;text-align:left!important;}
+ .login-page [data-ui~="logo"] {height:54px!important;}
+ .login-page [data-ui~="labName"] {font-family:var(--ui-display);font-size:22px!important;line-height:1.3;color:var(--ui-text)!important;}
+ .login-page [data-ui~="subtitle"] {color:var(--ui-muted)!important;font-size:13px!important;margin-bottom:26px!important;}
+ .login-page .login-btn {min-height:42px;font-size:14px!important;}
+ .login-page .login-btn {background:var(--ui-accent)!important;border-color:var(--ui-accent)!important;color:white!important;}
+ .login-page .login-btn:hover:not(:disabled) {background:#066A76!important;}
+ .ui-page :is(input,select,textarea),.login-page :is(input,select,textarea) {border-color:#7C8DA1!important;}
+ .reports-page .reports-preset-active {background:var(--ui-soft)!important;border-color:var(--ui-accent)!important;color:#066A76!important;}
+ .ui-page .clinical-flag {color:var(--ui-danger)!important;}
+ .ui-page :is([data-ui~="statCardHighlight"],[data-ui~="referrerCardSection"]) {background:var(--ui-surface)!important;border:1px solid var(--ui-border)!important;border-radius:8px!important;box-shadow:none!important;color:var(--ui-text)!important;padding:16px 18px!important;}
+ .ui-page :is([data-ui~="statValueHighlight"],[data-ui~="statLabelHighlight"],[data-ui~="referrerCardName"],[data-ui~="referrerCardPerfLabel"],[data-ui~="referrerCardLabel"],[data-ui~="referrerCardHint"]) {color:var(--ui-muted)!important;opacity:1!important;}
+ .ui-page [data-ui~="statValueHighlight"] {color:var(--ui-text)!important;font-size:16px!important;}
+ .ui-page [data-ui~="referrerCardBadge"] {background:#EFF3F7!important;color:var(--ui-text)!important;box-shadow:none!important;border:1px solid var(--ui-border);}
+ .ui-page :is([data-ui~="commissionBanner"],[data-ui~="referrerCardPerf"],[data-ui~="referrerCardHint"]) {background:#EFF3F7!important;border-color:var(--ui-border)!important;}
+ .ui-page [data-ui~="commissionBanner"] {color:var(--ui-muted)!important;}
+ .ui-page [data-ui~="clickHint"] {color:var(--ui-muted)!important;}
+ .ui-page :is([data-ui~="invHero"],[data-ui~="invGrandTotal"]) {background:var(--ui-nav)!important;box-shadow:none!important;}
+ .ui-page [data-ui~="sectionHeader"]:not(tr) {background:transparent!important;}
+ .settings-page [data-ui~="sectionLab"] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+ .settings-page [data-ui~="sectionLab"] > :is([data-ui~="sectionHeader"],[data-ui~="desc"],button,[data-ui~="message"]) {grid-column:1/-1;}
+ .settings-page [data-ui~="formRow"] {margin-bottom:0!important;}
+ .settings-page [data-ui~="sectionLab"] [data-ui~="sectionHeader"] {margin-bottom:0!important;}
+ .settings-page [data-ui~="btnSecondary"] {background:white!important;color:var(--ui-text)!important;border-color:#7C8DA1!important;}
+ .advanced-danger summary {color:var(--ui-danger);}
+ .ui-page .billing-payment-chip[data-payment="paid"] {background:#EFF3F7!important;color:var(--ui-text)!important;border-color:var(--ui-border)!important;}
+ .ui-page .billing-payment-chip[data-payment="due"] {background:var(--ui-review-soft)!important;color:var(--ui-review)!important;border-color:#DAC59F!important;}
+ .login-page input {min-height:42px!important;}
+ .ui-page [data-ui~="registerCard"] {padding:22px!important;background:var(--ui-surface)!important;color:var(--ui-text)!important;max-width:620px!important;}
+ .dashboard-skeleton {animation:none!important;background:var(--ui-border)!important;}
+ .workspace-toast {background:var(--ui-surface)!important;color:var(--ui-text)!important;border:1px solid var(--ui-border)!important;border-left:4px solid var(--ui-accent)!important;box-shadow:0 4px 20px #14283F14!important;}
+ .workspace-toast[data-variant="error"] {border-left-color:var(--ui-danger)!important;}
+ .workspace-toast[data-variant="warning"] {border-left-color:var(--ui-review)!important;}
+ .workspace-toast button {color:var(--ui-muted)!important;}
+ @media(max-width:1450px) {.workspace-content{padding:24px!important;}.settings-page [data-ui~="grid"]{grid-template-columns:minmax(0,1fr)!important;}.ui-page [data-ui~="twoCol"]{gap:16px!important;}}
+ @media(max-width:900px) {.app-layout aside{width:172px!important;}.workspace-content{padding:16px!important;}.ui-page [data-ui~="filterRow"]{flex-direction:column;}.reference-fields{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+ .recovery-settings h3 {margin:18px 0 10px;}
+ .recovery-settings h3:first-child {margin-top:0;}
+ .recovery-settings label {display:block;font-weight:600;margin:12px 0 5px;}
+ .recovery-settings input {display:block;width:min(100%,420px);margin-bottom:12px;}
+ .recovery-settings button {margin:0 8px 12px 0;}
+ .recovery-settings p {margin:8px 0;line-height:1.5;color:var(--ui-muted);}
+ .recovery-settings [role="region"] {border:1px solid var(--ui-border);background:var(--ui-canvas);padding:16px;border-radius:var(--ui-radius);margin-top:12px;}
+ .recovery-settings [role="alert"] {color:var(--ui-danger);}
+ @media(prefers-reduced-motion:reduce) {*{animation:none!important;transition:none!important;scroll-behavior:auto!important;}}
+}

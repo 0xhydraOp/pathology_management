@@ -1,3 +1,4 @@
+const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
 // Optional real-browser regression. Set T001_PLAYWRIGHT_PATH to a Playwright module path.
 const fs = require('fs');
 const path = require('path');
@@ -5,6 +6,7 @@ const os = require('os');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('child_process');
 const Database = require('../electron/database');
+const {EventEmitter}=require('events');const {registerApplicationIpc}=require('../electron/applicationIpc.cjs');
 
 async function main() {
   const { chromium } = require(process.env.T001_PLAYWRIGHT_PATH || 'playwright');
@@ -16,7 +18,7 @@ async function main() {
   const baselineSource = process.env.T001_BASELINE === '1' ? path.join(root,'src/pages',`.t001-baseline-${process.pid}.jsx`) : null;
   let server, browser;
   try {
-    await db.init();
+    await db.init();if(db.credentialState().setupRequired)db.setupAdmin('admin','synthetic-admin-password');
     db.run("INSERT INTO patients(id,patient_id,name,age,sex) VALUES(9001,'SYNTHETIC','Synthetic Patient',30,'male')");
     db.run("INSERT INTO orders(id,patient_id,order_date,status) VALUES(9001,9001,'2026-10-07','pending')");
     for (const id of [9001,9002]) {
@@ -24,6 +26,7 @@ async function main() {
       db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,?)',[id]);
     }
     if (baselineSource) fs.writeFileSync(baselineSource,execFileSync('git',['show','902cebda:src/pages/ResultEntrySimple.jsx'],{cwd:root}));
+    const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:99})};await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{withLicenceIpc:true});handlers.get('db:verifyUser')(event,'admin','synthetic-admin-password');
     const component = baselineSource ? `/src/pages/${path.basename(baselineSource)}` : '/src/pages/ResultEntrySimple.jsx';
     fs.writeFileSync(harness,`<div id="root"></div><script type="module">
       import React from 'react'; import {createRoot} from 'react-dom/client';
@@ -39,11 +42,11 @@ async function main() {
     const errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     await page.exposeFunction('testDb',({method,args})=> {
-      assert.ok(['all','get','run','saveOrderResults'].includes(method));
-      return db[method](...args);
+      assert.ok(handlers.has('db:'+method));
+      return handlers.get('db:'+method)(event,...args);
     });
     await page.addInitScript(()=> {
-      window.db=Object.fromEntries(['all','get','run','saveOrderResults'].map(method=>[method,(...args)=>window.testDb({method,args})]));
+      window.db=Object.fromEntries(['read','saveOrderResults','getReferenceContext'].map(method=>[method,(...args)=>window.testDb({method,args})]));
     });
     const url=server.resolvedUrls.local[0]+path.basename(harness);
     await page.goto(url+'#/result-entry?order=9001');
@@ -77,8 +80,8 @@ async function main() {
     assert.equal(db.get('SELECT status FROM orders WHERE id=9001').status,'complete');
     await page.goto(url+'#/result-entry?order=9001');
     await page.reload();
-    await page.getByRole('button',{name:'Save & Print Report',exact:true}).click();
-    await page.waitForURL(/#\/reports\?order=9001&print=1$/);
+    await page.getByRole('button',{name:'Save & Preview Report',exact:true}).click();
+    await page.waitForURL(/#\/reports\?order=9001$/);
     assert.deepEqual(errors,[]);
     db.close();
     const reopened=new Database(dir,{migrateLegacy:false});

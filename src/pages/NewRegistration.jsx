@@ -14,8 +14,9 @@ function toLocalDateStr(d) {
 /** Age in years; supports 0 (newborn). Empty → null. Invalid → null. */
 function parseOptionalAge(raw) {
   if (raw === '' || raw == null) return null;
-  const n = parseInt(String(raw).trim(), 10);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  if (!/^\d+$/.test(String(raw).trim())) return null;
+  const n = Number(String(raw).trim());
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
 }
 
 export default function NewRegistration() {
@@ -49,8 +50,7 @@ export default function NewRegistration() {
 
   useEffect(() => {
     if (window.db) {
-      window.db
-        .all('SELECT id, code, name, section, display_order, type FROM parameters ORDER BY section, display_order')
+      window.db.read('catalogue.registrationParameters', [])
         .then((rows) => setParameters(rows || []))
         .catch(console.error)
         .finally(() => setParametersLoading(false));
@@ -123,14 +123,7 @@ export default function NewRegistration() {
     }
     referredByRef.current = q;
     const id = setTimeout(() => {
-      window.db.all(
-        `SELECT name FROM (
-          SELECT DISTINCT referred_by as name FROM patients WHERE referred_by LIKE ? AND referred_by != ''
-          UNION
-          SELECT referrer_name as name FROM referrer_commission_pct WHERE referrer_name LIKE ?
-        ) ORDER BY name LIMIT 15`,
-        [`%${q}%`, `%${q}%`]
-      ).then((rows) => {
+      window.db.read('registration.referrerSuggestions', [`%${q}%`, `%${q}%`]).then((rows) => {
         if (referredByRef.current === q) setReferrerSuggestions((rows || []).map((r) => r.name));
       }).catch(() => {
         if (referredByRef.current === q) setReferrerSuggestions([]);
@@ -160,45 +153,8 @@ export default function NewRegistration() {
     setSaving(true);
     try {
       const refStored = normalizeReferrerName(form.referred_by);
-      const patientId = await window.db.nextPatientId();
-      const patientRes = await window.db.run(
-        `INSERT INTO patients (patient_id, name, age, sex, phone, address, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          patientId,
-          form.name.trim(),
-          parseOptionalAge(form.age),
-          form.sex,
-          form.phone || null,
-          form.address || null,
-          refStored,
-        ]
-      );
-      const pid = patientRes?.lastInsertRowid ?? (await window.db.get('SELECT id FROM patients WHERE patient_id = ?', [patientId]))?.id;
-      if (!pid) {
-        showToast('Could not save patient record. Please try again.', 'error');
-        return;
-      }
-
-      const orderDate = toLocalDateStr(new Date());
-      const orderRes = await window.db.run(
-        `INSERT INTO orders (patient_id, referring_doctor, order_date, status) VALUES (?, ?, ?, 'pending')`,
-        [pid, refStored, orderDate]
-      );
-      const orderId = orderRes?.lastInsertRowid ?? (await window.db.get('SELECT id FROM orders WHERE patient_id = ? ORDER BY id DESC LIMIT 1', [pid]))?.id;
-      if (!orderId) {
-        showToast('Could not create bill for this patient. Please try again.', 'error');
-        return;
-      }
-
-      for (let i = 0; i < form.tests.length; i++) {
-        await window.db.run(`INSERT INTO order_tests (order_id, parameter_id, display_order) VALUES (?, ?, ?)`, [
-          orderId,
-          form.tests[i],
-          i + 1,
-        ]);
-      }
-
-      await window.db.computeOrderBillAndCommission(orderId);
+      const registered=await window.db.registerPatientOrder({name:form.name.trim(),age:parseOptionalAge(form.age),sex:form.sex,phone:form.phone || null,address:form.address || null,referred_by:refStored,tests:form.tests,orderDate:toLocalDateStr(new Date())});
+      const orderId=registered.orderId;
 
       setForm(emptyRegistrationForm());
       try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
@@ -211,7 +167,7 @@ export default function NewRegistration() {
       }, 600);
     } catch (err) {
       console.error(err);
-      showToast('Error saving. Please try again.', 'error');
+      showToast(err.message || 'Error saving. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -236,10 +192,10 @@ export default function NewRegistration() {
 
   if (!formVisible) {
     return (
-      <div style={styles.container}>
-        <h1 style={styles.title}>New Registration</h1>
-        <p style={styles.subtitle}>Double-click below to open the registration form.</p>
-        <div
+      <div data-ui="container" style={styles.container} className="ui-page ui-newregistration ">
+        <h1 data-ui="title" style={styles.title}>New Registration</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>Double-click below to open the registration form.</p>
+        <div data-ui="registerCard"
           className="new-register-card"
           role="button"
           tabIndex={0}
@@ -249,28 +205,28 @@ export default function NewRegistration() {
           onKeyDown={keyboardActivateHandler(() => setFormVisible(true))}
           title="Click to register new patient"
         >
-          <span style={styles.registerIcon}>⊕</span>
-          <span style={styles.registerText}>Register new patient</span>
-          <span style={styles.registerHint}>Click or double-click to open form</span>
+          <span data-ui="registerIcon" style={styles.registerIcon}>⊕</span>
+          <span data-ui="registerText" style={styles.registerText}>Register new patient</span>
+          <span data-ui="registerHint" style={styles.registerHint}>Click or double-click to open form</span>
         </div>
-        <button type="button" style={styles.addPatientBtn} onClick={() => setFormVisible(true)}>+ Add patient</button>
+        <button data-ui="addPatientBtn" type="button" style={styles.addPatientBtn} onClick={() => setFormVisible(true)}>+ Add patient</button>
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>New Registration</h1>
-      <p style={styles.subtitle}>Fill patient details, referrer, and tick tests required.</p>
+    <div data-ui="container" style={styles.container} className="ui-page ui-newregistration ">
+      <h1 data-ui="title" style={styles.title}>New Registration</h1>
+      <p data-ui="subtitle" style={styles.subtitle}>Fill patient details, referrer, and tick tests required.</p>
 
-      <form style={styles.form} onSubmit={handleSubmit}>
-        <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Patient Details</h3>
-          <div style={styles.grid}>
-            <div style={styles.field}>
-              <label>Name *</label>
-              <input
-                tabIndex={1}
+      <form data-ui="form" style={styles.form} onSubmit={handleSubmit}>
+        <div data-ui="section" style={styles.section}>
+          <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Patient Details</h3>
+          <div data-ui="grid" style={styles.grid}>
+            <div data-ui="field" style={styles.field}>
+              <label htmlFor="newregistration-field-1">Name *</label>
+              <input data-ui="input" id="newregistration-field-1"
+
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -278,10 +234,10 @@ export default function NewRegistration() {
                 placeholder="Patient full name"
               />
             </div>
-            <div style={styles.field}>
-              <label>Age (years)</label>
-              <input
-                tabIndex={2}
+            <div data-ui="field" style={styles.field}>
+              <label htmlFor="newregistration-field-2">Age (years)</label>
+              <input data-ui="input" id="newregistration-field-2"
+
                 type="number"
                 value={form.age}
                 onChange={(e) => setForm({ ...form, age: e.target.value })}
@@ -290,17 +246,17 @@ export default function NewRegistration() {
                 placeholder="e.g. 45"
               />
             </div>
-            <div style={styles.field}>
-              <label>Sex</label>
-              <select tabIndex={3} value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value })} style={styles.input}>
+            <div data-ui="field" style={styles.field}>
+              <label htmlFor="newregistration-field-3">Sex</label>
+              <select data-ui="input" id="newregistration-field-3"  value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value })} style={styles.input}>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
             </div>
-            <div style={styles.field}>
-              <label>Phone</label>
-              <input
-                tabIndex={4}
+            <div data-ui="field" style={styles.field}>
+              <label htmlFor="newregistration-field-4">Phone</label>
+              <input data-ui="input" id="newregistration-field-4"
+
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 style={styles.input}
@@ -308,10 +264,10 @@ export default function NewRegistration() {
               />
             </div>
           </div>
-          <div style={styles.field}>
-            <label>Address</label>
-            <textarea
-              tabIndex={5}
+          <div data-ui="field" style={styles.field}>
+            <label htmlFor="newregistration-field-5">Address</label>
+            <textarea data-ui="input" id="newregistration-field-5"
+
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
               style={styles.input}
@@ -319,29 +275,29 @@ export default function NewRegistration() {
               placeholder="Full address"
             />
           </div>
-          <div style={styles.field}>
-            <label>Referred by</label>
-            <div style={styles.referredByWrap}>
-              <input
-                tabIndex={6}
+          <div data-ui="field" style={styles.field}>
+            <label htmlFor="newregistration-field-6">Referred by</label>
+            <div data-ui="referredByWrap" style={styles.referredByWrap}>
+              <input data-ui="input referredByInput" id="newregistration-field-6"
+
                 value={form.referred_by ?? ''}
                 onChange={(e) => setForm({ ...form, referred_by: e.target.value })}
                 style={{ ...styles.input, ...styles.referredByInput }}
                 list="referrers"
                 placeholder="Type 1–2 letters to search, or click Self for walk-in"
               />
-              <button
+              <button data-ui={['selfBtn',(form.referred_by === 'Self')?'selfBtnActive':''].filter(Boolean).join(' ')}
                 type="button"
-                tabIndex={7}
+
                 onClick={() => setForm((prev) => ({ ...prev, referred_by: prev.referred_by === 'Self' ? '' : 'Self' }))}
                 style={{ ...styles.selfBtn, ...(form.referred_by === 'Self' ? styles.selfBtnActive : {}) }}
                 title="Walk-in patient (toggle to clear)"
               >
                 Self
               </button>
-              <button
+              <button data-ui="clearBtn"
                 type="button"
-                tabIndex={8}
+
                 onClick={() => setForm({ ...form, referred_by: '' })}
                 style={styles.clearBtn}
                 title="Clear referrer"
@@ -358,28 +314,28 @@ export default function NewRegistration() {
           </div>
         </div>
 
-        <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Tests to be done</h3>
-          <p style={styles.testHint}>Tick each test required. Tests are grouped by department (same sections as in Test Prices / reports).</p>
+        <div data-ui="section" style={styles.section}>
+          <h3 data-ui="sectionTitle" style={styles.sectionTitle}>Tests to be done</h3>
+          <p data-ui="testHint" style={styles.testHint}>Tick each test required. Tests are grouped by department (same sections as in Test Prices / reports).</p>
           {!parametersLoading && parameters.length === 0 && (
-            <div style={styles.catalogueWarning}>
+            <div data-ui="catalogueWarning" style={styles.catalogueWarning}>
               <strong>No tests in the catalogue.</strong> This usually happens if the app was installed from a build that did not bundle catalogue JSON, or the catalogue was never loaded.
               <div style={{ marginTop: 10 }}>
-                Go to <button type="button" style={styles.catalogueLinkBtn} onClick={() => navigate('/settings')}>Settings</button>
-                {' '}and click <strong>Reload Catalogue</strong>. If that does not help, update the app or reinstall from a build that includes <code style={styles.codeTiny}>pathology_parameters.json</code>.
+                Go to <button data-ui="catalogueLinkBtn" type="button" style={styles.catalogueLinkBtn} onClick={() => navigate('/settings')}>Settings</button>
+                {' '}and click <strong>Reload Catalogue</strong>. If that does not help, update the app or reinstall from a build that includes <code data-ui="codeTiny" style={styles.codeTiny}>pathology_parameters.json</code>.
               </div>
             </div>
           )}
-          {parametersLoading && <p style={styles.testHint}>Loading test list…</p>}
-          <div style={styles.testGrid}>
+          {parametersLoading && <p data-ui="testHint" style={styles.testHint}>Loading test list…</p>}
+          <div data-ui="testGrid" style={styles.testGrid}>
             {orderedSections.map((sectionName) => {
               const sectionParams = testsBySection[sectionName];
               return (
-              <div key={sectionName} style={styles.testGroup}>
-                <div style={styles.testGroupTitle}>{sectionName}</div>
-                <div style={styles.testList}>
+              <div data-ui="testGroup" key={sectionName} style={styles.testGroup}>
+                <div data-ui="testGroupTitle" style={styles.testGroupTitle}>{sectionName}</div>
+                <div data-ui="testList" style={styles.testList}>
                   {sectionParams.map((p) => (
-                    <label key={p.id} style={styles.checkLabel}>
+                    <label data-ui="checkLabel" key={p.id} style={styles.checkLabel}>
                       <input
                         type="checkbox"
                         checked={form.tests.includes(p.id)}
@@ -396,14 +352,14 @@ export default function NewRegistration() {
         </div>
 
         {saveFeedback && <p style={{ color: '#0d7377', marginBottom: 12, fontSize: 14 }}>{saveFeedback}</p>}
-        <div style={styles.actions}>
-          <button tabIndex={9} type="submit" style={styles.btnPrimary} disabled={saving}>
+        <div data-ui="actions" style={styles.actions}>
+          <button data-ui="btnPrimary"  type="submit" style={styles.btnPrimary} disabled={saving}>
             {saving ? 'Saving...' : 'Save & Go to Result Entry'}
           </button>
-          <button type="button" tabIndex={10} onClick={() => setFormVisible(false)} style={styles.btnSecondary}>
+          <button data-ui="btnSecondary" type="button"  onClick={() => setFormVisible(false)} style={styles.btnSecondary}>
             Close form
           </button>
-          <button type="button" tabIndex={11} onClick={() => navigate('/')} style={styles.btnSecondary}>
+          <button data-ui="btnSecondary" type="button"  onClick={() => navigate('/')} style={styles.btnSecondary}>
             Cancel
           </button>
         </div>

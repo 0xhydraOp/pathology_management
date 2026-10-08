@@ -1,4 +1,6 @@
+import useModalFocus from '../components/useModalFocus';
 ﻿import { parseNumericResult, isValidNumericResult } from '../utils/resultValidation';
+import { selectReference, referenceFlag, referenceText, referenceRows } from '../utils/referenceIntervals';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { formatOrderDateMediumIN } from '../utils/dateDisplay';
@@ -44,23 +46,14 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
 
   useEffect(() => {
     if (!window.db) return;
-    window.db.all(`SELECT id, code, name, unit, decimal_places, min_allowed_value, max_allowed_value FROM parameters WHERE type='numeric' ORDER BY section, display_order`)
+    window.db.read('catalogue.numericParameters', [])
       .then((rows) => { setParams(rows || []); setParamsLoaded(true); });
-    window.db.all(`SELECT parameter_id, sex, min_age, max_age, low_value, high_value, critical_low, critical_high FROM parameter_ranges`)
-      .then((rows) => {
-        const map = {};
-        (rows || []).forEach((row) => {
-          if (!map[row.parameter_id]) map[row.parameter_id] = [];
-          map[row.parameter_id].push(row);
-        });
-        setRangesByParam(map);
-      });
-    window.db.all(
-      `SELECT o.id, o.order_date, p.patient_id, p.name as patient_name, p.age, p.sex
-       FROM orders o JOIN patients p ON o.patient_id = p.id
-       WHERE o.status IN ('pending','partial')
-       ORDER BY o.order_date DESC, o.id DESC`
-    ).then((rows) => { setAllOrders(rows || []); setOrdersLoaded(true); });
+    window.db.getReferenceContext().then(context => {
+      const map = {};
+      referenceRows(context).forEach(row => { (map[row.parameter_id] ||= []).push(row); });
+      setRangesByParam(map);
+    });
+    window.db.read('results.batchOrders', []).then((rows) => { setAllOrders(rows || []); setOrdersLoaded(true); });
   }, []);
 
   useEffect(() => {
@@ -76,11 +69,7 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       setOrdersWithParam([]);
       return;
     }
-    window.db.all(
-      `SELECT o.id FROM order_tests ot JOIN orders o ON ot.order_id = o.id
-       WHERE ot.parameter_id = ? AND o.status IN ('pending','partial')`,
-      [selectedParam.id]
-    ).then((rows) => {
+    window.db.read('results.ordersForParameter', [selectedParam.id]).then((rows) => {
       const ids = new Set((rows || []).map((r) => r.id));
       setOrdersWithParam(allOrders.filter((o) => ids.has(o.id)));
     });
@@ -90,18 +79,8 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
   const currentOrder = orders[currentIdx];
 
   const getOrderRange = useCallback((order, parameterId) => {
-    const age = order?.age ?? 30;
-    const sex = order?.sex || 'any';
-    const ranges = rangesByParam[parameterId] || [];
-    let best = null;
-    ranges.forEach((r) => {
-      const match = (r.sex === 'any' || r.sex === sex) && age >= (r.min_age ?? 0) && age <= (r.max_age ?? 150);
-      if (match && (!best || (r.sex !== 'any' && best.sex === 'any'))) best = r;
-    });
-    return best
-      ? { low: best.low_value, high: best.high_value, criticalLow: best.critical_low, criticalHigh: best.critical_high }
-      : null;
-  }, [rangesByParam]);
+    return selectReference(order, rangesByParam[parameterId] || [],selectedParam?.unit || '');
+  }, [rangesByParam, selectedParam?.unit]);
 
   useEffect(() => {
     setCurrentIdx(0);
@@ -139,31 +118,31 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
 
   if (ordersLoaded && allOrders.length === 0) {
     return (
-      <div style={styles.container} className="result-entry-page">
-        <h1 style={styles.title}>Batch Entry</h1>
-        <p style={styles.subtitle}>No pending orders. Register patients and add tests first.</p>
-        <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
+      <div data-ui="container" style={styles.container} className="ui-page ui-resultentrysimple result-entry-page">
+        <h1 data-ui="title" style={styles.title}>Batch Entry</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>No pending orders. Register patients and add tests first.</p>
+        <button data-ui="btnSecondary" type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
       </div>
     );
   }
   if (paramsLoaded && params.length === 0) {
     return (
-      <div style={styles.container} className="result-entry-page">
-        <h1 style={styles.title}>Batch Entry</h1>
-        <p style={styles.subtitle}>No numeric test parameters found. Add parameters in Settings first.</p>
-        <button type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
+      <div data-ui="container" style={styles.container} className="ui-page ui-resultentrysimple result-entry-page">
+        <h1 data-ui="title" style={styles.title}>Batch Entry</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>No numeric test parameters found. Add parameters in Settings first.</p>
+        <button data-ui="btnSecondary" type="button" style={styles.btnSecondary} onClick={onClose}>Back</button>
       </div>
     );
   }
-  if (!selectedParam) return <div style={styles.loading}>Loading...</div>;
+  if (!selectedParam) return <div data-ui="loading" style={styles.loading}>Loading...</div>;
 
   return (
-    <div style={styles.container} className="result-entry-page">
-      <h1 style={styles.title}>Batch Entry â€” {selectedParam.name}</h1>
-      <p style={styles.subtitle}>Enter {selectedParam.name} for each patient. Press Enter to save and move to next.</p>
-      <div style={styles.batchToolbar}>
-        <label>Test: </label>
-        <select value={selectedParam.id} onChange={(e) => setSelectedParam(params.find((p) => p.id === parseInt(e.target.value)))} style={styles.filterSelect}>
+    <div data-ui="container" style={styles.container} className="ui-page ui-resultentrysimple result-entry-page">
+      <h1 data-ui="title" style={styles.title}>Batch Entry — {selectedParam.name}</h1>
+      <p data-ui="subtitle" style={styles.subtitle}>Enter {selectedParam.name} for each patient. Press Enter to save and move to next.</p>
+      <div data-ui="batchToolbar" style={styles.batchToolbar}>
+        <label htmlFor="resultentrysimple-field-1">Test: </label>
+        <select data-ui="filterSelect" id="resultentrysimple-field-1" value={selectedParam.id} onChange={(e) => setSelectedParam(params.find((p) => p.id === parseInt(e.target.value)))} style={styles.filterSelect}>
           {params.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -172,15 +151,18 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
       </div>
       {orders.length === 0 && <p>No pending orders have the selected test. Try another test or add orders first.</p>}
       {currentOrder && (
-        <div style={styles.card}>
-          <div style={styles.patientBar}>
-            <strong>{currentOrder.patient_name}</strong> ({currentOrder.patient_id}) â€” Order #{currentOrder.id}
+        <div data-ui="card" style={styles.card}>
+          <div data-ui="patientBar" style={styles.patientBar}>
+            <strong>{currentOrder.patient_name}</strong> ({currentOrder.patient_id}) — Order #{currentOrder.id}
           </div>
-          <div style={styles.batchInputRow}>
-            <label>{selectedParam.name} ({selectedParam.unit || 'â€”'}):</label>
-            <input
+          <p>{referenceText(getOrderRange(currentOrder, selectedParam.id))}</p>
+          {getOrderRange(currentOrder, selectedParam.id).reviewMessage && <p>{getOrderRange(currentOrder, selectedParam.id).reviewMessage}</p>}
+          <div data-ui="batchInputRow" style={styles.batchInputRow}>
+            <label htmlFor="resultentrysimple-field-2">{selectedParam.name} ({selectedParam.unit || '—'}):</label>
+            <input data-ui="input" id="resultentrysimple-field-2"
               ref={inputRef}
               type="text"
+              aria-label={`${selectedParam?.name || 'Numeric'} result for ${currentOrder?.patient_name || 'patient'}`}
               inputMode="decimal"
               value={values[currentOrder.id] ?? ''}
               onChange={(e) => setValues((v) => ({ ...v, [currentOrder.id]: e.target.value }))}
@@ -188,39 +170,19 @@ function BatchEntryMode({ onClose, loadPendingOrders }) {
               style={styles.input}
               autoFocus
             />
-            <button type="button" style={styles.btnPrimary} onClick={saveCurrentAndNext} disabled={saving}>
+            <button data-ui="btnPrimary" type="button" style={styles.btnPrimary} onClick={saveCurrentAndNext} disabled={saving}>
               {saving ? 'Saving...' : 'Save & Next'}
             </button>
           </div>
         </div>
       )}
-      <button type="button" style={styles.btnSecondary} onClick={onClose}>Cancel / Done</button>
+      <button data-ui="btnSecondary" type="button" style={styles.btnSecondary} onClick={onClose}>Cancel / Done</button>
     </div>
   );
 }
 
-function getRange(patient, ranges) {
-  if (!ranges?.length) return null;
-  const age = patient?.age ?? 30;
-  const sex = patient?.sex || 'any';
-  for (const r of ranges) {
-    if ((r.sex === 'any' || r.sex === sex) && age >= (r.min_age ?? 0) && age <= (r.max_age ?? 150)) {
-      return { low: r.low_value, high: r.high_value, criticalLow: r.critical_low, criticalHigh: r.critical_high };
-    }
-  }
-  return null;
-}
-
-function computeFlag(val, range) {
-  if (val == null || val === '' || !range) return 'N';
-  if (!isValidNumericResult(val)) return 'N';
-  const v = parseNumericResult(val);
-  if (range.criticalLow != null && v < range.criticalLow) return 'C';
-  if (range.criticalHigh != null && v > range.criticalHigh) return 'C';
-  if (range.low != null && v < range.low) return 'L';
-  if (range.high != null && v > range.high) return 'H';
-  return 'N';
-}
+function getRange(patient, ranges, unit) { return selectReference(patient,ranges,unit); }
+function computeFlag(value,range) { return referenceFlag(value,range); }
 
 function evalFormula(formula, valuesByCode) {
   try {
@@ -262,6 +224,8 @@ export default function ResultEntrySimple() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [sectionCollapsed, setSectionCollapsed] = useState({});
   const [showValidationSummary, setShowValidationSummary] = useState(false);
+  const criticalFocus=useModalFocus(Boolean(criticalPending),()=>setCriticalPending(null));
+  const validationFocus=useModalFocus(showValidationSummary,()=>setShowValidationSummary(false));
   const [batchMode, setBatchMode] = useState(false);
   const [testSearch, setTestSearch] = useState('');
 
@@ -271,16 +235,7 @@ export default function ResultEntrySimple() {
     setPendingRefreshLoading(true);
     try {
       const [dateFrom, dateTo] = getDateRangeForFilter(pendingDateFilter);
-      let sql = `SELECT o.id, o.order_date, o.status, p.patient_id, p.name as patient_name, p.referred_by
-         FROM orders o JOIN patients p ON o.patient_id = p.id
-         WHERE o.status IN ('pending','partial')`;
-      const args = [];
-      if (dateFrom && dateTo) {
-        sql += ` AND date(o.order_date) >= ? AND date(o.order_date) <= ?`;
-        args.push(dateFrom, dateTo);
-      }
-      sql += ` ORDER BY o.order_date DESC, o.id DESC`;
-      const rows = await window.db.all(sql, args);
+      const rows = await window.db.read('results.pendingOrders', {dateFrom,dateTo});
       setPendingOrders(rows || []);
     } catch (e) {
       console.error(e);
@@ -306,12 +261,7 @@ export default function ResultEntrySimple() {
     searchRef.current = q;
     const id = setTimeout(() => {
       const query = `%${q}%`;
-      window.db.all(
-        `SELECT id, patient_id, name, age, sex, referred_by FROM patients 
-         WHERE name LIKE ? OR patient_id LIKE ? OR phone LIKE ? 
-         ORDER BY created_at DESC LIMIT 30`,
-        [query, query, query]
-      ).then((rows) => {
+      window.db.read('results.patientSearch', [query, query, query]).then((rows) => {
         if (searchRef.current === q) setPatients(rows || []);
       }).catch(() => {
         if (searchRef.current === q) setPatients([]);
@@ -333,12 +283,7 @@ export default function ResultEntrySimple() {
     }
     const pid = selectedPatient.id;
     selectedPatientIdRef.current = pid;
-    window.db.all(
-      `SELECT o.id, o.order_date, o.status, o.created_at 
-       FROM orders o WHERE o.patient_id = ? 
-       ORDER BY o.created_at DESC LIMIT 20`,
-      [pid]
-    ).then((rows) => {
+    window.db.read('results.patientOrders', [pid]).then((rows) => {
       if (selectedPatientIdRef.current === pid) setOrders(rows || []);
     }).catch(() => {
       if (selectedPatientIdRef.current === pid) setOrders([]);
@@ -351,28 +296,17 @@ export default function ResultEntrySimple() {
     if (!window.db || !orderId) return;
     loadingOrderIdRef.current = orderId;
     try {
-      const ord = await window.db.get(
-        `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.referred_by 
-         FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?`,
-        [orderId]
-      );
+      const ord = await window.db.read('results.order', [orderId]);
       if (!ord || loadingOrderIdRef.current !== orderId) return;
+      ord.issued = Boolean(await window.db.read('results.issuedMarker', [orderId]));
       setOrder(ord);
       setPatient(ord);
 
-      const testRows = await window.db.all(
-        `SELECT pr.id, pr.code, pr.name, pr.unit, pr.decimal_places, pr.type, pr.section, pr.min_allowed_value, pr.max_allowed_value, ot.display_order
-         FROM order_tests ot JOIN parameters pr ON ot.parameter_id = pr.id
-         WHERE ot.order_id = ? ORDER BY pr.section, pr.display_order, ot.display_order`,
-        [orderId]
-      );
+      const testRows = await window.db.read('results.orderedTests', [orderId]);
       if (loadingOrderIdRef.current !== orderId) return;
       setTests(testRows || []);
 
-      const existing = await window.db.all(
-        'SELECT parameter_id, result_value, result_text, flag FROM order_results WHERE order_id = ?',
-        [orderId]
-      );
+      const existing = await window.db.read('results.savedValues', [orderId]);
       const resMap = {};
       (existing || []).forEach((r) => {
         resMap[r.parameter_id] = { value: r.result_value == null ? null : String(r.result_value), text: r.result_text, flag: r.flag };
@@ -380,19 +314,13 @@ export default function ResultEntrySimple() {
       if (loadingOrderIdRef.current !== orderId) return;
       setResults(resMap);
 
-      const rangeRows = await window.db.all(
-        `SELECT pr.id as parameter_id, prr.sex, prr.min_age, prr.max_age, prr.low_value, prr.high_value, prr.critical_low, prr.critical_high
-         FROM parameters pr JOIN parameter_ranges prr ON pr.id = prr.parameter_id`
-      );
+      const context = await window.db.getReferenceContext();
       const rangeMap = {};
-      (rangeRows || []).forEach((r) => {
-        if (!rangeMap[r.parameter_id]) rangeMap[r.parameter_id] = [];
-        rangeMap[r.parameter_id].push(r);
-      });
+      referenceRows(context).forEach(r => { (rangeMap[r.parameter_id] ||= []).push(r); });
       if (loadingOrderIdRef.current !== orderId) return;
       setRanges(rangeMap);
 
-      const formulaRows = await window.db.all('SELECT parameter_id, formula_expression, dependencies FROM formulas');
+      const formulaRows = await window.db.read('catalogue.formulas', []);
       const formulaMap = {};
       (formulaRows || []).forEach((f) => {
         formulaMap[f.parameter_id] = {
@@ -433,50 +361,50 @@ export default function ResultEntrySimple() {
   }, [selectedOrder?.id, loadOrderDetails]);
 
   const getResultDisplay = (test, visiting = new Set()) => {
-    if (visiting.has(test.id)) return { display: '—', flag: 'N', missing: true };
+    if (visiting.has(test.id)) return { display: '—', flag: '', missing: true };
     visiting = new Set(visiting).add(test.id);
     const r = results[test.id];
     if (test.type === 'derived') {
       const f = formulas[test.id];
-      if (!f) return { display: 'â€”', flag: 'N' };
+      if (!f) return { display: '—', flag: '' };
       const codeToId = {};
       tests.forEach((t) => (codeToId[t.code] = t.id));
       const vals = {};
       for (const code of f.deps) {
         const depTest = tests.find((t) => t.code === code);
-        if (!depTest) return { display: 'â€”', flag: 'N' };
+        if (!depTest) return { display: '—', flag: '' };
         let v;
         if (depTest.type === 'derived') {
           const d = getResultDisplay(depTest, visiting);
-          if (d.display === 'â€”' || (d.display && d.display.startsWith('Not calculable'))) return { display: 'â€”', flag: 'N' };
+          if (d.display === '—' || (d.display && d.display.startsWith('Not calculable'))) return { display: '—', flag: '' };
           v = d.display;
-          if (!isValidNumericResult(v)) return { display: 'â€”', flag: 'N' };
+          if (!isValidNumericResult(v)) return { display: '—', flag: '' };
         } else {
           const pid = codeToId[code];
-          if (!pid) return { display: 'â€”', flag: 'N' };
+          if (!pid) return { display: '—', flag: '' };
           v = results[pid]?.value ?? results[pid]?.text;
         }
-        if (!isValidNumericResult(v)) return { display: 'â€”', flag: 'N' };
+        if (!isValidNumericResult(v)) return { display: '—', flag: '' };
         vals[code] = v;
       }
-      if (test.code === 'LDL' && parseFloat(vals.TG) > 400) return { display: 'Not calculable (TG > 400)', flag: 'N' };
-      if (test.code === 'AGRATIO' && parseFloat(vals.GLOB) === 0) return { display: 'â€”', flag: 'N' };
+      if (test.code === 'LDL' && parseFloat(vals.TG) > 400) return { display: 'Not calculable (TG > 400)', flag: '' };
+      if (test.code === 'AGRATIO' && parseFloat(vals.GLOB) === 0) return { display: '—', flag: '' };
       const computed = evalFormula(f.expr, vals);
-      if (typeof computed !== 'number' || !Number.isFinite(computed)) return { display: 'â€”', flag: 'N' };
+      if (typeof computed !== 'number' || !Number.isFinite(computed)) return { display: '—', flag: '' };
       const dec = test.decimal_places ?? 0;
       const display = Number(computed).toFixed(dec);
-      const range = getRange(patient, ranges[test.id]);
+      const range = getRange(patient, ranges[test.id],test.unit || '');
       const flag = computeFlag(computed, range);
       return { display, flag };
     }
     const val = r?.value ?? r?.text ?? '';
-    const range = getRange(patient, ranges[test.id]);
-    const flag = r?.flag ?? computeFlag(val, range);
+    const range = getRange(patient, ranges[test.id],test.unit || '');
+    const flag = computeFlag(val, range);
     return { display: val, flag };
   };
 
   const handleChange = (paramId, value, test) => {
-    const range = getRange(patient, ranges[paramId]);
+    const range = getRange(patient, ranges[paramId],test.unit || '');
     const flag = computeFlag(value, range);
     setResults((prev) => ({
       ...prev,
@@ -493,7 +421,7 @@ export default function ResultEntrySimple() {
     const r = results[paramId];
     const value = r?.value ?? r?.text ?? '';
     if (value === '' || value == null) return;
-    const range = getRange(patient, ranges[paramId]);
+    const range = getRange(patient, ranges[paramId],test.unit || '');
     const flag = computeFlag(value, range);
     const isCritical = flag === 'C';
     if (isCritical && (range?.criticalLow != null || range?.criticalHigh != null)) {
@@ -524,8 +452,8 @@ export default function ResultEntrySimple() {
       const r = results[t.id];
       const val = r?.value ?? r?.text ?? '';
       if (val === '' || val == null) return;
-      const range = getRange(patient, ranges[t.id]);
-      const flag = r?.flag ?? computeFlag(val, range);
+      const range = getRange(patient, ranges[t.id],t.unit || '');
+      const flag = computeFlag(val, range);
       if (flag === 'C') items.push({ test: t.name, val, flag: 'Critical' });
       else if (flag === 'L' || flag === 'H') items.push({ test: t.name, val, flag: flag === 'L' ? 'Low' : 'High' });
     });
@@ -544,16 +472,12 @@ export default function ResultEntrySimple() {
       });
       const saved = await window.db.saveOrderResults(order.id, changes);
       setOrder(prev => ({ ...prev, status: saved.status }));
-      /* report_print_log: recorded in Reports.jsx (manual Print + ?print=1 auto-print) so each print action logs once. */
+      /* Reports records successful issued print requests using the authenticated actor. */
       setHasUnsavedChanges(false);
       if (doPrint) {
-        navigate(`/reports?order=${order.id}&print=1`);
+        navigate(`/reports?order=${order.id}`);
       } else if (!stayOnCurrent) {
-        const nextPending = await window.db.get(
-          `SELECT o.id FROM orders o WHERE o.status IN ('pending','partial') AND o.id != ?
-           ORDER BY o.order_date DESC, o.id DESC LIMIT 1`,
-          [order.id]
-        );
+        const nextPending = await window.db.read('results.nextOrder', [order.id]);
         if (nextPending) {
           loadOrderDetails(nextPending.id);
         } else {
@@ -604,11 +528,7 @@ export default function ResultEntrySimple() {
     else if (action === 'saveAndNext') performSave(false, false);
   };
 
-  const formatRange = (range) => {
-    if (!range) return '';
-    if (range.low != null && range.high != null) return `${range.low} - ${range.high}`;
-    return '';
-  };
+  const formatRange = referenceText;
 
   const goBack = () => {
     if (step === 'entry') {
@@ -648,15 +568,15 @@ export default function ResultEntrySimple() {
   // Step 1: Select patient
   if (step === 'select' && !order && !batchMode) {
     return (
-      <div style={styles.container} className="result-entry-page">
-        <h1 style={styles.title}>Enter Results & Print</h1>
-        <p style={styles.subtitle}>Select a patient whose results need to be entered, or search for a patient below.</p>
+      <div data-ui="container" style={styles.container} className="ui-page ui-resultentrysimple result-entry-page">
+        <h1 data-ui="title" style={styles.title}>Enter Results & Print</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>Select a patient whose results need to be entered, or search for a patient below.</p>
 
-        <div style={styles.card}>
-          <div style={styles.pendingHeaderRow}>
-            <h3 style={styles.cardTitle}>Patients awaiting results ({filteredPending.length})</h3>
-            <div style={styles.pendingToolbar}>
-              <select
+        <div data-ui="card" style={styles.card}>
+          <div data-ui="pendingHeaderRow" style={styles.pendingHeaderRow}>
+            <h3 data-ui="cardTitle" style={styles.cardTitle}>Patients awaiting results ({filteredPending.length})</h3>
+            <div data-ui="pendingToolbar" style={styles.pendingToolbar}>
+              <select data-ui="filterSelect"
                 value={pendingDateFilter}
                 onChange={(e) => setPendingDateFilter(e.target.value)}
                 style={styles.filterSelect}
@@ -666,42 +586,42 @@ export default function ResultEntrySimple() {
                 <option value="week">This week</option>
                 <option value="month">This month</option>
               </select>
-              <input
+              <input data-ui="pendingSearchInput"
                 type="text"
                 placeholder="Filter by name, ID, referrer..."
                 value={pendingSearch}
                 onChange={(e) => setPendingSearch(e.target.value)}
                 style={styles.pendingSearchInput}
               />
-              <button
+              <button data-ui="refreshBtn"
                 type="button"
                 style={styles.refreshBtn}
                 onClick={loadPendingOrders}
                 disabled={pendingRefreshLoading}
                 title="Refresh list"
               >
-                {pendingRefreshLoading ? 'â€¦' : 'â†»'}
+                {pendingRefreshLoading ? 'Refreshing…' : 'Refresh'}
               </button>
             </div>
           </div>
-          <p style={styles.pendingHint}>Registration and test selection done â€” click to enter results.</p>
+          <p data-ui="pendingHint" style={styles.pendingHint}>Registration and test selection done — click to enter results.</p>
           {filteredPending.length === 0 ? (
-            <div style={styles.emptyActionWrap}>
-              <div style={styles.empty}>
+            <div data-ui="emptyActionWrap" style={styles.emptyActionWrap}>
+              <div data-ui="empty" style={styles.empty}>
                 {pendingOrders.length === 0
                   ? 'No pending results. Use search below to find a patient.'
                   : 'No matches for your filter. Try a different search.'}
               </div>
               {pendingOrders.length === 0 ? (
-                <button type="button" style={styles.emptyActionBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
+                <button data-ui="emptyActionBtn" type="button" style={styles.emptyActionBtn} onClick={() => navigate('/new-registration')}>Register patient</button>
               ) : (
-                <button type="button" style={styles.emptyActionBtn} onClick={() => setPendingSearch('')}>Clear filter</button>
+                <button data-ui="emptyActionBtn" type="button" style={styles.emptyActionBtn} onClick={() => setPendingSearch('')}>Clear filter</button>
               )}
             </div>
           ) : (
-            <div style={styles.pendingList}>
+            <div data-ui="pendingList" style={styles.pendingList}>
               {filteredPending.map((o) => (
-                <div
+                <div data-ui="pendingItem"
                   key={o.id}
                   role="button"
                   tabIndex={0}
@@ -711,33 +631,33 @@ export default function ResultEntrySimple() {
                   onKeyDown={keyboardActivateHandler(() => loadOrderDetails(o.id))}
                   title="Click to enter results"
                 >
-                  <span style={styles.pendingId}>#{o.id}</span>
-                  <span style={styles.pendingName}>{o.patient_name || 'â€”'}</span>
-                  <span style={styles.pendingPtId}>{o.patient_id || 'â€”'}</span>
-                  <span style={styles.pendingRef}>{o.referred_by || 'â€”'}</span>
-                  <span style={styles.pendingDate}>
+                  <span data-ui="pendingId" style={styles.pendingId}>#{o.id}</span>
+                  <span data-ui="pendingName" style={styles.pendingName}>{o.patient_name || '—'}</span>
+                  <span data-ui="pendingPtId" style={styles.pendingPtId}>{o.patient_id || '—'}</span>
+                  <span data-ui="pendingRef" style={styles.pendingRef}>{o.referred_by || '—'}</span>
+                  <span data-ui="pendingDate" style={styles.pendingDate}>
                     {formatOrderDateMediumIN(o.order_date)}
                   </span>
-                  <span style={styles.pendingStatus}>{o.status}</span>
+                  <span data-ui="pendingStatus" style={styles.pendingStatus}>{o.status}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>1. Search & Select Patient</h3>
-          <input
-            tabIndex={1}
+        <div data-ui="card" style={styles.card}>
+          <h3 data-ui="cardTitle" style={styles.cardTitle}>1. Search & Select Patient</h3>
+          <input data-ui="searchInput"
+
             type="text"
             placeholder="Type patient name, ID, or phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={styles.searchInput}
           />
-          <div style={styles.patientList}>
+          <div data-ui="patientList" style={styles.patientList}>
             {patients.map((p) => (
-              <div
+              <div data-ui={['patientItem',(selectedPatient?.id === p.id)?'patientItemSelected':''].filter(Boolean).join(' ')}
                 key={p.id}
                 role="button"
                 tabIndex={0}
@@ -748,19 +668,19 @@ export default function ResultEntrySimple() {
                 onClick={() => setSelectedPatient(p)}
                 onKeyDown={keyboardActivateHandler(() => setSelectedPatient(p))}
               >
-                <strong>{p.patient_id}</strong> â€” {p.name} {p.age ? `(${p.age} Y)` : ''} | {p.referred_by || 'â€”'}
+                <strong>{p.patient_id}</strong> — {p.name} {p.age ? `(${p.age} Y)` : ''} | {p.referred_by || '—'}
               </div>
             ))}
-            {search.length >= 2 && patients.length === 0 && <div style={styles.empty}>No patients found</div>}
+            {search.length >= 2 && patients.length === 0 && <div data-ui="empty" style={styles.empty}>No patients found</div>}
           </div>
         </div>
 
         {selectedPatient && (
-          <div style={styles.card}>
-            <h3 style={styles.cardTitle}>2. Select Order</h3>
-            <div style={styles.orderList}>
+          <div data-ui="card" style={styles.card}>
+            <h3 data-ui="cardTitle" style={styles.cardTitle}>2. Select Order</h3>
+            <div data-ui="orderList" style={styles.orderList}>
               {orders.map((o) => (
-                <div
+                <div data-ui={['orderItem',(selectedOrder?.id === o.id)?'orderItemSelected':''].filter(Boolean).join(' ')}
                   key={o.id}
                   role="button"
                   tabIndex={0}
@@ -771,21 +691,21 @@ export default function ResultEntrySimple() {
                   onClick={() => setSelectedOrder(o)}
                   onKeyDown={keyboardActivateHandler(() => setSelectedOrder(o))}
                 >
-                  Order #{o.id} â€” {formatOrderDateMediumIN(o.order_date)} ({o.status})
+                  Order #{o.id} — {formatOrderDateMediumIN(o.order_date)} ({o.status})
                 </div>
               ))}
-              {orders.length === 0 && <div style={styles.empty}>No orders for this patient</div>}
+              {orders.length === 0 && <div data-ui="empty" style={styles.empty}>No orders for this patient</div>}
             </div>
           </div>
         )}
 
         {selectedPatient && !selectedOrder && orders.length > 0 && (
-          <p style={styles.hint}>Select an order above to enter results.</p>
+          <p data-ui="hint" style={styles.hint}>Select an order above to enter results.</p>
         )}
 
-        <div style={styles.batchModeRow}>
-          <button type="button" style={styles.batchModeBtn} onClick={() => setBatchMode(true)}>
-            âš¡ Batch entry â€” enter one test for multiple patients
+        <div data-ui="batchModeRow" style={styles.batchModeRow}>
+          <button data-ui="batchModeBtn" type="button" style={styles.batchModeBtn} onClick={() => setBatchMode(true)}>
+            Batch entry — enter one test for multiple patients
           </button>
         </div>
       </div>
@@ -833,38 +753,39 @@ export default function ResultEntrySimple() {
     : testsBySection;
 
   // Step 2: Enter results
-  if (!order) return <div style={styles.loading} className="result-entry-page">Loading...</div>;
+  if (!order) return <div data-ui="loading" style={styles.loading} className="result-entry-page">Loading...</div>;
 
   return (
-    <div style={styles.container} className="result-entry-page">
-      <h1 style={styles.title}>Enter Results â€” {patient?.patient_name}</h1>
-      <div style={styles.progressBar}>
-        <span style={styles.progressText}>{filledCount} / {tests.length} tests entered</span>
-        <div style={styles.progressTrack}>
-          <div style={{ ...styles.progressFill, width: `${tests.length ? Math.round((filledCount / tests.length) * 100) : 0}%` }} />
+    <div data-ui="container" style={styles.container} className="ui-page ui-resultentrysimple result-entry-page">
+      <h1 data-ui="title" style={styles.title}>Enter Results — {patient?.patient_name}</h1>
+      <div data-ui="progressBar" style={styles.progressBar}>
+        <span data-ui="progressText" style={styles.progressText}>{filledCount} / {tests.length} tests entered</span>
+        <div data-ui="progressTrack" style={styles.progressTrack}>
+          <div data-ui="progressFill" style={{ ...styles.progressFill, width: `${tests.length ? Math.round((filledCount / tests.length) * 100) : 0}%` }} />
         </div>
       </div>
-      <div style={styles.patientBar}>
-        <strong>{patient?.patient_name}</strong> ({patient?.pt_id}) | Age: {patient?.age ?? 'â€”'} Y | Sex: {patient?.sex === 'male' ? 'M' : patient?.sex === 'female' ? 'F' : 'â€”'} | Referred by: {patient?.referred_by || 'â€”'}
+      <div data-ui="patientBar" style={styles.patientBar}>
+        <span className="clinical-state">Order #{order.id} · {order.issued?'Issued — read only':'Draft'}</span><br/>
+        <strong>{patient?.patient_name}</strong> ({patient?.pt_id}) | Age: {patient?.age ?? '—'} Y | Sex: {patient?.sex === 'male' ? 'M' : patient?.sex === 'female' ? 'F' : '—'} | Referred by: {patient?.referred_by || '—'}
       </div>
 
       {criticalPending && (
-        <div style={styles.modal}>
-          <div style={styles.modalContent}>
+        <div data-ui="modal" style={styles.modal}>
+          <div ref={criticalFocus} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Critical value review" data-ui="modalContent" style={styles.modalContent}>
             <h3 style={{ color: '#c00', marginBottom: 12 }}>CRITICAL VALUE DETECTED</h3>
             <p>{criticalPending.test?.name}: {criticalPending.value}</p>
             <p style={{ fontSize: 12, color: '#666' }}>Please confirm this result is correct.</p>
-            <div style={styles.modalActions}>
-              <button type="button" style={styles.btnConfirm} onClick={confirmCritical}>Confirm result</button>
-              <button type="button" style={styles.btnCancel} onClick={() => setCriticalPending(null)}>Edit</button>
+            <div data-ui="modalActions" style={styles.modalActions}>
+              <button data-ui="btnConfirm" type="button" style={styles.btnConfirm} onClick={confirmCritical}>Confirm result</button>
+              <button data-ui="btnCancel" type="button" style={styles.btnCancel} onClick={() => setCriticalPending(null)}>Edit</button>
             </div>
           </div>
         </div>
       )}
 
       {showValidationSummary && (
-        <div style={styles.modal}>
-          <div style={styles.modalContent}>
+        <div data-ui="modal" style={styles.modal}>
+          <div ref={validationFocus} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Out-of-range result review" data-ui="modalContent" style={styles.modalContent}>
             <h3 style={{ marginBottom: 12 }}>Out-of-range values</h3>
             <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>The following results are outside reference range. Review before saving.</p>
             <ul style={{ marginBottom: 16, paddingLeft: 20 }}>
@@ -874,9 +795,9 @@ export default function ResultEntrySimple() {
                 </li>
               ))}
             </ul>
-            <div style={styles.modalActions}>
-              <button type="button" style={styles.btnPrimary} onClick={confirmValidationProceed}>Save anyway</button>
-              <button type="button" style={styles.btnCancel} onClick={() => setShowValidationSummary(false)}>Edit</button>
+            <div data-ui="modalActions" style={styles.modalActions}>
+              <button data-ui="btnPrimary" type="button" style={styles.btnPrimary} onClick={confirmValidationProceed}>Save anyway</button>
+              <button data-ui="btnCancel" type="button" style={styles.btnCancel} onClick={() => setShowValidationSummary(false)}>Edit</button>
             </div>
           </div>
         </div>
@@ -884,7 +805,7 @@ export default function ResultEntrySimple() {
 
       {tests.length > 6 && (
         <div style={{ marginBottom: 12 }}>
-          <input
+          <input data-ui="searchInput"
             type="text"
             placeholder="Search tests by name or code..."
             value={testSearch}
@@ -893,8 +814,8 @@ export default function ResultEntrySimple() {
           />
         </div>
       )}
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div data-ui="tableWrap" style={styles.tableWrap}>
+        <table data-ui="table" style={styles.table}>
           <thead>
             <tr>
               <th>Test</th>
@@ -909,8 +830,9 @@ export default function ResultEntrySimple() {
               const isCollapsed = sectionCollapsed[sectionName];
               return (
                 <React.Fragment key={sectionName}>
-                  <tr
+                  <tr data-ui="sectionHeader"
                     role="button"
+                    aria-expanded={!isCollapsed}
                     tabIndex={0}
                     style={styles.sectionHeader}
                     onClick={() => setSectionCollapsed((s) => ({ ...s, [sectionName]: !s[sectionName] }))}
@@ -919,22 +841,24 @@ export default function ResultEntrySimple() {
                     )}
                   >
                     <td colSpan={5} style={{ cursor: 'pointer', fontWeight: 600 }}>
-                      {isCollapsed ? 'â–¶' : 'â–¼'} {sectionName}
+                      {isCollapsed ? '▸' : '▾'} {sectionName}
                     </td>
                   </tr>
                   {!isCollapsed && sectionTests.map((test) => {
                     const derived = test.type === 'derived';
                     const disp = getResultDisplay(test);
-                    const range = getRange(patient, ranges[test.id]);
+                    const range = getRange(patient, ranges[test.id],test.unit || '');
                     return (
                       <tr key={test.id}>
                         <td>{test.name}</td>
                         <td>
                           {derived ? (
-                            <span style={styles.derived}>{disp.display}</span>
+                            <span data-ui="derived" style={styles.derived}>{disp.display}</span>
                           ) : (
-                            <input
-                              tabIndex={10 + tests.indexOf(test)}
+                            <input data-ui="input"
+                              aria-label={`${test.name} result`}
+                              disabled={order?.issued}
+
                               type="text"
                               inputMode={test.type === 'numeric' ? 'decimal' : undefined}
                               step={test.decimal_places ? Math.pow(10, -test.decimal_places) : 1}
@@ -945,9 +869,9 @@ export default function ResultEntrySimple() {
                             />
                           )}
                         </td>
-                        <td>{test.unit || 'â€”'}</td>
-                        <td style={styles.ref}>{formatRange(range)}</td>
-                        <td style={disp.flag === 'C' || disp.flag === 'L' || disp.flag === 'H' ? { color: 'red', fontWeight: 600 } : {}}>
+                        <td>{test.unit || '—'}</td>
+                        <td data-ui="ref" style={styles.ref}>{formatRange(range)}{range.reviewMessage && <small style={{display:'block'}}>{range.reviewMessage}</small>}</td>
+                        <td className={['C','L','H'].includes(disp.flag)?'clinical-flag':undefined} title={{C:'Critical',L:'Low',H:'High'}[disp.flag]} style={disp.flag === 'C' || disp.flag === 'L' || disp.flag === 'H' ? { color: 'red', fontWeight: 600 } : {}}>
                           {disp.flag}
                         </td>
                       </tr>
@@ -960,21 +884,23 @@ export default function ResultEntrySimple() {
         </table>
       </div>
 
-      <div style={styles.actions}>
-        <button type="button" tabIndex={100} style={styles.btnPrimary} onClick={handleSaveClick} disabled={saving}>
-          {saving ? 'Saving...' : 'Save & Print Report'}
+      <p className="clinical-legend">Flags: L — Low · H — High · C — Critical. Review messages remain visible beside the reference interval.</p>
+      {order?.issued && <p>This report is issued and results are read-only. <button type="button" onClick={() => navigate(`/reports?order=${order.id}`)}>View issued report</button></p>}
+      <div data-ui="actions" style={styles.actions}>
+        <button data-ui="btnPrimary" type="button"  style={styles.btnPrimary} onClick={handleSaveClick} disabled={saving || order?.issued}>
+          {saving ? 'Saving...' : 'Save & Preview Report'}
         </button>
-        <button type="button" style={styles.btnSaveOnly} onClick={() => handleSaveOnlyClick(false)} disabled={saving} title="Save without printing, stay on current order">
+        <button data-ui="btnSaveOnly" type="button" style={styles.btnSaveOnly} onClick={() => handleSaveOnlyClick(false)} disabled={saving || order?.issued} title="Save without printing, stay on current order">
           Save only
         </button>
-        <button type="button" style={styles.btnNext} onClick={() => handleSaveOnlyClick(true)} disabled={saving} title="Save and open next pending order">
-          Next pending â†’
+        <button data-ui="btnNext" type="button" style={styles.btnNext} onClick={() => handleSaveOnlyClick(true)} disabled={saving || order?.issued} title="Save and open next pending order">
+          Next pending →
         </button>
-        <button type="button" style={styles.btnSecondary} onClick={goBack}>
+        <button data-ui="btnSecondary" type="button" style={styles.btnSecondary} onClick={goBack}>
           Back to Select Patient
         </button>
       </div>
-      <p style={styles.keyboardHint}>Ctrl+S to save Â· Tab to move between fields</p>
+      <p data-ui="keyboardHint" style={styles.keyboardHint}>Ctrl+S to save · Tab to move between fields</p>
     </div>
   );
 }

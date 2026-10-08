@@ -59,7 +59,7 @@ async function main() {
   await runAsync('Database init & basic queries', async () => {
     const DatabaseManager = require(path.join(root, 'electron/database.js'));
     const db = new DatabaseManager(path.join(sandbox, 'basic'), { migrateLegacy: false });
-    await db.init();
+    await db.init();if(db.credentialState().setupRequired)db.setupAdmin('admin','synthetic-admin-password');
     const lab = db.get('SELECT name FROM lab WHERE id = 1');
     if (!lab) throw new Error('Lab config missing');
     const paramCount = db.get('SELECT COUNT(*) as c FROM parameters');

@@ -7,6 +7,7 @@ import NewRegistration from './pages/NewRegistration';
 import ResultEntrySimple from './pages/ResultEntrySimple';
 import Layout from './components/Layout';
 import ToastProvider from './components/ToastProvider';
+import LicenceSettings from './components/LicenceSettings';
 
 const Reports = lazy(() => import('./pages/Reports'));
 const Billing = lazy(() => import('./pages/Billing'));
@@ -39,15 +40,19 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    setIsLoggedIn(sessionStorage.getItem('lab_auth') === '1');
+    if (window.db?.getSession) window.db.getSession().then(user => setIsLoggedIn(Boolean(user && !user.requiresPasswordChange))).catch(() => setIsLoggedIn(false));
+    else setIsLoggedIn(sessionStorage.getItem('lab_auth') === '1');
   }, []);
 
   useEffect(() => {
     applyUiFontScale();
   }, []);
 
+  useEffect(()=>window.electronApp?.onPermissionDenied?.(message=>{if(message.includes('Sign in again.')){sessionStorage.removeItem('lab_auth');sessionStorage.removeItem('lab_user');setIsLoggedIn(false);}}),[]);
+
   const handleLogin = () => setIsLoggedIn(true);
   const handleLogout = () => {
+    window.db?.logout?.()?.catch(()=>{});
     sessionStorage.removeItem('lab_auth');
     sessionStorage.removeItem('lab_user');
     setIsLoggedIn(false);
@@ -72,6 +77,7 @@ function App() {
                 <Route path="referrer-commission" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><ReferrerCommission /></Suspense>} />
                 <Route path="rate-chart" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><RateChart /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><Settings /></Suspense>} />
+                <Route path="activation" element={<div className="ui-page"><h1>Licence & activation</h1><LicenceSettings /></div>} />
               </Route>
             </Routes>
           )}

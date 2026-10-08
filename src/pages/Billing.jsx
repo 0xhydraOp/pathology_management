@@ -1,3 +1,4 @@
+import useModalFocus from '../components/useModalFocus';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import OrderBarcode from '../components/OrderBarcode.jsx';
@@ -112,6 +113,8 @@ export default function Billing() {
     return [toLocalDateStr(start), toLocalDateStr(end)];
   }, []);
 
+  const invoiceFocus=useModalFocus(Boolean(invoiceData),closeInvoice);
+
   const loadOrders = useCallback(async () => {
     if (!window.db) {
       setLoading(false);
@@ -120,18 +123,10 @@ export default function Billing() {
     setLoading(true);
     try {
       const [start, end] = getDateRange(filter, customFrom, customTo);
-      const rows = await window.db.all(
-        `SELECT o.id, o.order_date, o.status, o.total_amount, o.payment_status, o.referring_doctor, o.access_code,
-         p.patient_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by
-         FROM orders o
-         JOIN patients p ON o.patient_id = p.id
-         WHERE date(o.order_date) >= ? AND date(o.order_date) <= ?
-         ORDER BY o.order_date DESC, o.id DESC`,
-        [start, end]
-      );
+      const rows = await window.db.read('billing.orders', [start, end]);
       const withTestCount = await Promise.all(
         (rows || []).map(async (r) => {
-          const countRow = await window.db.get('SELECT COUNT(*) as c FROM order_tests WHERE order_id = ?', [r.id]);
+          const countRow = await window.db.read('billing.testCount', [r.id]);
           return { ...r, test_count: countRow?.c ?? 0 };
         })
       );
@@ -170,16 +165,9 @@ export default function Billing() {
     if (!window.db || !order) return;
     const orderId = order.id;
     try {
-      const tests = await window.db.all(
-        `SELECT ot.parameter_id, ot.rate, ot.display_order, p.name as test_name
-         FROM order_tests ot
-         JOIN parameters p ON p.id = ot.parameter_id
-         WHERE ot.order_id = ?
-         ORDER BY ot.display_order`,
-        [orderId]
-      );
+      const tests = await window.db.read('billing.invoiceTests', [orderId]);
       const rateMap = {};
-      const rateRows = await window.db.all('SELECT parameter_id, rate FROM test_rates');
+      const rateRows = await window.db.read('billing.rates', []);
       (rateRows || []).forEach((r) => { rateMap[r.parameter_id] = parseFloat(r.rate) || 0; });
 
       const items = (tests || []).map((t) => ({
@@ -190,7 +178,7 @@ export default function Billing() {
       let accessCode = order.access_code;
       if ((!accessCode || !String(accessCode).trim()) && orderId) {
         try {
-          const ac = await window.db.get('SELECT access_code FROM orders WHERE id = ?', [orderId]);
+          const ac = await window.db.read('billing.accessCode', [orderId]);
           accessCode = ac?.access_code;
         } catch (_) {}
       }
@@ -216,10 +204,7 @@ export default function Billing() {
     setRecalcMessage('');
     try {
       const [start, end] = getDateRange(filter, customFrom, customTo);
-      const orderRows = await window.db.all(
-        'SELECT id FROM orders WHERE date(order_date) >= ? AND date(order_date) <= ?',
-        [start, end]
-      );
+      const orderRows = await window.db.read('billing.recalculationOrders', [start, end]);
       const n = (orderRows || []).length;
       for (const row of orderRows || []) {
         await window.db.computeOrderBillAndCommission(row.id);
@@ -228,14 +213,9 @@ export default function Billing() {
       const openId = invoiceOrderIdRef.current;
       if (openId && window.db) {
         try {
-          const latest = await window.db.get(
-            `SELECT o.id, o.order_date, o.status, o.total_amount, o.payment_status, o.referring_doctor, o.access_code,
-             p.patient_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by
-             FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?`,
-            [openId]
-          );
+          const latest = await window.db.read('billing.order', [openId]);
           if (latest && invoiceOrderIdRef.current === openId) {
-            const countRow = await window.db.get('SELECT COUNT(*) as c FROM order_tests WHERE order_id = ?', [openId]);
+            const countRow = await window.db.read('billing.testCount', [openId]);
             const ord = { ...latest, test_count: countRow?.c ?? 0 };
             setInvoiceOrder(ord);
             loadInvoiceData(ord);
@@ -246,7 +226,7 @@ export default function Billing() {
       setTimeout(() => setRecalcMessage(''), 4500);
     } catch (e) {
       console.error(e);
-      setRecalcMessage('Recalculate failed — try again.');
+      setRecalcMessage(e.message || 'Recalculate failed — try again.');
       setTimeout(() => setRecalcMessage(''), 4000);
     } finally {
       setRecalculating(false);
@@ -268,7 +248,7 @@ export default function Billing() {
     if (!ok) return;
     setUpdating(orderId);
     try {
-      await window.db.run('UPDATE orders SET payment_status = ? WHERE id = ?', [next, orderId]);
+      await window.db.setPaymentStatus(orderId,next);
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, payment_status: next } : o))
       );
@@ -358,15 +338,15 @@ export default function Billing() {
     : { style: styles.chipDue, label: 'Due' });
 
   return (
-    <div style={styles.container} className="billing-page">
+    <div data-ui="container" style={styles.container} className="ui-page ui-billing billing-page">
       {/* Hide list/chrome when printing invoice — avoids blank/extra pages */}
       <div className={invoiceData ? 'no-print' : ''}>
-      <div style={styles.headerTop}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>Billing</h1>
-          <p style={styles.subtitle}>Open an order to view invoice · Use table view to scan many bills fast</p>
+      <div data-ui="headerTop" style={styles.headerTop}>
+        <div data-ui="header" style={styles.header}>
+          <h1 data-ui="title" style={styles.title}>Billing</h1>
+          <p data-ui="subtitle" style={styles.subtitle}>Open an order to view invoice · Use table view to scan many bills fast</p>
         </div>
-        <button
+        <button data-ui="newBillBtnHero"
           type="button"
           style={styles.newBillBtnHero}
           onClick={() => navigate('/new-registration')}
@@ -376,10 +356,10 @@ export default function Billing() {
         </button>
       </div>
 
-      <div style={styles.toolbar}>
-        <div style={styles.periodRow}>
+      <div data-ui="toolbar" style={styles.toolbar}>
+        <div data-ui="periodRow" style={styles.periodRow}>
           {PERIODS.map((p) => (
-            <button
+            <button data-ui={['periodBtn',(filter === p.id)?'periodBtnActive':''].filter(Boolean).join(' ')}
               key={p.id}
               type="button"
               style={{ ...styles.periodBtn, ...(filter === p.id ? styles.periodBtnActive : {}) }}
@@ -391,14 +371,14 @@ export default function Billing() {
           ))}
         </div>
         {filter === 'custom' && (
-          <div style={styles.customRow}>
-            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} style={styles.dateInput} />
-            <span style={styles.dateSep}>→</span>
-            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} style={styles.dateInput} />
+          <div data-ui="customRow" style={styles.customRow}>
+            <input data-ui="dateInput" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} style={styles.dateInput} />
+            <span data-ui="dateSep" style={styles.dateSep}>→</span>
+            <input data-ui="dateInput" type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} style={styles.dateInput} />
           </div>
         )}
-        <div style={styles.searchWrap}>
-          <input
+        <div data-ui="searchWrap" style={styles.searchWrap}>
+          <input data-ui="searchInput"
             type="text"
             placeholder="Search name, ID, referrer, order #, or barcode…"
             value={search}
@@ -407,36 +387,36 @@ export default function Billing() {
             aria-label="Search bills"
           />
           {search.trim() && (
-            <button type="button" style={styles.searchClear} onClick={() => setSearch('')} aria-label="Clear search">
+            <button data-ui="searchClear" type="button" style={styles.searchClear} onClick={() => setSearch('')} aria-label="Clear search">
               ×
             </button>
           )}
         </div>
-        <button style={styles.recalcBtn} onClick={handleRecalculateAll} disabled={recalculating} title="Recalculate totals for this date range">
+        <button data-ui="recalcBtn" style={styles.recalcBtn} onClick={handleRecalculateAll} disabled={recalculating} title="Recalculate totals for this date range">
           {recalculating ? '…' : '↻ Recalc'}
         </button>
-        <div style={styles.paymentFilter} role="group" aria-label="Payment filter">
+        <div data-ui="paymentFilter" style={styles.paymentFilter} role="group" aria-label="Payment filter">
           {[
             { id: 'all', label: 'All', icon: '◆' },
             { id: 'unpaid', label: 'Unpaid', icon: '◐' },
             { id: 'paid', label: 'Paid', icon: '✓' },
           ].map((pf) => (
-            <button
+            <button data-ui={['paymentFilterBtn',(paymentFilter === pf.id)?'paymentFilterActive':''].filter(Boolean).join(' ')}
               key={pf.id}
               type="button"
               style={{ ...styles.paymentFilterBtn, ...(paymentFilter === pf.id ? styles.paymentFilterActive : {}) }}
               onClick={() => setPaymentFilter(pf.id)}
               aria-pressed={paymentFilter === pf.id}
             >
-              <span style={styles.paymentFilterIcon} aria-hidden>{pf.icon}</span> {pf.label}
+              <span data-ui="paymentFilterIcon" style={styles.paymentFilterIcon} aria-hidden>{pf.icon}</span> {pf.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div style={styles.subToolbar}>
-        <div style={styles.viewToggle} role="group" aria-label="Layout">
-          <button
+      <div data-ui="subToolbar" style={styles.subToolbar}>
+        <div data-ui="viewToggle" style={styles.viewToggle} role="group" aria-label="Layout">
+          <button data-ui={['viewBtn',(viewMode === 'cards')?'viewBtnActive':''].filter(Boolean).join(' ')}
             type="button"
             style={{ ...styles.viewBtn, ...(viewMode === 'cards' ? styles.viewBtnActive : {}) }}
             onClick={() => setViewMode('cards')}
@@ -444,7 +424,7 @@ export default function Billing() {
           >
             ▦ Cards
           </button>
-          <button
+          <button data-ui={['viewBtn',(viewMode === 'table')?'viewBtnActive':''].filter(Boolean).join(' ')}
             type="button"
             style={{ ...styles.viewBtn, ...(viewMode === 'table' ? styles.viewBtnActive : {}) }}
             onClick={() => setViewMode('table')}
@@ -453,7 +433,7 @@ export default function Billing() {
             ☰ Table
           </button>
         </div>
-        <button
+        <button data-ui={['unpaidFirstBtn',(unpaidFirst)?'unpaidFirstBtnActive':''].filter(Boolean).join(' ')}
           type="button"
           style={{ ...styles.unpaidFirstBtn, ...(unpaidFirst ? styles.unpaidFirstBtnActive : {}) }}
           onClick={() => setUnpaidFirst((v) => !v)}
@@ -464,34 +444,34 @@ export default function Billing() {
         </button>
       </div>
 
-      <div style={styles.statsSticky}>
-        <div style={styles.statsRow}>
-          <span style={styles.statHighlight}>{filteredOrders.length} orders</span>
-          <span style={styles.statDivider}>|</span>
-          <span style={styles.stat}>₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })} total</span>
-          <span style={styles.statDivider}>|</span>
-          <span style={styles.statPaid}>{paidCount} paid</span>
-          <span style={styles.statUnpaid}>{unpaidCount} due</span>
+      <div data-ui="statsSticky" style={styles.statsSticky}>
+        <div data-ui="statsRow" style={styles.statsRow}>
+          <span data-ui="statHighlight" style={styles.statHighlight}>{filteredOrders.length} orders</span>
+          <span data-ui="statDivider" style={styles.statDivider}>|</span>
+          <span data-ui="stat" style={styles.stat}>₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })} total</span>
+          <span data-ui="statDivider" style={styles.statDivider}>|</span>
+          <span data-ui="statPaid" style={styles.statPaid}>{paidCount} paid</span>
+          <span data-ui="statUnpaid" style={styles.statUnpaid}>{unpaidCount} due</span>
         </div>
-        {recalcMessage && <div style={styles.recalcToast}>{recalcMessage}</div>}
+        {recalcMessage && <div data-ui="recalcToast" style={styles.recalcToast}>{recalcMessage}</div>}
       </div>
 
       {loading ? (
-        <div style={styles.loading}>Loading...</div>
+        <div data-ui="loading" style={styles.loading}>Loading...</div>
       ) : viewMode === 'table' ? (
-        <div style={styles.tableWrap}>
+        <div data-ui="tableWrap" style={styles.tableWrap}>
           {sortedOrders.length === 0 ? (
-            <div style={styles.empty}>
-              <div style={styles.emptyTitle}>{orders.length === 0 ? 'No bills in this period' : 'No bills match your filters'}</div>
-              <p style={styles.emptyHint}>
+            <div data-ui="empty" style={styles.empty}>
+              <div data-ui="emptyTitle" style={styles.emptyTitle}>{orders.length === 0 ? 'No bills in this period' : 'No bills match your filters'}</div>
+              <p data-ui="emptyHint" style={styles.emptyHint}>
                 {orders.length === 0
                   ? 'Try a wider date range (Week / Month / Year) or register a new patient.'
                   : 'Clear the search box, set Payment to All, or widen the date range.'}
               </p>
-              <div style={styles.emptyActions}>
-                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
+              <div data-ui="emptyActions" style={styles.emptyActions}>
+                <button data-ui="emptyBtn" type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
                 {orders.length > 0 && (
-                  <button
+                  <button data-ui="emptyBtn emptyBtnSecondary"
                     type="button"
                     style={{ ...styles.emptyBtn, ...styles.emptyBtnSecondary }}
                     onClick={() => {
@@ -505,48 +485,48 @@ export default function Billing() {
               </div>
             </div>
           ) : (
-            <table style={styles.table}>
+            <table data-ui="table" style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>
-                    <button type="button" style={styles.thBtn} onClick={() => handleSort('date')}>Date {sortCol === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
+                  <th data-ui="th" style={styles.th}>
+                    <button data-ui="thBtn" type="button" style={styles.thBtn} onClick={() => handleSort('date')}>Date {sortCol === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
                   </th>
-                  <th style={styles.th}>
-                    <button type="button" style={styles.thBtn} onClick={() => handleSort('patient')}>Patient {sortCol === 'patient' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
+                  <th data-ui="th" style={styles.th}>
+                    <button data-ui="thBtn" type="button" style={styles.thBtn} onClick={() => handleSort('patient')}>Patient {sortCol === 'patient' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
                   </th>
-                  <th style={styles.th}>ID</th>
-                  <th style={styles.th}>Referrer</th>
-                  <th style={styles.th}>Tests</th>
-                  <th style={styles.th}>
-                    <button type="button" style={styles.thBtn} onClick={() => handleSort('amount')}>₹ {sortCol === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
+                  <th data-ui="th" style={styles.th}>ID</th>
+                  <th data-ui="th" style={styles.th}>Referrer</th>
+                  <th data-ui="th" style={styles.th}>Tests</th>
+                  <th data-ui="th" style={styles.th}>
+                    <button data-ui="thBtn" type="button" style={styles.thBtn} onClick={() => handleSort('amount')}>₹ {sortCol === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
                   </th>
-                  <th style={styles.th}>
-                    <button type="button" style={styles.thBtn} onClick={() => handleSort('status')}>Status {sortCol === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
+                  <th data-ui="th" style={styles.th}>
+                    <button data-ui="thBtn" type="button" style={styles.thBtn} onClick={() => handleSort('status')}>Status {sortCol === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button>
                   </th>
-                  <th style={styles.th}>Actions</th>
+                  <th data-ui="th" style={styles.th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedOrders.map((o) => {
                   const chip = paymentChip(o);
                   return (
-                    <tr
+                    <tr data-ui={[(o.payment_status !== 'paid')?'trUnpaid':'',(!(o.payment_status !== 'paid'))?'trPaid':''].filter(Boolean).join(' ')}
                       key={o.id}
                       style={o.payment_status !== 'paid' ? styles.trUnpaid : styles.trPaid}
                       onClick={() => handleViewInvoice(o, false)}
                       className="billing-table-row"
                     >
-                      <td style={styles.td}>{formatOrderDateDisplay(o.order_date)}</td>
-                      <td style={styles.td}>{o.patient_name ?? '—'}</td>
-                      <td style={styles.tdMono}>{o.patient_id}</td>
-                      <td style={styles.tdMuted}>{o.referred_by || '—'}</td>
-                      <td style={styles.td}>{o.test_count}</td>
-                      <td style={styles.tdAmount}>₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                      <td style={styles.td} onClick={(e) => e.stopPropagation()}><span style={chip.style}>{chip.label}</span></td>
-                      <td style={styles.tdActions} onClick={(e) => e.stopPropagation()}>
-                        <button type="button" style={styles.tableActionBtn} onClick={() => handleViewInvoice(o, false)}>View</button>
-                        <button type="button" style={styles.tableActionBtn} onClick={() => handleViewInvoice(o, true)}>Print</button>
-                        <button
+                      <td data-ui="td" style={styles.td}>{formatOrderDateDisplay(o.order_date)}</td>
+                      <td data-ui="td" style={styles.td}>{o.patient_name ?? '—'}</td>
+                      <td data-ui="tdMono" style={styles.tdMono}>{o.patient_id}</td>
+                      <td data-ui="tdMuted" style={styles.tdMuted}>{o.referred_by || '—'}</td>
+                      <td data-ui="td" style={styles.td}>{o.test_count}</td>
+                      <td data-ui="tdAmount" style={styles.tdAmount}>₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td data-ui="td" style={styles.td} onClick={(e) => e.stopPropagation()}><span className="billing-payment-chip" data-payment={chip.label.toLowerCase()} style={chip.style}>{chip.label}</span></td>
+                      <td data-ui="tdActions" style={styles.tdActions} onClick={(e) => e.stopPropagation()}>
+                        <button data-ui="tableActionBtn" type="button" style={styles.tableActionBtn} onClick={() => handleViewInvoice(o, false)}>View</button>
+                        <button data-ui="tableActionBtn" type="button" style={styles.tableActionBtn} onClick={() => handleViewInvoice(o, true)}>Print</button>
+                        <button data-ui="tableToggleBtn"
                           type="button"
                           style={styles.tableToggleBtn}
                           onClick={() => handlePaymentToggle(o)}
@@ -563,19 +543,19 @@ export default function Billing() {
           )}
         </div>
       ) : (
-        <div style={styles.cardGrid}>
+        <div data-ui="cardGrid" style={styles.cardGrid}>
           {sortedOrders.length === 0 ? (
-            <div style={styles.empty}>
-              <div style={styles.emptyTitle}>{orders.length === 0 ? 'No bills in this period' : 'No bills match your filters'}</div>
-              <p style={styles.emptyHint}>
+            <div data-ui="empty" style={styles.empty}>
+              <div data-ui="emptyTitle" style={styles.emptyTitle}>{orders.length === 0 ? 'No bills in this period' : 'No bills match your filters'}</div>
+              <p data-ui="emptyHint" style={styles.emptyHint}>
                 {orders.length === 0
                   ? 'Try a wider date range (Week / Month / Year) or register a new patient.'
                   : 'Clear the search box, set Payment to All, or widen the date range.'}
               </p>
-              <div style={styles.emptyActions}>
-                <button type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
+              <div data-ui="emptyActions" style={styles.emptyActions}>
+                <button data-ui="emptyBtn" type="button" style={styles.emptyBtn} onClick={() => navigate('/new-registration')}>New bill</button>
                 {orders.length > 0 && (
-                  <button
+                  <button data-ui="emptyBtn emptyBtnSecondary"
                     type="button"
                     style={{ ...styles.emptyBtn, ...styles.emptyBtnSecondary }}
                     onClick={() => {
@@ -592,7 +572,7 @@ export default function Billing() {
             sortedOrders.map((o) => {
               const chip = paymentChip(o);
               return (
-                <div
+                <div data-ui={['billingCard',(o.payment_status !== 'paid')?'billingCardUnpaid':''].filter(Boolean).join(' ')}
                   key={o.id}
                   style={{
                     ...styles.billingCard,
@@ -610,40 +590,40 @@ export default function Billing() {
                   }}
                   title="Click to view invoice"
                 >
-                  <div style={styles.cardHeader}>
-                    <span style={styles.cardPatientId}>{o.patient_id}</span>
-                    <span style={chip.style}>{chip.label}</span>
+                  <div data-ui="cardHeader" style={styles.cardHeader}>
+                    <span data-ui="cardPatientId" style={styles.cardPatientId}>{o.patient_id}</span>
+                    <span className="billing-payment-chip" data-payment={chip.label.toLowerCase()} style={chip.style}>{chip.label}</span>
                   </div>
-                  <div style={styles.cardPatientName}>{o.patient_name ?? '—'}</div>
-                  <div style={styles.cardMeta}>
+                  <div data-ui="cardPatientName" style={styles.cardPatientName}>{o.patient_name ?? '—'}</div>
+                  <div data-ui="cardMeta" style={styles.cardMeta}>
                     <span>{formatOrderDateDisplay(o.order_date)}</span>
                     <span>·</span>
                     <span>{o.test_count} tests</span>
                   </div>
                   {o.referred_by && (
-                    <div style={styles.cardReferrer}>{o.referred_by}</div>
+                    <div data-ui="cardReferrer" style={styles.cardReferrer}>{o.referred_by}</div>
                   )}
-                  <div style={styles.cardAmount}>
+                  <div data-ui="cardAmount" style={styles.cardAmount}>
                     ₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </div>
-                  <div style={styles.cardActions} onClick={(e) => e.stopPropagation()}>
-                    <button
+                  <div data-ui="cardActions" style={styles.cardActions} onClick={(e) => e.stopPropagation()}>
+                    <button data-ui="cardIconBtn"
                       type="button"
                       style={styles.cardIconBtn}
                       onClick={() => handleViewInvoice(o, false)}
                       title="View invoice"
                     >
-                      📄 View
+                      View
                     </button>
-                    <button
+                    <button data-ui="cardIconBtn"
                       type="button"
                       style={styles.cardIconBtn}
                       onClick={() => handleViewInvoice(o, true)}
                       title="Print invoice"
                     >
-                      🖨 Print
+                      Print
                     </button>
-                    <button
+                    <button data-ui="toggleBtn"
                       type="button"
                       style={styles.toggleBtn}
                       onClick={() => handlePaymentToggle(o)}
@@ -661,98 +641,98 @@ export default function Billing() {
       </div>
 
       {invoiceData && (
-        <div className="billing-invoice-overlay" style={styles.modalOverlay} onClick={closeInvoice}>
-          <div style={styles.invoiceModal} onClick={(e) => e.stopPropagation()} className="bill-invoice-print">
-            <div className="no-print" style={styles.invoiceHeader}>
+        <div data-ui="modalOverlay" className="billing-invoice-overlay" style={styles.modalOverlay} onClick={closeInvoice}>
+          <div ref={invoiceFocus} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="bill-dialog-title" data-ui="invoiceModal" style={styles.invoiceModal} onClick={(e) => e.stopPropagation()} className="bill-invoice-print">
+            <div data-ui="invoiceHeader" className="no-print" style={styles.invoiceHeader}>
               <div>
-                <h3 style={styles.invoiceTitle}>Bill Invoice</h3>
-                {invoicePrintHint && <p style={styles.invoicePrintHint}>{invoicePrintHint}</p>}
+                <h3 id="bill-dialog-title" data-ui="invoiceTitle" style={styles.invoiceTitle}>Bill Invoice</h3>
+                {invoicePrintHint && <p data-ui="invoicePrintHint" style={styles.invoicePrintHint}>{invoicePrintHint}</p>}
               </div>
-              <div style={styles.invoiceActions}>
-                <button
+              <div data-ui="invoiceActions" style={styles.invoiceActions}>
+                <button data-ui="printBtn"
                   type="button"
                   style={styles.printBtn}
                   onClick={handlePrintInvoice}
                   title="Opens PDF with preview (recommended on Windows), then print from there"
                 >
-                  🖨 Print
+                  Print
                 </button>
-                <button type="button" style={styles.closeBtn} onClick={closeInvoice}>×</button>
+                <button data-ui="closeBtn" aria-label="Close invoice" type="button" style={styles.closeBtn} onClick={closeInvoice}>×</button>
               </div>
             </div>
-            <div style={styles.invoiceBody} className="invoice-sheet-body">
-              <div style={styles.invoiceHero}>
-                <div style={styles.invoiceHeroAccent} aria-hidden />
-                <div style={styles.invoiceHeroInner}>
-                  <div style={styles.invoiceMonogram} aria-hidden>
+            <div data-ui="invoiceBody" style={styles.invoiceBody} className="invoice-sheet-body">
+              <div data-ui="invoiceHero" style={styles.invoiceHero}>
+                <div data-ui="invoiceHeroAccent" style={styles.invoiceHeroAccent} aria-hidden />
+                <div data-ui="invoiceHeroInner" style={styles.invoiceHeroInner}>
+                  <div data-ui="invoiceMonogram" style={styles.invoiceMonogram} aria-hidden>
                     {(labConfig.name || 'M').trim().charAt(0).toUpperCase() || 'M'}
                   </div>
-                  <div style={styles.invoiceHeroText}>
-                    <div style={styles.invoiceLabName}>{labConfig.name}</div>
-                    <div style={styles.invoiceContactRow}>
-                      <span style={styles.invoiceContactChip}>✉ {labConfig.email}</span>
-                      <span style={styles.invoiceContactChip}>☎ {labConfig.phone}</span>
+                  <div data-ui="invoiceHeroText" style={styles.invoiceHeroText}>
+                    <div data-ui="invoiceLabName" style={styles.invoiceLabName}>{labConfig.name}</div>
+                    <div data-ui="invoiceContactRow" style={styles.invoiceContactRow}>
+                      <span data-ui="invoiceContactChip" style={styles.invoiceContactChip}>✉ {labConfig.email}</span>
+                      <span data-ui="invoiceContactChip" style={styles.invoiceContactChip}>☎ {labConfig.phone}</span>
                     </div>
                   </div>
                 </div>
-                <div style={styles.invoiceBillBadge}>Bill invoice</div>
+                <div data-ui="invoiceBillBadge" style={styles.invoiceBillBadge}>Bill invoice</div>
               </div>
 
               {invoiceData.order.access_code && (
-                <div style={styles.invoiceBarcodeBlock}>
-                  <p style={styles.invoiceBarcodeCaption}>Scan at counter to open this report</p>
+                <div data-ui="invoiceBarcodeBlock" style={styles.invoiceBarcodeBlock}>
+                  <p data-ui="invoiceBarcodeCaption" style={styles.invoiceBarcodeCaption}>Scan at counter to open this report</p>
                   <OrderBarcode value={invoiceData.order.access_code} height={42} fontSize={10} />
                 </div>
               )}
 
-              <div style={styles.invoicePatientCard}>
-                <div style={styles.invoicePatientCardTitle}>Patient details</div>
-                <div style={styles.invoicePatientGrid}>
-                  <div style={styles.invoiceKv}>
-                    <span style={styles.invoiceK}>Patient</span>
-                    <span style={styles.invoiceV}>{invoiceData.order.patient_name ?? '—'}</span>
+              <div data-ui="invoicePatientCard" style={styles.invoicePatientCard}>
+                <div data-ui="invoicePatientCardTitle" style={styles.invoicePatientCardTitle}>Patient details</div>
+                <div data-ui="invoicePatientGrid" style={styles.invoicePatientGrid}>
+                  <div data-ui="invoiceKv" style={styles.invoiceKv}>
+                    <span data-ui="invoiceK" style={styles.invoiceK}>Patient</span>
+                    <span data-ui="invoiceV" style={styles.invoiceV}>{invoiceData.order.patient_name ?? '—'}</span>
                   </div>
-                  <div style={styles.invoiceKv}>
-                    <span style={styles.invoiceK}>Patient ID</span>
-                    <span style={styles.invoiceV}>{invoiceData.order.patient_id ?? '—'}</span>
+                  <div data-ui="invoiceKv" style={styles.invoiceKv}>
+                    <span data-ui="invoiceK" style={styles.invoiceK}>Patient ID</span>
+                    <span data-ui="invoiceV" style={styles.invoiceV}>{invoiceData.order.patient_id ?? '—'}</span>
                   </div>
-                  <div style={styles.invoiceKv}>
-                    <span style={styles.invoiceK}>Age / Sex</span>
-                    <span style={styles.invoiceV}>
+                  <div data-ui="invoiceKv" style={styles.invoiceKv}>
+                    <span data-ui="invoiceK" style={styles.invoiceK}>Age / Sex</span>
+                    <span data-ui="invoiceV" style={styles.invoiceV}>
                       {invoiceData.order.age ?? '—'} · {invoiceData.order.sex === 'male' ? 'Male' : invoiceData.order.sex === 'female' ? 'Female' : '—'}
                     </span>
                   </div>
-                  <div style={styles.invoiceKv}>
-                    <span style={styles.invoiceK}>Date</span>
-                    <span style={styles.invoiceV}>{formatOrderDateDisplay(invoiceData.order.order_date)}</span>
+                  <div data-ui="invoiceKv" style={styles.invoiceKv}>
+                    <span data-ui="invoiceK" style={styles.invoiceK}>Date</span>
+                    <span data-ui="invoiceV" style={styles.invoiceV}>{formatOrderDateDisplay(invoiceData.order.order_date)}</span>
                   </div>
                   {invoiceData.order.phone && (
-                    <div style={{ ...styles.invoiceKv, gridColumn: '1 / -1' }}>
-                      <span style={styles.invoiceK}>Phone</span>
-                      <span style={styles.invoiceV}>{invoiceData.order.phone}</span>
+                    <div data-ui="invoiceKv" style={{ ...styles.invoiceKv, gridColumn: '1 / -1' }}>
+                      <span data-ui="invoiceK" style={styles.invoiceK}>Phone</span>
+                      <span data-ui="invoiceV" style={styles.invoiceV}>{invoiceData.order.phone}</span>
                     </div>
                   )}
                   {invoiceData.order.address && (
-                    <div style={{ ...styles.invoiceKv, gridColumn: '1 / -1' }}>
-                      <span style={styles.invoiceK}>Address</span>
-                      <span style={styles.invoiceV}>{invoiceData.order.address}</span>
+                    <div data-ui="invoiceKv" style={{ ...styles.invoiceKv, gridColumn: '1 / -1' }}>
+                      <span data-ui="invoiceK" style={styles.invoiceK}>Address</span>
+                      <span data-ui="invoiceV" style={styles.invoiceV}>{invoiceData.order.address}</span>
                     </div>
                   )}
-                  <div style={{ ...styles.invoiceKv, gridColumn: '1 / -1' }}>
-                    <span style={styles.invoiceK}>Referred by</span>
-                    <span style={styles.invoiceV}>{invoiceData.order.referred_by || '—'}</span>
+                  <div data-ui="invoiceKv" style={{ ...styles.invoiceKv, gridColumn: '1 / -1' }}>
+                    <span data-ui="invoiceK" style={styles.invoiceK}>Referred by</span>
+                    <span data-ui="invoiceV" style={styles.invoiceV}>{invoiceData.order.referred_by || '—'}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bill-invoice-items-wrap" style={styles.invoiceTableWrap}>
-                <div style={styles.invoiceTableHead}>
+              <div data-ui="invoiceTableWrap" className="bill-invoice-items-wrap" style={styles.invoiceTableWrap}>
+                <div data-ui="invoiceTableHead" style={styles.invoiceTableHead}>
                   <span>Test / service</span>
                   <span style={{ textAlign: 'right' }}>Amount (₹)</span>
                 </div>
-                <div style={styles.invoiceTestList}>
+                <div data-ui="invoiceTestList" style={styles.invoiceTestList}>
                   {invoiceData.items.map((item, i) => (
-                    <div
+                    <div data-ui={['invoiceTestRow',(i % 2 === 0)?'invoiceTestRowAlt':''].filter(Boolean).join(' ')}
                       key={i}
                       className="bill-invoice-test-row"
                       style={{
@@ -760,27 +740,27 @@ export default function Billing() {
                         ...(i % 2 === 0 ? styles.invoiceTestRowAlt : {}),
                       }}
                     >
-                      <span className="bill-invoice-test-name" style={styles.invoiceTestName}>
-                        <span style={styles.invoiceTestDot} aria-hidden />
+                      <span data-ui="invoiceTestName" className="bill-invoice-test-name" style={styles.invoiceTestName}>
+                        <span data-ui="invoiceTestDot" style={styles.invoiceTestDot} aria-hidden />
                         {item.name}
                       </span>
-                      <span style={styles.invoiceTestRate}>₹{(Number(item.rate) || 0).toLocaleString('en-IN')}</span>
+                      <span data-ui="invoiceTestRate" style={styles.invoiceTestRate}>₹{(Number(item.rate) || 0).toLocaleString('en-IN')}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="bill-invoice-grand-total" style={styles.invoiceGrandTotalWrap}>
-                <div style={styles.invoiceGrandTotalInner} className="invoice-grand-total-row">
-                  <span style={styles.invoiceGrandLabel}>Grand total</span>
-                  <span style={styles.invoiceGrandAmount}>
+              <div data-ui="invoiceGrandTotalWrap" className="bill-invoice-grand-total" style={styles.invoiceGrandTotalWrap}>
+                <div data-ui="invoiceGrandTotalInner" style={styles.invoiceGrandTotalInner} className="invoice-grand-total-row">
+                  <span data-ui="invoiceGrandLabel" style={styles.invoiceGrandLabel}>Grand total</span>
+                  <span data-ui="invoiceGrandAmount" style={styles.invoiceGrandAmount}>
                     ₹{invoiceData.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </span>
                 </div>
               </div>
 
-              <div className="bill-invoice-footer" style={styles.invoicePrintedBy}>
-                <span style={styles.invoicePrintedByLine} />
+              <div data-ui="invoicePrintedBy" className="bill-invoice-footer" style={styles.invoicePrintedBy}>
+                <span data-ui="invoicePrintedByLine" style={styles.invoicePrintedByLine} />
                 Printed by <strong>{labConfig.default_printed_by}</strong> · Thank you for choosing our lab
               </div>
             </div>

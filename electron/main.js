@@ -1,15 +1,39 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, Menu, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { pathToFileURL } = require('url');
 const Database = require('./database');
 
+if (process.argv.includes('--recover-administrator')) {
+  require('./recoveryEntry.cjs').start({ app, BrowserWindow, ipcMain, dialog });
+} else {
+
+// Explicit isolated QA storage never consults the legacy lab directory.
+const isolatedArgument=process.argv.find(arg=>arg.startsWith('--isolated-data-dir='));
+let isolatedDataDir=null;
+if(isolatedArgument){
+  isolatedDataDir=isolatedArgument.slice('--isolated-data-dir='.length);
+  if(!path.isAbsolute(isolatedDataDir))throw new Error('Isolated QA data directory must be absolute');
+  isolatedDataDir=fs.realpathSync(isolatedDataDir);
+  const marker=JSON.parse(fs.readFileSync(path.join(isolatedDataDir,'synthetic-qa.json'),'utf8'));
+  if(marker.purpose!=='synthetic-packaged-qa'||path.resolve(marker.directory)!==isolatedDataDir)throw new Error('Isolated QA directory marker is invalid');
+  app.setPath('userData',isolatedDataDir);
+  app.setPath('sessionData',isolatedDataDir);
+}
+function restrictWindow(window,allowed){
+  window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+  window.webContents.on('will-navigate',(event,url)=>{if(url.split('#')[0]!==allowed)event.preventDefault();});
+  window.webContents.on('will-attach-webview',event=>event.preventDefault());
+}
 let mainWindow;
 let splashWindow;
 let previewWindow;
 let db;
-let previewPrintCopies = 1;
+const previewPrintOptions = new Map();
+const previewPermissions = new Map();
+let allowedRendererURL;
+const { nativePrintOptions, pdfPrintOptions } = require("./printOptions.cjs");
 
 /** One process = one DB file; second launch focuses the existing window (Windows/Linux). */
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -96,17 +120,17 @@ function showAboutDialog() {
   dialog.showMessageBox(parent || null, {
     type: 'info',
     title: 'About',
-    message: 'MONDAL DIAGNOSTIC CENTRE',
-    detail: `Pathology Lab Management System\n\nVersion ${app.getVersion()}`,
+    message: `Patholy Management System — v${app.getVersion()}`,
+    detail: `Patholy Management System\n\nVersion ${app.getVersion()}`,
     buttons: ['OK'],
   }).catch(() => {});
 }
 
 function createApplicationMenu() {
-  const isDev = process.env.ELECTRON_DEV === '1';
+  const isDev = !app.isPackaged && process.env.ELECTRON_DEV === '1';
   const helpSubmenu = [
     {
-      label: 'About MONDAL DIAGNOSTIC CENTRE',
+      label: 'About Patholy Management System',
       click: () => showAboutDialog(),
     },
   ];
@@ -173,7 +197,7 @@ function createSplashWindow() {
     transparent: false,
     resizable: false,
     icon: getIconPath(),
-    webPreferences: { nodeIntegration: false },
+    webPreferences: { nodeIntegration: false,contextIsolation:true,sandbox:true,devTools:!app.isPackaged },
   });
   const splashHtml = `
 <!DOCTYPE html>
@@ -184,11 +208,12 @@ function createSplashWindow() {
   .spinner{border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;width:36px;height:36px;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
-  <div class="logo">MONDAL</div>
+  <div class="logo">Patholy</div>
   <div class="sub">Pathology Lab Management System</div>
   <div class="spinner"></div>
   <div class="sub">Loading...</div>
 </body></html>`;
+  restrictWindow(splashWindow,'data:');
   splashWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(splashHtml));
   splashWindow.center();
   return splashWindow;
@@ -199,6 +224,7 @@ function createWindow() {
   const defaults = { width: 1280, height: 800, x: undefined, y: undefined };
 
   mainWindow = new BrowserWindow({
+    title: `Patholy Management System — v${app.getVersion()}`,
     width: state?.width ?? defaults.width,
     height: state?.height ?? defaults.height,
     x: state?.x,
@@ -208,6 +234,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox:true,
+      devTools:!app.isPackaged,
       preload: path.join(__dirname, 'preload.js'),
     },
     icon: getIconPath(),
@@ -217,7 +245,10 @@ function createWindow() {
   if (state?.isAlwaysOnTop) mainWindow.setAlwaysOnTop(true, 'floating');
 
   const distPath = path.join(__dirname, '../dist/index.html');
-  const useDevServer = process.env.ELECTRON_DEV === '1';
+  const useDevServer = !app.isPackaged && process.env.ELECTRON_DEV === '1';
+  if(!useDevServer && !fs.existsSync(distPath))throw new Error('Production assets are missing. Reinstall the application; no development server fallback is allowed.');
+  allowedRendererURL=useDevServer?'http://localhost:5173/':pathToFileURL(distPath).href;
+  restrictWindow(mainWindow,allowedRendererURL);
   if (useDevServer) {
     mainWindow.loadURL('http://localhost:5173');
   } else if (fs.existsSync(distPath)) {
@@ -242,33 +273,22 @@ function createWindow() {
   });
 }
 
-function doPrint(copies = 1) {
-  const win = mainWindow || BrowserWindow.getFocusedWindow();
-  if (win && win.webContents) {
-    win.webContents.print({
-      silent: false,
-      printBackground: true,
-      copies: Math.max(1, parseInt(copies, 10) || 1),
-    });
-  } else {
-    console.warn('[print] No BrowserWindow available — print skipped');
-  }
+function doPrint(copies = 1, profile) {
+  const win=mainWindow || BrowserWindow.getFocusedWindow();
+  if(!win?.webContents)return {ok:false,error:'No window'};
+  const options=nativePrintOptions(copies,profile);
+  return new Promise(resolve=>win.webContents.print(options,(ok,error)=>resolve({ok,cancelled:!ok && /cancel/i.test(error || ''),error:ok?undefined:error})));
 }
 
-async function doPrintPreview(copies = 1) {
+async function doPrintPreview(copies = 1, profile, access) {
   const win = mainWindow || BrowserWindow.getFocusedWindow();
   if (!win || !win.webContents) return { ok: false, error: 'No window' };
   let pdfPath;
   let pdfWin;
   try {
-    previewPrintCopies = Math.max(1, parseInt(copies, 10) || 1);
-    // Margins are in inches (Electron 33+ docs: webContents.printToPDF).
-    const pdfData = await win.webContents.printToPDF({
-      printBackground: true,
-      preferCSSPageSize: true,
-      pageSize: 'A4',
-      margins: { top: 0.25, bottom: 0.25, left: 0.25, right: 0.25 },
-    });
+    const windowPrintOptions = nativePrintOptions(copies,profile);
+    const options=pdfPrintOptions(profile);
+    const pdfData = await win.webContents.printToPDF(options);
     pdfPath = path.join(os.tmpdir(), `mondal-report-preview-${Date.now()}.pdf`);
     fs.writeFileSync(pdfPath, pdfData);
     const prevState = loadPreviewState();
@@ -280,27 +300,33 @@ async function doPrintPreview(copies = 1) {
       minWidth: 500,
       minHeight: 400,
       show: false,
-      title: 'Print Preview - MONDAL DIAGNOSTIC CENTRE (Ctrl+P to print)',
+      title: `Print Preview — Patholy Management System v${app.getVersion()} (Ctrl+P to print)`,
       icon: getIconPath(),
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
+        devTools:!app.isPackaged,
       },
     });
     previewWindow = pdfWin;
+    previewPrintOptions.set(pdfWin.id,windowPrintOptions);
+    if(access)previewPermissions.set(pdfWin.id,{...access,window:pdfWin});
     if (!prevState) pdfWin.center();
     pdfWin.on('close', () => {
       savePreviewState(pdfWin);
     });
     pdfWin.on('closed', () => {
-      previewWindow = null;
+      previewPrintOptions.delete(pdfWin.id);
+      previewPermissions.delete(pdfWin.id);
+      if(previewWindow===pdfWin)previewWindow = null;
       try {
         if (pdfPath) fs.unlinkSync(pdfPath);
       } catch (_) {}
     });
 
     const fileUrl = pathToFileURL(pdfPath).href;
+    restrictWindow(pdfWin,fileUrl);
     await new Promise((resolve, reject) => {
       let settled = false;
       const t = setTimeout(() => {
@@ -321,6 +347,7 @@ async function doPrintPreview(copies = 1) {
       pdfWin.loadURL(fileUrl).catch((e) => done(() => reject(e)));
     });
 
+    access?.authorize();
     pdfWin.show();
     return { ok: true };
   } catch (err) {
@@ -340,6 +367,17 @@ async function doPrintPreview(copies = 1) {
   }
 }
 
+function printFocusedWindow() {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win?.webContents && previewPrintOptions.has(win.id)) {
+      try { previewPermissions.get(win.id)?.authorize(); } catch(error) { win.destroy();return; }
+      win.webContents.print(previewPrintOptions.get(win.id));
+    } else if (mainWindow?.webContents) {
+      mainWindow.webContents.send('app:print-trigger');
+      if (win !== mainWindow) mainWindow.focus();
+    }
+}
+
 app.whenReady().then(async () => {
   const userDataDir = app.getPath('userData');
   try {
@@ -350,118 +388,68 @@ app.whenReady().then(async () => {
 
   createSplashWindow();
 
-  db = new Database(userDataDir);
-  await db.init();
+  db = new Database(userDataDir,{migrateLegacy:!isolatedDataDir});
+  try {await db.init();}catch(error){
+    const recoveryWindow=new BrowserWindow({width:740,height:500,title:`Patholy Management System — v${app.getVersion()} · Recovery`,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,devTools:!app.isPackaged}});
+    restrictWindow(recoveryWindow,'data:');splashWindow?.destroy();
+    const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    recoveryWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(`<html><body style="background:#F5F7FA;color:#18283B;font:16px Segoe UI;padding:40px"><h1>Database recovery required</h1><p>${escape(error.message)}</p><p>The original database has not been replaced. Close the app, preserve the data folder, and follow RECOVERY.md. Do not delete lab.db or create a fresh database over it.</p><p>Data folder: ${escape(userDataDir)}</p><p>Restore a verified local recovery copy with the app closed, or ask your administrator for assistance.</p></body></html>`));return;
+  }
 
-  const safeDb = (fn) => (...args) => { try { return fn(...args); } catch (e) { console.error('DB error:', e); throw e; } };
-  ipcMain.handle('db:query', (_, sql, params = []) => safeDb(db.query.bind(db))(sql, params));
-  ipcMain.handle('db:run', (_, sql, params = []) => safeDb(db.run.bind(db))(sql, params));
-  ipcMain.handle('db:get', (_, sql, params = []) => safeDb(db.get.bind(db))(sql, params));
-  ipcMain.handle('db:all', (_, sql, params = []) => safeDb(db.all.bind(db))(sql, params));
-  ipcMain.handle('db:init', () => db.init());
-  ipcMain.handle('db:saveOrderResults', (_, orderId, changes) => db.saveOrderResults(orderId, changes));
-  ipcMain.handle('db:reloadCatalogue', () => db.loadCatalogueFromJson());
-  ipcMain.handle('db:nextPatientId', () => {
-    const DatabaseManager = require('./database');
-    return DatabaseManager.getNextPatientId(db);
+  const licensing=await require('./licensingRuntime.cjs').createAppLicensing(app,safeStorage,isolatedDataDir);
+  app.on('will-quit',()=>licensing.close());
+  const {authorization:auth}=require('./applicationIpc.cjs').registerApplicationIpc(ipcMain,db,{
+    licensing,
+    isTrusted:event=>event.sender===mainWindow?.webContents && (event.senderFrame?.url || event.sender.getURL()).split('#')[0]===allowedRendererURL,
+    onRevoke:senderId=>{for(const access of [...previewPermissions.values()])if(access.senderId===senderId && !access.window.isDestroyed())access.window.destroy();},
+    chooseRestorePath:event=>dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender),{title:'Select encrypted backup to validate',defaultPath:isolatedDataDir || undefined,properties:['openFile'],filters:[{name:'Encrypted lab backup',extensions:['enc']}]}),
+    chooseBackupPath:async(event,encrypted)=>{
+      const timestamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+      return dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{title:encrypted?'Save encrypted backup on your PC':'Save backup on your PC',defaultPath:path.join(isolatedDataDir || app.getPath('desktop'),encrypted?`lab_backup_${timestamp}.db.enc`:`lab_backup_${timestamp}.db`),filters:[{name:encrypted?'Encrypted backup':'SQLite backup',extensions:[encrypted?'enc':'db']}]});
+    },
   });
-  ipcMain.handle('db:logPrint', (_, orderId, printedBy) => db.logPrint(orderId, printedBy));
-  ipcMain.handle('db:backup', () => db.backup());
-  ipcMain.handle('db:backupEncrypted', (_, password) => db.backupEncrypted(password));
-  ipcMain.handle('db:backupChooseLocation', async () => {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const defaultName = `lab_backup_${timestamp}.db`;
-    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : BrowserWindow.getFocusedWindow();
-    const { canceled, filePath } = await dialog.showSaveDialog(win || undefined, {
-      title: 'Save backup on your PC',
-      defaultPath: path.join(app.getPath('desktop'), defaultName),
-      filters: [{ name: 'SQLite backup', extensions: ['db'] }],
-    });
-    if (canceled || !filePath) return { ok: false, canceled: true };
-    try {
-      const savedPath = db.backupToPath(filePath);
-      return { ok: true, path: savedPath };
-    } catch (e) {
-      return { ok: false, error: String(e.message || e) };
-    }
-  });
-  ipcMain.handle('db:backupEncryptedChooseLocation', async (_, password) => {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const defaultName = `lab_backup_${timestamp}.db.enc`;
-    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : BrowserWindow.getFocusedWindow();
-    const { canceled, filePath } = await dialog.showSaveDialog(win || undefined, {
-      title: 'Save encrypted backup on your PC',
-      defaultPath: path.join(app.getPath('desktop'), defaultName),
-      filters: [{ name: 'Encrypted backup', extensions: ['enc'] }],
-    });
-    if (canceled || !filePath) return { ok: false, canceled: true };
-    try {
-      const savedPath = db.backupEncryptedToPath(filePath, password);
-      return { ok: true, path: savedPath };
-    } catch (e) {
-      return { ok: false, error: String(e.message || e) };
-    }
-  });
-  ipcMain.handle('db:verifyUser', (_, username, password) => db.verifyUser(username, password));
-  ipcMain.handle('db:getLabConfig', () => db.get('SELECT name, address, phone, email, registration_no, pathologist_name, default_printed_by, staff_list, clinical_correlation_text FROM lab WHERE id = 1'));
-  ipcMain.handle('db:setLabConfig', (_, cfg) => {
-    db.run(`UPDATE lab SET name=?, address=?, phone=?, email=?, registration_no=?,
-      pathologist_name=?, default_printed_by=?, staff_list=?, clinical_correlation_text=? WHERE id = 1`,
-      [cfg.name || 'MONDAL DIAGNOSTIC CENTRE', cfg.address || null, cfg.phone || null, cfg.email || null, cfg.registration_no || null,
-        cfg.pathologist_name || 'Pathologist', cfg.default_printed_by || 'Admin', cfg.staff_list || null, cfg.clinical_correlation_text || 'Please correlate clinically']);
-  });
-  ipcMain.handle('db:exportOrdersExcel', (_, params) => db.exportOrdersExcel(params));
-  ipcMain.handle('db:exportReferralsExcel', (_, params) => db.exportReferralsExcel(params));
-  ipcMain.handle('db:getDatabaseSize', () => db.getDatabaseSize());
-  ipcMain.handle('db:getLastBackupDate', () => db.getLastBackupDate());
-  ipcMain.handle('db:computeOrderBillAndCommission', (_, orderId) => db.computeOrderBillAndCommission(orderId));
-  ipcMain.handle('db:clearAllPatientData', () => {
-    try {
-      db.clearAllPatients();
-      return { ok: true };
-    } catch (e) {
-      console.error('clearAllPatientData:', e);
-      return { ok: false, error: String(e.message || e) };
-    }
-  });
-  ipcMain.handle('app:print', (_, copies) => doPrint(copies || 1));
-  ipcMain.handle('app:printPreview', (_, copies) => doPrintPreview(copies || 1));
-  ipcMain.handle('app:setTitle', (_, title) => {
+  let licenceRefreshTimer;
+  const scheduleLicenceRefresh=()=>{
+    clearTimeout(licenceRefreshTimer);if(!licensing.configured())return;
+    const status=licensing.status(),remaining=(status.offlineUntil || 0)-Date.now()/1000;
+    const seconds=status.allowed?Math.max(1,Math.min(300,Math.floor(remaining/2))):60;
+    licenceRefreshTimer=setTimeout(async()=>{try{if(licensing.data?.key)await licensing.refresh();}catch{}scheduleLicenceRefresh();},seconds*1000);
+  };
+  app.on('will-quit',()=>clearTimeout(licenceRefreshTimer));
+  require('./licensingIpc.cjs').registerLicensingIpc(ipcMain,auth,licensing,{onChange:scheduleLicenceRefresh});
+  // Startup revalidation is main-process initiated; network failure retains the
+  // signed cached allowance and cannot lengthen it or affect clinical data.
+  if(licensing.configured())void licensing.refresh().catch(()=>{}).finally(scheduleLicenceRefresh);
+  const appOperations={};
+  const appHandle=(name,permission,fn)=>{if(require('./applicationIpc.cjs').appPermissions[name]!==permission)throw new Error('Application permission mismatch');appOperations[name]=fn;};
+  appHandle('print','staff', (_, copies, profile) => doPrint(copies || 1,profile));
+  appHandle('printPreview','staff', (event,copies,profile)=>{const token=auth.lease(event);return doPrintPreview(copies || 1,profile,{senderId:event.sender.id,authorize:()=>auth.requireLease(event,token)});});
+  appHandle('setTitle','staff', (_, title) => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();
-    if (w && !w.isDestroyed()) w.setTitle(title || 'MONDAL DIAGNOSTIC CENTRE');
+    if (w && !w.isDestroyed()) w.setTitle(title || `Patholy Management System — v${app.getVersion()}`);
   });
-  ipcMain.handle('app:setAlwaysOnTop', (_, on) => {
+  appHandle('setAlwaysOnTop','staff', (_, on) => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();
     if (w && !w.isDestroyed()) w.setAlwaysOnTop(!!on, 'floating');
   });
-  ipcMain.handle('app:getAlwaysOnTop', () => {
+  appHandle('getAlwaysOnTop','staff', () => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();
     return w && !w.isDestroyed() ? w.isAlwaysOnTop() : false;
   });
-  ipcMain.handle('app:getVersion', () => app.getVersion());
-  ipcMain.handle('app:getPath', (_, name) => {
+  appHandle('getVersion','public', () => app.getVersion());
+  appHandle('getPath','admin', (_, name) => {
     try {
-      return app.getPath(name || 'userData');
+      if(name && name!=='userData')throw new Error('Only the lab data folder is exposed');
+      return app.getPath('userData');
     } catch (_) {
       return null;
     }
   });
 
+  require('./applicationIpc.cjs').registerAppIpc(ipcMain,auth,appOperations);
   createWindow();
 
-  globalShortcut.register('CommandOrControl+P', () => {
-    const win = BrowserWindow.getFocusedWindow();
-    if (win === previewWindow && win?.webContents) {
-      win.webContents.print({
-        silent: false,
-        printBackground: true,
-        copies: Math.max(1, parseInt(previewPrintCopies, 10) || 1),
-      });
-    } else if (mainWindow?.webContents) {
-      mainWindow.webContents.send('app:print-trigger');
-      if (win !== mainWindow) mainWindow.focus();
-    }
-  });
+  globalShortcut.register('CommandOrControl+P', printFocusedWindow);
 });
 
 app.on('window-all-closed', () => {
@@ -476,4 +464,6 @@ app.on('will-quit', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+
+}
 

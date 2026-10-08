@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SQL_EXCLUDE_WALK_IN_REFERRALS } from '../utils/labRules';
 
 const DEFAULT_COMMISSION = 45;
 
@@ -20,14 +19,9 @@ export default function ReferrerCommission() {
     setLoading(true);
     try {
       const [refRows, pctRows, labRow] = await Promise.all([
-        window.db.all(
-          `SELECT DISTINCT p.referred_by as name FROM patients p
-           WHERE p.referred_by IS NOT NULL AND p.referred_by != ''
-           ${SQL_EXCLUDE_WALK_IN_REFERRALS}
-           ORDER BY p.referred_by`
-        ),
-        window.db.all('SELECT referrer_name, commission_percent FROM referrer_commission_pct'),
-        window.db.get('SELECT commission_default_percent FROM lab WHERE id = 1'),
+        window.db.read('referrals.names', []),
+        window.db.read('configuration.commissions', []),
+        window.db.read('configuration.defaultCommission', []),
       ]);
       const fromPatients = new Set((refRows || []).map((r) => r.name).filter(Boolean));
       const fromPct = (pctRows || []).map((r) => r.referrer_name);
@@ -70,13 +64,7 @@ export default function ReferrerCommission() {
     setSaving(true);
     setMessage('');
     try {
-      await window.db.run('UPDATE lab SET commission_default_percent = ? WHERE id = 1', [defaultPct]);
-      for (const [name, pct] of Object.entries(commissions)) {
-        await window.db.run(
-          'INSERT OR REPLACE INTO referrer_commission_pct (referrer_name, commission_percent, updated_at) VALUES (?, ?, datetime("now"))',
-          [name, pct]
-        );
-      }
+      await window.db.setCommissions({defaultPercent:defaultPct,entries:Object.entries(commissions).map(([name,percent])=>({name,percent}))});
       setMessage('Saved');
       setTimeout(() => setMessage(''), 2500);
     } catch (e) {
@@ -97,10 +85,7 @@ export default function ReferrerCommission() {
       }
       if (!window.db) return;
       try {
-        await window.db.run(
-          'INSERT OR REPLACE INTO referrer_commission_pct (referrer_name, commission_percent, updated_at) VALUES (?, ?, datetime("now"))',
-          [n, defaultPct]
-        );
+        await window.db.setCommissions({entries:[{name:n,percent:defaultPct}]});
         setReferrers((prev) => [...prev, n].sort());
         setCommissions((prev) => ({ ...prev, [n]: defaultPct }));
         setMessage('Added');
@@ -116,32 +101,32 @@ export default function ReferrerCommission() {
     : referrers;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Referrer Commission</h1>
-        <p style={styles.subtitle}>Adjust commission % for each referrer. Default is 45% of total bill value.</p>
+    <div data-ui="container" style={styles.container} className="ui-page ui-referrercommission ">
+      <div data-ui="header" style={styles.header}>
+        <h1 data-ui="title" style={styles.title}>Referrer Commission</h1>
+        <p data-ui="subtitle" style={styles.subtitle}>Adjust commission % for each referrer. Default is 45% of total bill value.</p>
       </div>
 
-      <div style={styles.toolbar}>
-        <input
+      <div data-ui="toolbar" style={styles.toolbar}>
+        <input data-ui="searchInput"
           type="text"
           placeholder="Search referrer..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={styles.searchInput}
         />
-        <button type="button" style={styles.addBtn} onClick={handleAddReferrer}>
+        <button data-ui="addBtn" type="button" style={styles.addBtn} onClick={handleAddReferrer}>
           + Add Referrer
         </button>
-        <button type="button" style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+        <button data-ui="saveBtn" type="button" style={styles.saveBtn} onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save All'}
         </button>
-        {message && <span style={styles.message}>{message}</span>}
+        {message && <span data-message-type={message.startsWith('Error')?'error':'status'} role={message.startsWith('Error')?'alert':'status'} data-ui="message" style={styles.message}>{message}</span>}
       </div>
 
-      <div style={styles.defaultSection}>
-        <label style={styles.defaultLabel}>Default commission (for new referrers):</label>
-        <input
+      <div data-ui="defaultSection" style={styles.defaultSection}>
+        <label data-ui="defaultLabel" htmlFor="referrercommission-field-1" style={styles.defaultLabel}>Default commission (for new referrers):</label>
+        <input data-ui="percentInput" id="referrercommission-field-1"
           type="number"
           min={0}
           max={100}
@@ -150,22 +135,23 @@ export default function ReferrerCommission() {
           onChange={(e) => handleDefaultChange(e.target.value)}
           style={styles.percentInput}
         />
-        <span style={styles.percentSuffix}>%</span>
+        <span data-ui="percentSuffix" style={styles.percentSuffix}>%</span>
       </div>
 
       {loading ? (
-        <div style={styles.loading}>Loading...</div>
+        <div data-ui="loading" style={styles.loading}>Loading...</div>
       ) : (
-        <div style={styles.tableWrap}>
-          <div style={styles.tableHeader}>
+        <div data-ui="tableWrap" style={styles.tableWrap}>
+          <div data-ui="tableHeader" style={styles.tableHeader}>
             <span>Referrer</span>
             <span style={{ textAlign: 'right' }}>Commission %</span>
           </div>
           {filteredReferrers.map((name) => (
-            <div key={name} style={styles.tableRow}>
-              <span style={styles.nameCell}>{name}</span>
-              <span style={styles.inpWrap}>
-                <input
+            <div data-ui="tableRow" key={name} style={styles.tableRow}>
+              <span data-ui="nameCell" style={styles.nameCell}>{name}</span>
+              <span data-ui="inpWrap" style={styles.inpWrap}>
+                <input data-ui="percentInput"
+                  aria-label={`${name} commission percentage`}
                   type="number"
                   min={0}
                   max={100}
@@ -174,12 +160,12 @@ export default function ReferrerCommission() {
                   onChange={(e) => handleCommissionChange(name, e.target.value)}
                   style={styles.percentInput}
                 />
-                <span style={styles.percentSuffix}>%</span>
+                <span data-ui="percentSuffix" style={styles.percentSuffix}>%</span>
               </span>
             </div>
           ))}
           {filteredReferrers.length === 0 && (
-            <div style={styles.empty}>
+            <div data-ui="empty" style={styles.empty}>
               No referrers yet. Add one above or they will appear when patients are registered with a referrer.
             </div>
           )}

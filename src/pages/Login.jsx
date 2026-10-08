@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { APP_TITLE } from '../utils/product';
+import { useState, useEffect } from 'react';
 
 export default function Login({ onLogin }) {
+  const [setup, setSetup] = useState(false);
+  const [restricted,setRestricted]=useState(null);
+  const [nextPassword,setNextPassword]=useState('');
+  const [confirmation,setConfirmation]=useState('');
+  useEffect(()=>{window.db?.credentialState?.().then(s=>setSetup(s.setupRequired)).catch(e=>setError(e.message));window.db?.getSession?.().then(u=>{if(u?.requiresPasswordChange)setRestricted(u);});},[]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -13,6 +19,7 @@ export default function Login({ onLogin }) {
     let user = null;
     try {
       if (window.db?.verifyUser) {
+        if(setup || restricted){if(nextPassword!==confirmation)throw new Error('Passwords do not match');if(setup)await window.db.setupAdmin(username,nextPassword);else await window.db.changePassword(password,nextPassword);setSetup(false);setRestricted(null);setPassword('');setNextPassword('');setConfirmation('');setLoading(false);setError('Credentials saved. Sign in with your new password.');return;}
         user = await window.db.verifyUser(username, password);
       } else {
         setError('Database not available. Run with npm run electron:dev');
@@ -20,14 +27,15 @@ export default function Login({ onLogin }) {
         return;
       }
     } catch (err) {
-      setError('Database error. Please try again or restart the app.');
+      setError(err.message || 'Unable to sign in.');
       setLoading(false);
       return;
     }
     setLoading(false);
+    if(user?.requiresPasswordChange){setRestricted(user);setPassword('');return;}
     if (user) {
       sessionStorage.setItem('lab_auth', '1');
-      sessionStorage.setItem('lab_user', JSON.stringify({ username: user.username || username, displayName: user.displayName || username }));
+      sessionStorage.setItem('lab_user', JSON.stringify({ username: user.username || username, displayName: user.displayName || username, role: user.role }));
       onLogin?.();
     } else {
       setError('Invalid username or password');
@@ -35,18 +43,20 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={styles.container} className="login-page">
-      <div style={styles.card}>
-        <div style={styles.logoWrap}>
-          <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
+    <div data-ui="container" style={styles.container} className="login-page">
+      <div data-ui="card" style={styles.card}>
+        <div data-ui="logoWrap" style={styles.logoWrap}>
+          <img data-ui="logo" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
         </div>
-        <h1 style={styles.labName}>MONDAL DIAGNOSTIC CENTRE</h1>
-        <p style={styles.subtitle}>Pathology Lab Management System</p>
+        <h1 data-ui="labName" style={styles.labName}>{APP_TITLE}</h1>
+        {APP_TITLE.includes('-rc.')&&<p role="note">Activation-pending prerelease. No production activation service is configured; new registration, result editing and finalization are unavailable. Not for production lab use.</p>}
+        <p data-ui="subtitle" style={styles.subtitle}>{setup?'Create your administrator account':restricted?'Replace the legacy default password':'Pathology Lab Management System'}</p>
+        {(setup||restricted)&&<p>Use a unique password of at least 12 characters. There is no default or hidden recovery account.</p>}
 
-        <form style={styles.form} onSubmit={handleSubmit}>
-          <div style={styles.field}>
-            <label style={styles.fieldLabel}>Username</label>
-            <input
+        <form data-ui="form" style={styles.form} onSubmit={handleSubmit}>
+          {!restricted&&<div data-ui="field" style={styles.field}>
+            <label data-ui="fieldLabel" htmlFor="login-field-1" style={styles.fieldLabel}>Username</label>
+            <input data-ui="input" id="login-field-1"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -55,10 +65,10 @@ export default function Login({ onLogin }) {
               autoComplete="username"
               disabled={loading}
             />
-          </div>
-          <div style={styles.field}>
-            <label style={styles.fieldLabel}>Password</label>
-            <input
+          </div>}
+          {!setup&&<div data-ui="field" style={styles.field}>
+            <label data-ui="fieldLabel" htmlFor="login-field-2" style={styles.fieldLabel}>Password</label>
+            <input data-ui="input" id="login-field-2"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -67,17 +77,19 @@ export default function Login({ onLogin }) {
               autoComplete="current-password"
               disabled={loading}
             />
-          </div>
+          </div>}
+          {(setup||restricted)&&<><div data-ui="field"><label htmlFor="new-password">New password</label><input data-ui="input" id="new-password" type="password" autoComplete="new-password" value={nextPassword} onChange={e=>setNextPassword(e.target.value)} required minLength={12}/></div><div data-ui="field"><label htmlFor="confirm-password">Confirm new password</label><input data-ui="input" id="confirm-password" type="password" autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} required/></div></>}
           {error && (
-            <div style={styles.errorWrap}>
-              <p style={styles.error}>{error}</p>
-              <button type="button" style={styles.tryAgainBtn} onClick={() => setError('')}>Try again</button>
+            <div data-ui="errorWrap" style={styles.errorWrap}>
+              <p data-ui="error" role="alert" style={styles.error}>{error}</p>
+              <button data-ui="tryAgainBtn" type="button" style={styles.tryAgainBtn} onClick={() => setError('')}>Try again</button>
             </div>
           )}
-          <button type="submit" style={styles.btn} disabled={loading} className="login-btn">
-            {loading ? 'Logging in...' : 'Login'}
+          <button data-ui="btn" type="submit" style={styles.btn} disabled={loading} className="login-btn">
+            {loading ? 'Saving...' : setup?'Create administrator':restricted?'Replace password':'Login'}
           </button>
         </form>
+        {restricted&&<button data-ui="tryAgainBtn" type="button" onClick={async()=>{await window.db.logout();setRestricted(null);setPassword('');setNextPassword('');setConfirmation('');setError('');}}>Sign in with another account</button>}
       </div>
     </div>
   );

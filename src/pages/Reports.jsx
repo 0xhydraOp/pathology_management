@@ -1,17 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import OrderBarcode from '../components/OrderBarcode.jsx';
+import ReportPrintLayout from '../components/ReportPrintLayout.jsx';
+import printSchema from '../../electron/printProfileSchema.json';
 
 /** USB scanners type alnum + Enter — lookup order by bill barcode (orders.access_code). */
 async function fetchOrderByAccessCode(raw) {
   const q = (raw || '').trim().toUpperCase();
   if (q.length < 8 || q.length > 14 || !/^[A-Z2-9]+$/.test(q) || !window.db) return null;
-  return window.db.get(
-    `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by
-     FROM orders o JOIN patients p ON o.patient_id = p.id
-     WHERE UPPER(TRIM(COALESCE(o.access_code, ''))) = ?`,
-    [q]
-  );
+  return window.db.read('reports.byBarcode', [q]);
 }
 
 function toLocalDateStr(d) {
@@ -55,19 +51,20 @@ export default function Reports() {
   const [printCopies, setPrintCopies] = useState(1);
   const [search, setSearch] = useState('');
   const [printFeedback, setPrintFeedback] = useState('');
-  const [printMeta, setPrintMeta] = useState(null);
+  const [profile,setProfile] = useState(printSchema.defaults);
+  const [layout,setLayout] = useState({ready:false});
+  const [finalizeReview,setFinalizeReview] = useState(null);
+  const [finalizing,setFinalizing] = useState(false);
+  const [printing,setPrinting] = useState(false);
+  const finalizeDialog = useRef(null);
+  const printingRef = useRef(false);
   const searchInputRef = useRef(null);
   const autoPrintFiredRef = useRef(false);
   const today = toLocalDateStr(new Date());
   const [orderFilter, setOrderFilter] = useState({ dateFrom: today, dateTo: today });
 
-  /* Top matches @page in index.css (2in) so on-screen report aligns with pre-printed pad */
-  const margins = { top: '2in', left: 28, right: 28, bottom: 12 };
-
-  const waitForPrintRender = useCallback(async (meta) => {
-    setPrintMeta(meta);
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  }, []);
+  useEffect(() => { window.db?.getPrintProfile?.().then(setProfile).catch(e=>setPrintFeedback(e.message)); }, []);
+  useEffect(() => { if(finalizeReview) finalizeDialog.current?.showModal(); }, [finalizeReview]);
 
   useEffect(() => {
     if (window.db?.getLabConfig) {
@@ -92,13 +89,7 @@ export default function Reports() {
       return;
     }
     setOrdersLoading(true);
-    let sql = `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by 
-         FROM orders o JOIN patients p ON o.patient_id = p.id WHERE 1=1`;
-    const params = [];
-    if (orderFilter.dateFrom) { sql += ' AND date(o.order_date) >= ?'; params.push(orderFilter.dateFrom); }
-    if (orderFilter.dateTo) { sql += ' AND date(o.order_date) <= ?'; params.push(orderFilter.dateTo); }
-    sql += ' ORDER BY o.created_at DESC LIMIT 200';
-    window.db.all(sql, params.length ? params : []).then((rows) => {
+    window.db.read('reports.orders', {dateFrom:orderFilter.dateFrom,dateTo:orderFilter.dateTo}).then((rows) => {
       setOrders(rows || []);
       setOrdersLoading(false);
       // Do not setSelectedOrder from ?order= here — date refetch would override barcode pick.
@@ -118,58 +109,8 @@ export default function Reports() {
     if (!orderId || !window.db || selectedOrder) return;
     const id = parseInt(orderId, 10);
     if (isNaN(id)) return;
-    window.db.get(
-      `SELECT o.*, p.patient_id as pt_id, p.name as patient_name, p.age, p.sex, p.phone, p.address, p.referred_by 
-       FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?`,
-      [id]
-    ).then((ord) => ord && setSelectedOrder(ord)).catch(() => {});
+    window.db.read('reports.order', [id]).then((ord) => ord && setSelectedOrder(ord)).catch(() => {});
   }, [orderId, selectedOrder]);
-
-  useEffect(() => {
-    if (shouldPrint && reportData && (reportData.results?.length ?? 0) > 0 && !autoPrintFiredRef.current) {
-      autoPrintFiredRef.current = true;
-      const orderIdForReport = reportData.id;
-      const copies = printCopies;
-      const defaultBy = labConfig.default_printed_by || 'Admin';
-      const timer = setTimeout(() => {
-        void (async () => {
-          const meta = {
-            printedAt: new Date().toISOString(),
-            printedBy: (() => {
-              try {
-                const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
-                return u.displayName || u.username || defaultBy;
-              } catch (_) {
-                return defaultBy;
-              }
-            })(),
-          };
-          await waitForPrintRender(meta);
-          if (window.db?.logPrint && orderIdForReport) {
-            try {
-              await window.db.logPrint(orderIdForReport, meta.printedBy);
-            } catch (e) {
-              console.error(e);
-            }
-          }
-          if (typeof window.electronPrintPreview === 'function') {
-            const previewResult = await window.electronPrintPreview(copies);
-            if (previewResult?.ok) return;
-            console.warn('[auto-print] PDF preview failed, falling back:', previewResult?.error || 'unknown');
-          }
-          if (typeof window.electronPrint === 'function') {
-            await window.electronPrint(copies);
-            return;
-          }
-          for (let i = 0; i < copies; i++) {
-            window.print();
-            if (i < copies - 1) await new Promise((r) => setTimeout(r, 800));
-          }
-        })();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [reportData, shouldPrint, printCopies, labConfig.default_printed_by, waitForPrintRender]);
 
   const selectedOrderIdRef = useRef(null);
   useEffect(() => {
@@ -180,107 +121,63 @@ export default function Reports() {
     }
     const orderId = selectedOrder.id;
     selectedOrderIdRef.current = orderId;
-    Promise.all([
-      window.db.all(
-        `SELECT pr.id as parameter_id, pr.code, pr.name as test_name, pr.unit, pr.decimal_places, pr.section, sr.result_value, sr.result_text, sr.flag
-         FROM order_results sr
-         JOIN parameters pr ON sr.parameter_id = pr.id
-         WHERE sr.order_id = ?
-         ORDER BY pr.section, pr.display_order`,
-        [orderId]
-      ),
-      window.db.all('SELECT parameter_id, sex, min_age, max_age, low_value, high_value FROM parameter_ranges'),
-    ]).then(([results, ranges]) => {
+    window.db.getReport(orderId).then(report => {
       if (selectedOrderIdRef.current !== orderId) return;
-      const age = selectedOrder.age ?? 30;
-      const sex = selectedOrder.sex || 'any';
-      const rangeMap = {};
-      (ranges || []).forEach((r) => {
-        const match = (r.sex === 'any' || r.sex === sex) && age >= (r.min_age ?? 0) && age <= (r.max_age ?? 150);
-        if (match) {
-          const existing = rangeMap[r.parameter_id];
-          if (!existing || (r.sex !== 'any' && existing.sex === 'any')) rangeMap[r.parameter_id] = r;
-        }
-      });
-      const resultsWithRange = (results || []).map((r) => {
-        const rr = rangeMap[r.parameter_id];
-        const lo = rr?.low_value;
-        const hi = rr?.high_value;
-        const refRange = (lo != null || hi != null) ? `(${lo ?? '\u2014'} \u2013 ${hi ?? '\u2014'})` : '';
-        return { ...r, refRange };
-      });
-      setReportData({ ...selectedOrder, results: resultsWithRange });
+      setReportData(report);
     }).catch(() => {
       if (selectedOrderIdRef.current === orderId) setReportData({ ...selectedOrder, results: [] });
     });
   }, [selectedOrder]);
 
-  const getPrintedBy = () => {
-    if (printMeta?.printedBy) return printMeta.printedBy;
+  const reviewFinalize = async () => {
+    const id=reportData.id;
     try {
-      const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
-      return u.displayName || u.username || labConfig.default_printed_by || 'Admin';
-    } catch { return labConfig.default_printed_by || 'Admin'; }
+      const report=await window.db.getReport(id);
+      if(selectedOrderIdRef.current!==id)return;
+      setReportData(report);
+      if(!report.issued){setPrintFeedback('');setFinalizeReview(report);}
+    } catch(e){setPrintFeedback(e.message);}
   };
-
-  const handlePrint = useCallback(async () => {
-    if (!reportData || (reportData.results?.length ?? 0) === 0) return;
-    const printedBy = (() => {
-      try {
-        const u = JSON.parse(sessionStorage.getItem('lab_user') || '{}');
-        return u.displayName || u.username || labConfig.default_printed_by || 'Admin';
-      } catch { return labConfig.default_printed_by || 'Admin'; }
-    })();
-    await waitForPrintRender({
-      printedAt: new Date().toISOString(),
-      printedBy,
-    });
-    if (window.db) {
-      try {
-        await window.db.logPrint(reportData.id, printedBy);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    if (typeof window.electronPrintPreview === 'function') {
-      const result = await window.electronPrintPreview(printCopies);
-      if (result?.ok) {
-        setPrintFeedback('Report opened in preview — use Ctrl+P in that window to print');
-      } else {
-        setPrintFeedback(result?.error || 'Preview failed');
-      }
-      setTimeout(() => setPrintFeedback(''), 3500);
-    } else if (typeof window.electronPrint === 'function') {
-      await window.electronPrint(printCopies);
-      setPrintFeedback('Printed');
-      setTimeout(() => setPrintFeedback(''), 2500);
-    } else {
-      for (let i = 0; i < printCopies; i++) {
-        window.print();
-        if (i < printCopies - 1) await new Promise((r) => setTimeout(r, 800));
-      }
-      setPrintFeedback('Printed');
-      setTimeout(() => setPrintFeedback(''), 2500);
-    }
-  }, [reportData, printCopies, labConfig.default_printed_by, waitForPrintRender]);
-
-
-  useEffect(() => {
-    const onPrintTrigger = () => {
-      if (reportData && (reportData.results?.length ?? 0) > 0) handlePrint();
-    };
-    window.addEventListener('app-print-trigger', onPrintTrigger);
-    return () => window.removeEventListener('app-print-trigger', onPrintTrigger);
-  }, [reportData, handlePrint]);
-
-  const formatDate = (d) => {
-    if (!d) return '\u2014';
-    const x = new Date(d);
-    if (isNaN(x.getTime())) return '\u2014';
-    return `${String(x.getDate()).padStart(2, '0')}-${String(x.getMonth() + 1).padStart(2, '0')}-${x.getFullYear()} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`;
+  const finalize = async () => {
+    if(finalizing || !finalizeReview)return;
+    const id=finalizeReview.id;setFinalizing(true);
+    try {
+      const issued=await window.db.issueReport(id);
+      if(selectedOrderIdRef.current===id){setReportData(issued);setPrintFeedback('Report finalized. Issued content is preserved for reprints.');}
+      finalizeDialog.current?.close();setFinalizeReview(null);
+    } catch(e){setPrintFeedback('Report was not finalized: '+e.message);}
+    finally{setFinalizing(false);}
   };
-
-  const reportPrintedAt = printMeta?.printedAt ? new Date(printMeta.printedAt) : new Date();
+  const handlePrint = useCallback(async (preview=true) => {
+    if(!reportData?.results?.length || !layout.ready || printingRef.current || finalizing)return;
+    const id=reportData.id;printingRef.current=true;setPrinting(true);
+    try {
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      if(selectedOrderIdRef.current!==id)return;
+      let result;
+      if(preview && window.electronPrintPreview) result=await window.electronPrintPreview(printCopies,profile);
+      else if(window.electronPrint) result=await window.electronPrint(printCopies,profile);
+      else {window.print();result={ok:true};}
+      if(result?.cancelled)setPrintFeedback('Print cancelled.');
+      else if(result?.ok===false)setPrintFeedback(result.error || 'Printing failed');
+      else {
+        setPrintFeedback(preview?'Preview opened — use Ctrl+P in that window to print.':'Print dialog completed.');
+        if(!preview && reportData.issued && window.db?.logPrint){
+          await window.db.logPrint(id);
+        }
+      }
+    }catch(e){setPrintFeedback('Printing failed: '+e.message);}
+    finally{printingRef.current=false;setPrinting(false);}
+  },[reportData,layout.ready,finalizing,printCopies,profile]);
+  useEffect(()=>{
+    if(!shouldPrint || !layout.ready || autoPrintFiredRef.current)return;
+    autoPrintFiredRef.current=true;void handlePrint(true);
+  },[shouldPrint,layout.ready,handlePrint]);
+  useEffect(()=>{
+    const trigger=()=>void handlePrint(false);
+    window.addEventListener('app-print-trigger',trigger);
+    return()=>window.removeEventListener('app-print-trigger',trigger);
+  },[handlePrint]);
 
   const filteredOrders = (() => {
     const list = orders.filter((o) => {
@@ -311,30 +208,30 @@ export default function Reports() {
   })();
 
   return (
-    <div style={styles.container} className="reports-print-container reports-page">
-      <div style={styles.pageHeader} className="no-print">
-        <div style={styles.pageHeaderIcon}>ðŸ“„</div>
+    <div data-ui="container" style={styles.container} className="ui-page ui-reports reports-print-container reports-page">
+      <div data-ui="pageHeader" style={styles.pageHeader} className="no-print">
+        <div data-ui="pageHeaderIcon" style={styles.pageHeaderIcon} aria-hidden="true">▤</div>
         <div>
-          <h1 style={styles.title}>Reports</h1>
-          <p style={styles.subtitle}>
+          <h1 data-ui="title" style={styles.title}>Reports</h1>
+          <p data-ui="subtitle" style={styles.subtitle}>
             Search <strong>order #</strong>, name, mobile, Ref. by, or <strong>scan bill barcode</strong> (focus here; Enter opens). Selected report stays at top of the list. Ctrl+P to print.
           </p>
         </div>
       </div>
 
-      <div style={styles.card} className="no-print reports-filter-card">
-        <div style={styles.presetCardGrid}>
+      <div data-ui="card" style={styles.card} className="no-print reports-filter-card">
+        <div data-ui="presetCardGrid" style={styles.presetCardGrid}>
           {[
-            { id: 'today', label: 'Today', icon: 'ðŸ“…' },
-            { id: 'yesterday', label: 'Yesterday', icon: 'ðŸ“†' },
-            { id: 'last7', label: 'This Week', icon: 'ðŸ“‹' },
-            { id: 'month', label: 'This Month', icon: 'ðŸ“†' },
-            { id: 'lastmonth', label: 'Last Month', icon: 'ðŸ—“ï¸' },
-          ].map(({ id, label, icon }) => {
+            { id: 'today', label: 'Today' },
+            { id: 'yesterday', label: 'Yesterday' },
+            { id: 'last7', label: 'This Week' },
+            { id: 'month', label: 'This Month' },
+            { id: 'lastmonth', label: 'Last Month' },
+          ].map(({ id, label }) => {
             const preset = getDatePreset(id);
             const isActive = orderFilter.dateFrom === preset?.dateFrom && orderFilter.dateTo === preset?.dateTo;
             return (
-              <button
+              <button data-ui={['presetCard',(isActive)?'presetCardActive':''].filter(Boolean).join(' ')}
                 key={id}
                 type="button"
                 className={`reports-preset-card ${isActive ? 'reports-preset-active' : ''}`}
@@ -344,16 +241,15 @@ export default function Reports() {
                 }}
                 onClick={() => preset && setOrderFilter(preset)}
               >
-                <span style={styles.presetCardIcon}>{icon}</span>
-                <span style={styles.presetCardLabel}>{label}</span>
+                <span data-ui="presetCardLabel" style={styles.presetCardLabel}>{label}</span>
               </button>
             );
           })}
         </div>
-        <div style={styles.filterRow}>
-          <div style={styles.filterCol}>
-            <label style={styles.label}>From</label>
-            <input
+        <div data-ui="filterRow" style={styles.filterRow}>
+          <div data-ui="filterCol" style={styles.filterCol}>
+            <label data-ui="label" htmlFor="reports-field-1" style={styles.label}>From</label>
+            <input data-ui="input" id="reports-field-1"
               type="date"
               value={orderFilter.dateFrom}
               onChange={(e) => {
@@ -367,9 +263,9 @@ export default function Reports() {
               style={styles.input}
             />
           </div>
-          <div style={styles.filterCol}>
-            <label style={styles.label}>To</label>
-            <input
+          <div data-ui="filterCol" style={styles.filterCol}>
+            <label data-ui="label" htmlFor="reports-field-2" style={styles.label}>To</label>
+            <input data-ui="input" id="reports-field-2"
               type="date"
               value={orderFilter.dateTo}
               onChange={(e) => {
@@ -383,13 +279,13 @@ export default function Reports() {
               style={styles.input}
             />
           </div>
-          <div style={{ ...styles.filterCol, flex: 1 }}>
-            <label style={styles.label}>Search or barcode scan</label>
-            <input
+          <div data-ui="filterCol" style={{ ...styles.filterCol, flex: 1 }}>
+            <label data-ui="label" htmlFor="reports-field-3" style={styles.label}>Search or barcode scan</label>
+            <input data-ui="searchInput" id="reports-field-3"
               ref={searchInputRef}
               type="text"
               autoComplete="off"
-              placeholder="Order #, name, mobile, referrer, or scan barcode\u2026"
+              placeholder="Order #, name, mobile, referrer, or scan barcode…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -442,10 +338,10 @@ export default function Reports() {
             />
           </div>
         </div>
-        <div style={styles.filterRow}>
-          <div style={{ ...styles.filterCol, flex: 1 }}>
-            <label style={styles.label}>Select order</label>
-            <select
+        <div data-ui="filterRow" style={styles.filterRow}>
+          <div data-ui="filterCol" style={{ ...styles.filterCol, flex: 1 }}>
+            <label data-ui="label" htmlFor="reports-field-4" style={styles.label}>Select order</label>
+            <select data-ui="select" id="reports-field-4"
               value={selectedOrder?.id || ''}
               onChange={(e) => {
                 const id = parseInt(e.target.value, 10);
@@ -461,167 +357,57 @@ export default function Reports() {
                 </option>
               ))}
             </select>
-            {orders.length > 0 && <span style={styles.resultCount}>{filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}</span>}
+            {orders.length > 0 && <span data-ui="resultCount" style={styles.resultCount}>{filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}</span>}
             {!ordersLoading && orders.length > 0 && filteredOrders.length === 0 && (
-              <div style={styles.inlineEmpty} className="no-print">
-                <p style={styles.inlineEmptyText}>
+              <div data-ui="inlineEmpty" style={styles.inlineEmpty} className="no-print">
+                <p data-ui="inlineEmptyText" style={styles.inlineEmptyText}>
                   <strong>No orders match your search.</strong> Clear the search box, widen the date range, or scan the bill barcode again.
                 </p>
-                <button type="button" style={styles.inlineEmptyBtn} onClick={() => setSearch('')}>Clear search</button>
+                <button data-ui="inlineEmptyBtn" type="button" style={styles.inlineEmptyBtn} onClick={() => setSearch('')}>Clear search</button>
               </div>
             )}
             {!ordersLoading && orders.length === 0 && (
-              <div style={styles.inlineEmpty} className="no-print">
-                <p style={styles.inlineEmptyText}>
+              <div data-ui="inlineEmpty" style={styles.inlineEmpty} className="no-print">
+                <p data-ui="inlineEmptyText" style={styles.inlineEmptyText}>
                   <strong>No orders in this date range.</strong> Choose <em>Last 7 days</em> / <em>This month</em> above, or register a patient first.
                 </p>
-                <button type="button" style={styles.inlineEmptyBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
+                <button data-ui="inlineEmptyBtn" type="button" style={styles.inlineEmptyBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {reportData && (() => {
-        const resultsBySection = (reportData.results || []).reduce((acc, r) => {
-          const sec = r.section || 'Other';
-          if (!acc[sec]) acc[sec] = [];
-          acc[sec].push(r);
-          return acc;
-        }, {});
-        const sectionOrder = ['DEPARTMENT OF HEMATOLOGY', 'DEPARTMENT OF BIOCHEMISTRY', 'DEPARTMENT OF LIVER FUNCTION TEST', 'DEPARTMENT OF KIDNEY FUNCTION TEST', 'DEPARTMENT OF LIPID PROFILE', 'DEPARTMENT OF SEROLOGY', 'DEPARTMENT OF IMMUNOLOGY', 'DEPARTMENT OF BLOOD GROUP TESTS', 'DEPARTMENT OF COAGULATION', 'DEPARTMENT OF CLINICAL PATHOLOGY', 'Other'];
-        const orderedSections = Object.keys(resultsBySection).sort((a, b) => {
-          const ia = sectionOrder.indexOf(a);
-          const ib = sectionOrder.indexOf(b);
-          if (ia >= 0 && ib >= 0) return ia - ib;
-          if (ia >= 0) return -1;
-          if (ib >= 0) return 1;
-          return a.localeCompare(b);
-        });
-        const hasResults = orderedSections.length > 0;
-        return (
-        <>
-          {!hasResults && (
-            <div style={styles.reportCard} className="no-print">
-              <p style={styles.hint}>No results entered yet for this order. Enter results first.</p>
-              <button type="button" style={styles.actionBtn} onClick={() => navigate(`/result-entry?order=${reportData.id}`)}>Go to Result Entry</button>
-            </div>
-          )}
-          <div style={styles.reportCardWrap} className="report-card-wrap">
-            {orderedSections.map((sectionName, sectionIdx) => (
-            <div
-              key={sectionName}
-              className={`report-print report-page report-card report-page-dept ${sectionIdx > 0 ? 'report-page-break-before' : ''} ${sectionIdx < orderedSections.length - 1 ? 'report-page-break' : ''}`}
-              style={{
-                ...styles.reportCard,
-                paddingTop: margins.top,
-                paddingLeft: margins.left,
-                paddingRight: margins.right,
-                paddingBottom: margins.bottom,
-              }}
-            >
-              <div style={styles.reportHeader} className="report-header-no-break">
-                <div style={styles.patientCard} className="patient-card-print">
-                  <div style={styles.patientCardMain}>
-                    <div style={styles.patientName}>{reportData.patient_name}</div>
-                    <div style={styles.patientId}>ID: {reportData.pt_id}</div>
-                  </div>
-                  <div style={styles.patientCardGrid} className="patient-card-grid">
-                    <div style={styles.patientItem}>
-                      <span style={styles.patientLabel}>Age</span>
-                      <span style={styles.patientValue}>{reportData.age || '\u2014'}</span>
-                    </div>
-                    <div style={styles.patientItem}>
-                      <span style={styles.patientLabel}>Sex</span>
-                      <span style={styles.patientValue}>{reportData.sex === 'male' ? 'M' : reportData.sex === 'female' ? 'F' : '\u2014'}</span>
-                    </div>
-                    <div style={styles.patientItem}>
-                      <span style={styles.patientLabel}>Phone</span>
-                      <span style={styles.patientValue}>{reportData.phone || '\u2014'}</span>
-                    </div>
-                    <div style={styles.patientItem}>
-                      <span style={styles.patientLabel}>Referred by</span>
-                      <span style={styles.patientValue}>{reportData.referred_by || '\u2014'}</span>
-                    </div>
-                  </div>
-                  <div style={styles.patientAddress}>
-                    <span style={styles.patientAddressLabel}>Address</span>
-                    <span style={styles.patientAddressValue}>{reportData.address || '\u2014'}</span>
-                  </div>
-                  {reportData.access_code && (
-                    <div style={styles.reportBarcodeSection} className="report-barcode-section">
-                      <span style={styles.patientLabel}>Bill barcode</span>
-                      <OrderBarcode value={reportData.access_code} height={26} fontSize={8} />
-                    </div>
-                  )}
-                  <div style={styles.reportDate}>Report Date: {formatDate(reportPrintedAt)}</div>
-                </div>
-                <div style={styles.departmentTitle}>{sectionName}</div>
-              </div>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Test</th>
-                    <th style={styles.th}>Result</th>
-                    <th style={styles.th}>Unit</th>
-                    <th style={styles.th}>Ref</th>
-                    <th style={styles.th}>Flag</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resultsBySection[sectionName].map((r, i) => (
-                    <tr key={i}>
-                      <td style={styles.td}>{r.test_name}</td>
-                      <td style={{ ...styles.td, fontWeight: 700, fontSize: 13 }}>
-                        {r.result_value != null ? r.result_value : r.result_text || '\u2014'}
-                      </td>
-                      <td style={styles.td}>{r.unit || '\u2014'}</td>
-                      <td style={{ ...styles.td, fontSize: 11, color: '#666' }}>{r.refRange || '\u2014'}</td>
-                      <td style={{ ...styles.td, color: r.flag === 'L' || r.flag === 'H' || r.flag === 'C' ? '#c00' : '#666' }}>
-                        {r.flag === 'N' ? 'N' : r.flag === 'L' ? 'â†“' : r.flag === 'H' ? 'â†‘' : r.flag === 'C' ? '!!' : r.flag || 'N'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={styles.footer} className="report-print-footer">
-                <div style={styles.footerReadBy}>Read by: {labConfig.pathologist_name} Â· Printed by: {getPrintedBy()} Â· {formatDate(reportPrintedAt)}</div>
-                <div style={styles.footerClinical}>{labConfig.clinical_correlation_text || 'Please correlate clinically'}</div>
-                <div className="report-print-page-number" style={styles.pageNumber}>
-                  Page {sectionIdx + 1} of {orderedSections.length}
-                </div>
-              </div>
-            </div>
-          ))}
-          </div>
+      {reportData && <>
+        <div className="report-identity no-print" role="status">
+          <strong>{reportData.patient_name}</strong>
+          <span>Patient ID: {reportData.pt_id} · Order #{reportData.id}</span>
+          <span className="clinical-state">{reportData.issued?'Issued snapshot':'Draft preview'}</span>
+        </div>
+        {reportData.presentation_provenance === 'captured-at-upgrade' && <p className="no-print" role="status">Historical lab presentation was not archived at issuance; this report preserves the lab settings available at upgrade.</p>}
+        {reportData.provenance === 'legacy-at-upgrade' && <p className="no-print" role="status">Historical report preserved at upgrade. The original printed interval was not recorded; this snapshot uses the legacy values available at migration.</p>}
+        <div data-ui="actions" style={styles.actions} className="no-print reports-actions-bar">
+          <select aria-label="Print copies" value={printCopies} onChange={e=>setPrintCopies(Number(e.target.value))}>{[1,2,3,4,5].map(n=><option key={n} value={n}>{n} {n===1?'copy':'copies'}</option>)}</select>
+          <select aria-label="Print mode" value={profile.mode} onChange={e=>setProfile({...profile,mode:e.target.value})}><option value="preprinted">Preprinted pad</option><option value="full">Full report</option></select>
+          <button data-ui="previewBtn" style={styles.previewBtn} onClick={()=>handlePrint(true)} disabled={!layout.ready || printing || finalizing}>Preview report</button>
+          <button data-ui="printBtn" style={styles.printBtn} onClick={()=>handlePrint(false)} disabled={!layout.ready || printing || finalizing}>Print report</button>
+          {!reportData.issued && <button data-ui="printBtn" style={styles.printBtn} className="finalize-action" onClick={reviewFinalize} disabled={printing || finalizing || !reportData.results?.length}>Finalize report</button>}
+          <span role="status">{!finalizeReview && printFeedback}</span>
+        </div>
+        <ReportPrintLayout report={reportData.issued?reportData:{...reportData,lab_config:labConfig}} profile={profile} onReady={setLayout} />
+        {finalizeReview && <dialog aria-labelledby="finalization-title" ref={finalizeDialog} className="no-print finalize-dialog" onCancel={e=>{if(finalizing)e.preventDefault();else setFinalizeReview(null);}}>
+          <h2 id="finalization-title">Finalize report</h2>{printFeedback.startsWith('Report was not finalized:') && <p role="alert">{printFeedback}</p>}<p>Review these results before issuing. Finalized clinical content cannot be edited in this workflow.</p>
+          <ul>{finalizeReview.results.map((r,i)=><li key={i}><strong>{r.test_name}</strong>: {r.result_value ?? r.result_text} {r.unit}<br/>{r.refRange || 'Reference interval not configured'}{r.review_message && <p>{r.review_message}</p>}{r.flag && <p>Flag: {r.flag}</p>}</li>)}</ul>
+          <button disabled={finalizing} onClick={()=>{finalizeDialog.current.close();setFinalizeReview(null);}}>Cancel</button>
+          <button disabled={finalizing} className="confirm-action" onClick={finalize}>{finalizing?'Finalizing…':'Confirm finalization'}</button>
+        </dialog>}
+      </>}
 
-          <div style={styles.actions} className="no-print reports-actions-bar">
-            <select value={printCopies} onChange={(e) => setPrintCopies(parseInt(e.target.value, 10) || 1)} style={styles.copiesSelect}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>{n} {n === 1 ? 'copy' : 'copies'}</option>
-              ))}
-            </select>
-            {typeof window.electronPrintPreview === 'function' ? (
-              <button type="button" style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn" title="Opens report in new window — use Ctrl+P there to print">
-                ðŸ–¨ View & Print
-              </button>
-            ) : (
-              <button type="button" style={styles.printBtn} onClick={handlePrint} disabled={!hasResults} className="reports-action-btn">
-                ðŸ–¨ Print Report
-              </button>
-            )}
-            {printFeedback && <span style={styles.printFeedback}>{printFeedback}</span>}
-            <span style={styles.shortcutHint}>Ctrl+P to print</span>
-          </div>
-        </>
-      );
-      })()}
-
-      {!reportData && selectedOrder && <p style={styles.loading} className="no-print">Loading...</p>}
+      {!reportData && selectedOrder && <p data-ui="loading" style={styles.loading} className="no-print">Loading...</p>}
       {!ordersLoading && !selectedOrder && orders.length > 0 && filteredOrders.length > 0 && (
-        <div className="no-print" style={styles.hintWrap}>
-          <p style={styles.hint}>Select an order above to view and print.</p>
-          <button type="button" style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
+        <div data-ui="hintWrap" className="no-print" style={styles.hintWrap}>
+          <p data-ui="hint" style={styles.hint}>Select an order above to view and print.</p>
+          <button data-ui="actionBtn" type="button" style={styles.actionBtn} onClick={() => navigate('/new-registration')}>New Registration</button>
         </div>
       )}
     </div>
@@ -687,7 +473,7 @@ const styles = {
     background: '#fff',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    minHeight: 88,
+    minHeight: 44,
     boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
     color: '#475569',
   },

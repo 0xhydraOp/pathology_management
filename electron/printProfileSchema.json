@@ -1,0 +1,5 @@
+{
+  "defaults": {"version":1,"mode":"preprinted","paper":"A4","paperWidthMm":210,"paperHeightMm":297,"reservedHeaderMm":50,"reservedFooterMm":15,"patientXmm":10,"patientYmm":55,"tableXmm":10,"tableYmm":80,"columnWidthsMm":[60,25,25,80],"offsetXmm":0,"offsetYmm":0,"fontSizeMm":3.2,"rowSpacingMm":2},
+  "fields": {"paperWidthMm":"Paper width","paperHeightMm":"Paper height","reservedHeaderMm":"Reserved header","reservedFooterMm":"Reserved footer","patientXmm":"Patient details X","patientYmm":"Patient details Y","tableXmm":"Table X","tableYmm":"Table start Y","offsetXmm":"Horizontal offset (+ right)","offsetYmm":"Vertical offset (+ down)","fontSizeMm":"Font size","rowSpacingMm":"Row spacing"},
+  "papers":{"A4":[210,297],"A5":[148,210],"Letter":[215.9,279.4],"Legal":[215.9,355.6]}
+}
