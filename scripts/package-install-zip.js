@@ -9,5 +9,10 @@ const prerelease=path.join(dir,'PRERELEASE.md');fs.copyFileSync(path.join(root,'
 const dest=path.join(dir,'Patholy Management System Activation-Pending Prerelease '+pkg.version+' Windows-Install-Package.zip');
 if(fs.existsSync(dest))throw Error('Refusing to overwrite an existing install archive.');
 const quote=s=>"'"+s.replaceAll("'","''")+"'";
-execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command','Compress-Archive -LiteralPath @('+[setup,notes,prerelease].map(quote).join(',')+') -DestinationPath '+quote(dest)],{stdio:'inherit',windowsHide:true});
+// Use the Windows .NET ZIP API directly; the optional Archive module may be absent.
+const command = 'Add-Type -AssemblyName System.IO.Compression; Add-Type -AssemblyName System.IO.Compression.FileSystem; '+
+  '$taskArchive=[IO.Compression.ZipFile]::Open('+quote(dest)+',[IO.Compression.ZipArchiveMode]::Create); '+
+  'try { foreach($taskArchiveFile in @('+[setup,notes,prerelease].map(quote).join(',')+')) { '+
+  '[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskArchiveFile,[IO.Path]::GetFileName($taskArchiveFile),[IO.Compression.CompressionLevel]::Optimal) | Out-Null } } finally { $taskArchive.Dispose() }';
+execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{stdio:'inherit',windowsHide:true});
 console.log('Created exact-version prerelease installer archive.');
