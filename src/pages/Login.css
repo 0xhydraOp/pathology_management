@@ -1,0 +1,33 @@
+.login-page.auth-page { min-height:100vh; min-height:100dvh; display:grid; place-items:center; padding:28px 20px!important; overflow:visible; background:var(--ui-canvas,#F5F7FA)!important; color:var(--ui-text,#18283B); }
+.auth-page .auth-panel { width:100%; max-width:460px; box-sizing:border-box; padding:30px; border:1px solid var(--ui-border,#DCE3EB); border-top:3px solid var(--ui-nav,#14283F); border-radius:10px; background:#FFF; box-shadow:0 6px 24px #14283F08; }
+.auth-page .auth-brand { margin:0 0 20px; color:var(--ui-muted,#526174); font-size:12px; font-weight:600; line-height:1.5; }
+.auth-page h1 { font-size:23px; line-height:1.3; font-weight:650; margin:0 0 10px; letter-spacing:-.3px; overflow-wrap:anywhere; }
+.auth-page .auth-intro { margin:0 0 24px; color:var(--ui-muted,#526174); font-size:14px; line-height:1.6; }
+.auth-page form { display:grid; gap:18px; }
+.auth-page .auth-field label { display:block; margin-bottom:7px; font-size:14px; font-weight:600; }
+.auth-page .auth-input { display:block; width:100%; box-sizing:border-box; min-height:44px; border:1px solid #7C8DA1; border-radius:6px; padding:10px 12px; font:inherit; font-size:15px; line-height:1.4; background:#FFF; color:var(--ui-text,#18283B); }
+.auth-page .auth-password { position:relative; }
+.auth-page .auth-password .auth-input { padding-right:68px; }
+.auth-page .auth-visibility { position:absolute; top:4px; right:4px; height:36px; min-width:54px; padding:0 8px; border:0; border-radius:4px; color:#066A76; background:#FFF; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.auth-page .auth-visibility:hover { background:#EDF6F6; }
+.auth-page .auth-hint { margin:7px 0 0; color:var(--ui-muted,#526174); font-size:12px; line-height:1.5; }
+.auth-page .auth-error { margin:7px 0 0; color:#A82117; font-size:13px; line-height:1.5; }
+.login-page.auth-page .auth-input[aria-invalid="true"] { border-color:#A82117!important; }
+.auth-page .auth-primary { width:100%; min-height:44px; padding:11px 15px; border:1px solid #087F8C; border-radius:6px; background:#087F8C; color:#FFF; font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+.auth-page .auth-primary:hover:not(:disabled) { background:#066A76; border-color:#066A76; }
+.auth-page :is(button,input):disabled { cursor:wait; opacity:.7; }
+.auth-page :is(input,button,summary):focus-visible { outline:3px solid #087F8C; outline-offset:3px; }
+.auth-page .auth-message { padding:10px 12px; margin:0; border:1px solid #DCE3EB; border-radius:6px; }
+.auth-page .auth-success { color:#185C3F; background:#F1F8F4; font-size:13px; line-height:1.5; }
+.auth-page .auth-secondary { margin:15px 0 0; padding:8px 0; background:none; border:0; color:#066A76; font:inherit; font-size:13px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+.auth-page .auth-recovery { border-top:1px solid var(--ui-border,#DCE3EB); margin-top:24px; padding-top:16px; }
+.auth-page .auth-recovery summary { color:#526174; font-size:13px; cursor:pointer; padding:3px 0; }
+.auth-page .auth-recovery p { font-size:13px; line-height:1.6; margin:12px 0 0; overflow-wrap:anywhere; }
+.auth-page .auth-release { font-size:11px; line-height:1.5; color:#526174; margin:20px 0 0; }
+.login-page.auth-page .auth-primary { min-height:44px; padding:11px 15px!important; background:#087F8C!important; border-color:#087F8C!important; color:#FFF!important; font-size:14px!important; }
+.login-page.auth-page .auth-primary:hover:not(:disabled) { background:#066A76!important; border-color:#066A76!important; }
+.login-page.auth-page .auth-visibility { padding:0 8px!important; border:0!important; color:#066A76!important; font-size:13px!important; }
+.login-page.auth-page .auth-field label { color:#18283B!important; font-size:14px!important; }
+.login-page.auth-page .auth-input { font-size:15px!important; }
+@media(max-width:520px) { .login-page.auth-page { padding:16px 12px!important; } .auth-page .auth-panel { padding:22px; } .auth-page h1 { font-size:21px; } }
+@media(max-height:700px) { .login-page.auth-page { align-items:start; } }

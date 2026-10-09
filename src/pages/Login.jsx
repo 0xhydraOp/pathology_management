@@ -1,203 +1,110 @@
 import { APP_TITLE } from '../utils/product';
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import './Login.css';
+
+const INVALID_LOGIN = 'Username or password is incorrect.';
+const RETRY_LOGIN = 'Too many sign-in attempts. Wait 30 seconds, then try again.';
+const RecoveryGuide = () => <><p>Ask this lab’s administrator for help. There is no online password reset.</p><p>If you are the administrator, close the app and open <strong>Recover Administrator.cmd</strong> in its installation folder. Follow <strong>RECOVERY.md</strong>. Recovery requires access to the local data folder; it does not create a new account or replace lab records.</p><p>Keep a verified backup. Do not delete <strong>lab.db</strong>.</p></>;
 
 export default function Login({ onLogin }) {
-  const [setup, setSetup] = useState(false);
-  const [checking,setChecking]=useState(true),[recoveryRequired,setRecoveryRequired]=useState(false);
-  const [restricted,setRestricted]=useState(null);
-  const [nextPassword,setNextPassword]=useState('');
-  const [confirmation,setConfirmation]=useState('');
-  async function checkSetup(){const credentials=await window.db.credentialState();setRecoveryRequired(Boolean(credentials.recoveryRequired));setSetup(Boolean(credentials.setupRequired&&!credentials.recoveryRequired));}
-  useEffect(()=>{let live=true;(async()=>{try{await checkSetup();const user=await window.db?.getSession?.();if(live&&user?.requiresPasswordChange)setRestricted(user);}catch(e){if(live)setError(e.message);}finally{if(live)setChecking(false);}})();return()=>{live=false;};},[]);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    let user = null;
+  const [setup, setSetup] = useState(false), [checking, setChecking] = useState(true);
+  const [recoveryRequired, setRecoveryRequired] = useState(false), [checkFailed, setCheckFailed] = useState(false);
+  const [restricted, setRestricted] = useState(null), [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState(''), [password, setPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState(''), [confirmation, setConfirmation] = useState('');
+  const [errors, setErrors] = useState({}), [notice, setNotice] = useState('');
+  const [visible, setVisible] = useState({}), [capsLock, setCapsLock] = useState(false);
+  const busy = useRef(false), live = useRef(true), form = useRef(null);
+  const changing = setup || Boolean(restricted);
+  const clearSecrets = () => { setPassword(''); setNextPassword(''); setConfirmation(''); setVisible({}); setCapsLock(false); };
+  const focus = name => requestAnimationFrame(() => { if (live.current) form.current?.elements.namedItem(name)?.focus(); });
+  async function checkSetup() {
+    const state = await window.db.credentialState();
+    if (live.current) { setRecoveryRequired(Boolean(state.recoveryRequired)); setSetup(Boolean(state.setupRequired && !state.recoveryRequired)); }
+    return state;
+  }
+  async function inspect() {
+    setChecking(true); setCheckFailed(false);
     try {
-      if (window.db?.verifyUser) {
-        if(setup || restricted){if(nextPassword!==confirmation)throw new Error('Passwords do not match');if(setup)await window.db.setupAdmin(username,nextPassword);else await window.db.changePassword(password,nextPassword);setSetup(false);setRestricted(null);setPassword('');setNextPassword('');setConfirmation('');setLoading(false);setError('Credentials saved. Sign in with your new password.');return;}
-        user = await window.db.verifyUser(username, password);
+      await checkSetup();
+      const user = await window.db.getSession();
+      if (live.current && user?.requiresPasswordChange) setRestricted(user);
+    } catch { if (live.current) setCheckFailed(true); }
+    finally { if (live.current) setChecking(false); }
+  }
+  useEffect(() => { live.current = true; void inspect(); return () => { live.current = false; }; }, []);
+  useEffect(() => { if (!checking && !checkFailed && !recoveryRequired) focus(restricted ? 'password' : 'username'); }, [checking, checkFailed, recoveryRequired, restricted]);
+  const fieldError = (name, text) => { setErrors({ [name]: text }); focus(name); };
+  const edit = (name, setter) => event => { setter(event.target.value); setErrors(previous => ({ ...previous, [name]: undefined, form: undefined })); setNotice(''); };
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (busy.current) return;
+    setErrors({}); setNotice('');
+    if (!restricted && !username) return fieldError('username', 'Enter your username.');
+    if (setup && !/^[A-Za-z0-9._-]{1,100}$/.test(username)) return fieldError('username', 'Use 1–100 letters, numbers, dots, underscores or hyphens.');
+    if (!setup && !password) return fieldError('password', 'Enter your password.');
+    if (changing && (nextPassword.length < 12 || nextPassword.length > 1024)) return fieldError('newPassword', 'Use a unique password of 12–1024 characters.');
+    if (changing && nextPassword !== confirmation) return fieldError('confirmation', 'Passwords do not match. Enter the same new password again.');
+    busy.current = true; setLoading(true);
+    try {
+      if (changing) {
+        if (setup) await window.db.setupAdmin(username, nextPassword);
+        else await window.db.changePassword(password, nextPassword);
+        if (!live.current) return;
+        clearSecrets(); setSetup(false); setRestricted(null);
+        setNotice('Credentials saved. Sign in with your new password.'); focus('password');
       } else {
-        setError('Database not available. Run with npm run electron:dev');
-        setLoading(false);
-        return;
+        const user = await window.db.verifyUser(username, password);
+        if (!live.current) return;
+        clearSecrets();
+        if (!user) return fieldError('password', INVALID_LOGIN);
+        if (user.requiresPasswordChange) { setRestricted(user); return; }
+        sessionStorage.setItem('lab_auth', '1');
+        sessionStorage.setItem('lab_user', JSON.stringify({ username: user.username, displayName: user.displayName || user.username, role: user.role }));
+        onLogin?.();
       }
-    } catch (err) {
-      setError(err.message || 'Unable to sign in.');
-      if(setup){try{await checkSetup();}catch{}}
-      setLoading(false);
-      return;
-    }
-    setLoading(false);
-    if(user?.requiresPasswordChange){setRestricted(user);setPassword('');return;}
-    if (user) {
-      sessionStorage.setItem('lab_auth', '1');
-      sessionStorage.setItem('lab_user', JSON.stringify({ username: user.username || username, displayName: user.displayName || username, role: user.role }));
-      onLogin?.();
-    } else {
-      setError('Invalid username or password');
-    }
-  };
+    } catch (error) {
+      if (!live.current) return;
+      // IPC messages may include Electron wrappers. Only map known safe errors;
+      // never render arbitrary database paths, exception contents or input values.
+      const text = String(error?.message || '');
+      if (/Too many sign-in attempts/.test(text)) { setPassword(''); fieldError('password', RETRY_LOGIN); }
+      else if (setup && /Invalid username/.test(text)) fieldError('username', 'Use 1–100 letters, numbers, dots, underscores or hyphens.');
+      else if (changing && /Use a unique password/.test(text)) fieldError('newPassword', 'Use a unique password of 12–1024 characters.');
+      else if (restricted && /Current password is incorrect/.test(text)) { setPassword(''); fieldError('password', 'Current password is incorrect.'); }
+      else if (restricted && /Choose a different password/.test(text)) fieldError('newPassword', 'Choose a password different from your current one.');
+      else if (setup && /already complete|Setup changed|recovery is required|offline administrator recovery/.test(text)) {
+        clearSecrets();
+        try { await checkSetup(); setNotice('Setup changed. Sign in with the existing account or follow the recovery guidance.'); }
+        catch { setCheckFailed(true); }
+      } else {
+        clearSecrets(); setErrors({ form: changing ? 'Credentials could not be saved. Try again. If this continues, close the app and follow RECOVERY.md.' : 'Sign-in is unavailable. Try again. If this continues, close the app and follow RECOVERY.md.' });
+      }
+    } finally { busy.current = false; if (live.current) setLoading(false); }
+  }
 
-  if(checking)return <div className="login-page" data-ui="container"><div data-ui="card"><h1>{APP_TITLE}</h1><p role="status">Checking installation setup…</p></div></div>;
-  if(recoveryRequired)return <div className="login-page" data-ui="container"><div data-ui="card"><h1>{APP_TITLE}</h1><h2>Administrator recovery required</h2><p>Existing lab records were found without an administrator account. The database has not been replaced. Close the app, preserve the data directory and follow RECOVERY.md or restore a verified backup.</p></div></div>;
-  return (
-    <div data-ui="container" style={styles.container} className="login-page">
-      <div data-ui="card" style={styles.card}>
-        <div data-ui="logoWrap" style={styles.logoWrap}>
-          <img data-ui="logo" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
-        </div>
-        <h1 data-ui="labName" style={styles.labName}>{APP_TITLE}</h1>
-        {APP_TITLE.includes('-rc.')&&<p role="note">Release candidate. Validate backup, recovery and printing before production lab use.</p>}
-        <p data-ui="subtitle" style={styles.subtitle}>{setup?'Create your local administrator account':restricted?'Replace the legacy default password':'Sign in to your lab workspace'}</p>
-        {(setup||restricted)&&<p>Use a unique password of at least 12 characters. There is no default or hidden recovery account.</p>}
-
-        <form data-ui="form" style={styles.form} onSubmit={handleSubmit}>
-          {!restricted&&<div data-ui="field" style={styles.field}>
-            <label data-ui="fieldLabel" htmlFor="login-field-1" style={styles.fieldLabel}>Username</label>
-            <input data-ui="input" id="login-field-1"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
-              style={styles.input}
-              autoComplete="username"
-              disabled={loading}
-            />
-          </div>}
-          {!setup&&<div data-ui="field" style={styles.field}>
-            <label data-ui="fieldLabel" htmlFor="login-field-2" style={styles.fieldLabel}>Password</label>
-            <input data-ui="input" id="login-field-2"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
-              style={styles.input}
-              autoComplete="current-password"
-              disabled={loading}
-            />
-          </div>}
-          {(setup||restricted)&&<><div data-ui="field" style={styles.field}><label data-ui="fieldLabel" style={styles.fieldLabel} htmlFor="new-password">New password</label><input data-ui="input" style={styles.input} id="new-password" type="password" autoComplete="new-password" value={nextPassword} onChange={e=>setNextPassword(e.target.value)} required minLength={12}/></div><div data-ui="field" style={styles.field}><label data-ui="fieldLabel" style={styles.fieldLabel} htmlFor="confirm-password">Confirm new password</label><input data-ui="input" style={styles.input} id="confirm-password" type="password" autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} required/></div></>}
-          {error && (
-            <div data-ui="errorWrap" style={styles.errorWrap}>
-              <p data-ui="error" role="alert" style={styles.error}>{error}</p>
-              <button data-ui="tryAgainBtn" type="button" style={styles.tryAgainBtn} onClick={() => setError('')}>Try again</button>
-            </div>
-          )}
-          <button data-ui="btn" type="submit" style={styles.btn} disabled={loading} className="login-btn">
-            {loading ? 'Saving...' : setup?'Create administrator':restricted?'Replace password':'Login'}
-          </button>
-        </form>
-        {restricted&&<button data-ui="tryAgainBtn" type="button" onClick={async()=>{await window.db.logout();setRestricted(null);setPassword('');setNextPassword('');setConfirmation('');setError('');}}>Sign in with another account</button>}
-      </div>
-    </div>
-  );
+  function passwordField(name, label, value, setter, autoComplete, help) {
+    const id = `auth-${name}`;
+    return <div className="auth-field"><label htmlFor={id}>{label}</label><div className="auth-password"><input id={id} name={name} className="auth-input" type={visible[name] ? 'text' : 'password'} value={value} onChange={edit(name, setter)} autoComplete={autoComplete} required maxLength={1024} disabled={loading} aria-invalid={Boolean(errors[name])} aria-describedby={[help ? `${id}-help` : '', errors[name] ? `${id}-error` : '', capsLock ? 'auth-caps' : ''].filter(Boolean).join(' ') || undefined} onKeyDown={event => setCapsLock(Boolean(event.getModifierState?.('CapsLock')))} onKeyUp={event => setCapsLock(Boolean(event.getModifierState?.('CapsLock')))} onBlur={() => setCapsLock(false)}/><button className="auth-visibility" type="button" aria-label={`${visible[name] ? 'Hide' : 'Show'} ${label.toLowerCase()}`} aria-controls={id} aria-pressed={Boolean(visible[name])} disabled={loading} onClick={() => setVisible(previous => ({ ...previous, [name]: !previous[name] }))}>{visible[name] ? 'Hide' : 'Show'}</button></div>{help && <p className="auth-hint" id={`${id}-help`}>{help}</p>}{errors[name] && <p className="auth-error" id={`${id}-error`} role="alert">{errors[name]}</p>}</div>;
+  }
+  return <main className="login-page auth-page"><section className="auth-panel" aria-labelledby="auth-title">
+    <p className="auth-brand">{APP_TITLE}</p>
+    {checking ? <><h1 id="auth-title">Opening your lab workspace</h1><p role="status">Checking local account setup…</p></> : checkFailed ? <><h1 id="auth-title">Account check unavailable</h1><p role="alert">We could not check this installation. Try again before signing in or creating an account.</p><button className="auth-primary" onClick={() => void inspect()}>Retry account check</button><RecoveryGuide /></> : recoveryRequired ? <><h1 id="auth-title">Administrator recovery required</h1><p>Existing lab records were found without an account. Your database has not been replaced.</p><RecoveryGuide /></> : <>
+      <h1 id="auth-title">{setup ? 'Create this lab’s administrator account.' : restricted ? 'Replace the legacy password' : 'Sign in to your lab workspace'}</h1>
+      <p className="auth-intro">{setup ? 'Choose local credentials for managing this lab’s users and settings.' : restricted ? 'Replace the default password before continuing.' : 'Use your local account to continue.'} No internet connection is needed.</p>
+      <form ref={form} onSubmit={handleSubmit} noValidate aria-busy={loading}>
+        {!restricted && <div className="auth-field"><label htmlFor="auth-username">Username</label><input id="auth-username" name="username" className="auth-input" value={username} onChange={edit('username', setUsername)} autoComplete="username" autoCapitalize="none" spellCheck={false} required maxLength={100} disabled={loading} aria-invalid={Boolean(errors.username)} aria-describedby={errors.username ? 'auth-username-error' : setup ? 'auth-username-help' : undefined}/>{setup && <p className="auth-hint" id="auth-username-help">Letters, numbers, dots, underscores or hyphens. No spaces.</p>}{errors.username && <p className="auth-error" id="auth-username-error" role="alert">{errors.username}</p>}</div>}
+        {!setup && passwordField('password', 'Password', password, setPassword, 'current-password')}
+        {changing && <>{passwordField('newPassword', 'New password', nextPassword, setNextPassword, 'new-password', '12–1024 characters. Use a unique password and save it securely.')}{passwordField('confirmation', 'Confirm new password', confirmation, setConfirmation, 'new-password')}</>}
+        {capsLock && <p id="auth-caps" className="auth-hint" role="status">Caps Lock is on.</p>}
+        {errors.form && <p role="alert" className="auth-error auth-message">{errors.form}</p>}
+        {notice && <p role="status" className="auth-success auth-message">{notice}</p>}
+        <button className="auth-primary" type="submit" disabled={loading}>{loading ? changing ? 'Saving credentials…' : 'Signing in…' : setup ? 'Create administrator' : restricted ? 'Replace password' : 'Login'}</button>
+      </form>
+      {restricted && <button className="auth-secondary" disabled={loading} onClick={async () => { if (busy.current) return; busy.current = true; setLoading(true); try { await window.db.logout(); if (live.current) { clearSecrets(); setRestricted(null); setErrors({}); setNotice(''); } } catch { if (live.current) setErrors({ form: 'Could not sign out. Close the app before trying another account.' }); } finally { busy.current = false; if (live.current) setLoading(false); } }}>Sign in with another account</button>}
+      <details className="auth-recovery"><summary>{setup ? 'Keeping administrator access safe' : 'Need help signing in?'}</summary><RecoveryGuide /></details>
+      {APP_TITLE.includes('-rc.') && <p className="auth-release">Release candidate · Validate backup, recovery and printing before lab use.</p>}
+    </>}
+  </section></main>;
 }
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'linear-gradient(160deg, #0f2847 0%, #1e3a5f 35%, #0d7377 85%, #14a3a8 100%)',
-    padding: 24,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  card: {
-    background: '#fff',
-    borderRadius: 20,
-    boxShadow: '0 24px 64px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.08) inset',
-    padding: 48,
-    width: '100%',
-    maxWidth: 420,
-    textAlign: 'center',
-    position: 'relative',
-    zIndex: 1,
-  },
-  logoWrap: {
-    marginBottom: 20,
-  },
-  logo: {
-    height: 80,
-    objectFit: 'contain',
-  },
-  labName: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: '#1e3a5f',
-    marginBottom: 6,
-    letterSpacing: '-0.3px',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 36,
-    fontWeight: 500,
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 22,
-  },
-  field: {
-    textAlign: 'left',
-  },
-  fieldLabel: {
-    color: '#334155',
-    display: 'block',
-    marginBottom: 6,
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  input: {
-    width: '100%',
-    padding: '14px 18px',
-    borderRadius: 12,
-    border: '2px solid #e2e8f0',
-    fontSize: 15,
-    marginTop: 4,
-    transition: 'border-color 0.2s, box-shadow 0.2s',
-    color: '#1e293b',
-    backgroundColor: '#ffffff',
-  },
-  errorWrap: { marginBottom: 4 },
-  error: {
-    color: '#dc2626',
-    fontSize: 13,
-    margin: '0 0 10px',
-    padding: '10px 14px',
-    background: '#fef2f2',
-    borderRadius: 10,
-    border: '1px solid #fecaca',
-  },
-  tryAgainBtn: {
-    padding: '8px 16px',
-    borderRadius: 8,
-    border: '1px solid #dc2626',
-    background: '#fff',
-    color: '#dc2626',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  btn: {
-    background: 'linear-gradient(180deg, #0d7377 0%, #0a5c5f 100%)',
-    color: '#fff',
-    border: 'none',
-    padding: '16px',
-    borderRadius: 12,
-    fontSize: 16,
-    fontWeight: 600,
-    marginTop: 8,
-    boxShadow: '0 4px 16px rgba(13,115,119,0.4)',
-    transition: 'transform 0.15s, box-shadow 0.15s',
-  },
-};

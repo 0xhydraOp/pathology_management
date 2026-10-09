@@ -10,7 +10,7 @@ Download the matching Windows x64 installer and SHA256SUMS.txt from GitHub Relea
 
 Install into a chosen local folder. First launch: **create your own local administrator username/password → login → use the app**. No default account is supplied. Closing before administrator creation safely resumes setup; completing creation then closing resumes at login. Existing users and records remain local. Legacy default credentials must be replaced through the existing protected flow.
 
-The internal application ID and data-directory identity are retained for upgrades. Do not delete the data folder or open simultaneous older/newer versions against it. Uninstalling must not delete lab data.
+See the [local setup and login guide](docs/SETUP_LOGIN.md) for password requirements, keyboard controls, retry cooldown and recovery guidance. The internal application ID and data-directory identity are retained for upgrades. Do not delete the data folder or open simultaneous older/newer versions against it. Uninstalling must not delete lab data.
 
 ## Features
 
