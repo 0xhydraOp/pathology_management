@@ -25,4 +25,7 @@ if (-not (Test-Path -LiteralPath $taskIcon -PathType Leaf)) { throw 'Build the a
 if ($LASTEXITCODE -ne 0) { throw "Inno compilation failed with exit code $LASTEXITCODE." }
 $taskInstaller = Join-Path $taskOutput "Pathology Management System Offline Setup $taskVersion.exe"
 if (-not (Test-Path -LiteralPath $taskInstaller -PathType Leaf)) { throw 'Compiler did not produce the expected installer.' }
-Get-FileHash -Algorithm SHA256 -LiteralPath $taskInstaller
+$taskHasher = [Security.Cryptography.SHA256]::Create()
+$taskStream = [IO.File]::OpenRead($taskInstaller)
+try { $taskDigest = [BitConverter]::ToString($taskHasher.ComputeHash($taskStream)).Replace('-','').ToLowerInvariant() } finally { $taskStream.Dispose(); $taskHasher.Dispose() }
+[PSCustomObject]@{ Algorithm='SHA256'; Hash=$taskDigest; Path=$taskInstaller }

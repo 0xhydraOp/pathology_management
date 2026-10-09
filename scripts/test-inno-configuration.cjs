@@ -15,6 +15,6 @@ test('Legacy NSIS installations and open app/recovery processes fail closed',()=
 });
 test('Compiler build inputs are explicit and current package version is authoritative',()=>{
  assert.equal((builder.match(/\[Parameter\(Mandatory=\$true\)\]/g)||[]).length,3);
- assert.ok(builder.includes("'package.json'"));assert.ok(builder.includes('ISCC.exe'));assert.ok(builder.includes('Get-FileHash -Algorithm SHA256'));
+ assert.ok(builder.includes("'package.json'"));assert.ok(builder.includes('ISCC.exe'));assert.ok(builder.includes('[Security.Cryptography.SHA256]::Create()'));
  assert.ok(!/SignTool|CertificatePassword|private.key|password/i.test(builder));
 });
