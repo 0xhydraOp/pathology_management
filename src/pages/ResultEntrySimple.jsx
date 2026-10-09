@@ -325,6 +325,7 @@ export default function ResultEntrySimple() {
       (formulaRows || []).forEach((f) => {
         formulaMap[f.parameter_id] = {
           expr: f.formula_expression,
+          unitsValid: f.units_valid!==false,
           deps: (f.dependencies || '').split(',').map((s) => s.trim()).filter(Boolean),
         };
       });
@@ -367,6 +368,7 @@ export default function ResultEntrySimple() {
     if (test.type === 'derived') {
       const f = formulas[test.id];
       if (!f) return { display: '—', flag: '' };
+      if(!f.unitsValid)return {display:'Not calculable (review units)',flag:'',missing:true};
       const codeToId = {};
       tests.forEach((t) => (codeToId[t.code] = t.id));
       const vals = {};

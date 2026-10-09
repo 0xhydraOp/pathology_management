@@ -1,13 +1,13 @@
-# Reviewed release process
+# Reviewed unsigned release process
 
-Current candidate: **1.1.0-rc.2**, fully offline and unsigned. See [OFFLINE_RELEASE.md](OFFLINE_RELEASE.md). GitHub publication does not deploy Cloudflare. The former automatic latest-release workflow and obsolete default-password instructions are superseded.
+Target version 1.1.0: Pathology Management System, fully offline, unsigned. The user authorized commit, feature-branch push, a new final GitHub release and the Inno installer. Signing was explicitly skipped. No Cloudflare/domain changes or old artifact replacement are authorized.
 
-1. Review the complete working tree and staged work, secrets/history and clinical/recovery paths. Obtain independent security, clinical and packaging reviews. Confirm copyright ownership and notices.
-2. Run `npm ci`, `npm test`, browser/offline-migration/PDF regressions and targeted failure tests using explicit temporary synthetic databases. Never open real lab data. Audit dependencies while documenting coverage limitations.
-3. Commit reviewed source on the feature branch. Build from that exact clean commit; embed/record the source SHA. There is no production licensing configuration.
-4. Build the explicitly named prerelease installer with `npm run electron:build`. Verify packaged behavior, archive contents, offline setup and network isolation, licence notices and source commit. Do not publish synthetic QA packages.
-5. Create SHA-256 checksums and an explicit manifest `{commit,version,assets:[{path,sha256}]}`. Include only the reviewed installer, installer archive, checksums and sanitized verification/notes. Never attach the whole release directory.
-6. Push the feature branch normally. Check rules; do not force-push or merge the default branch. Publish a new prerelease targeting the exact commit: `node scripts/create-release.js manifest.json release-notes.md`. It refuses a dirty tree, mismatched commit/version/hash, guessed assets and existing releases.
-7. Read back the release/tag/asset metadata, download uploaded checksum text and compare it. Record public links and remaining limitations. Physical printer/driver, elevated installation/upgrade and power-loss checks stay NOT TESTED unless performed.
+1. Review source, staged files, history/exposure and all current application/security/data paths; fix demonstrated critical/high risks.
+2. Run source, browser, PDF and synthetic failure/recovery tests. Commit reviewed source on the feature branch; never reset unrelated work or force-push.
+3. Build the Windows application and Inno installer from that clean exact commit with `npm run electron:build`. Set INNO_COMPILER to an authenticated ISCC.exe if needed. Verify bundled metadata/source commit, production local assets, no sensitive files, actual packaged behavior and NotSigned status.
+4. Test isolated per-user installation/reinstall/uninstall where safe. Mark unavailable installer/Windows/printer/power-loss scenarios NOT TESTED; never touch a working lab installation.
+5. Create a new immutable v1.1.0 tag on the verified commit, rebuild from that tag and verify final checksums. Push feature branch and new tag normally; do not merge a protected/default branch or move existing tags.
+6. Prepare only reviewed installer/archive, README, notes, sanitized verification summary and SHA256SUMS. Explicit manifest includes `{commit,version,prerelease:false,verificationPassed:true,assets:[{path,sha256}]}`.
+7. Publish using `node scripts/create-release.js reviewed-manifest.json release-notes.md`. It requires clean exact source, matching tag/version/type/hashes and rejects an existing release. Attach no lab databases, backups, secrets, private keys or transient QA logs. Verify remote checksums after publication.
 
-GitHub Actions is manual verification/build only, has read-only repository permission and never publishes automatically on tag pushes. Source and dependencies retain their own licence rights. Old historical LFS archives are not new candidate assets.
+Unsigned binaries do not establish publisher trust. MIT grants project-code reuse rights, not dependency relicensing or clinical certification. Each laboratory must validate its intervals, formulas, units, rounding and critical thresholds; printing and recovery need local acceptance. Existing historical prereleases retain their original names and limitations.

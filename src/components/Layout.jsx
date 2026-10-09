@@ -1,5 +1,6 @@
 import { APP_NAME, APP_VERSION } from '../utils/product';
 import WorkspaceIcon from './WorkspaceIcon';
+import BackupHealth from './BackupHealth';
 ﻿import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
@@ -124,10 +125,11 @@ export default function Layout({ children, onLogout }) {
       )}
       <header data-ui="header" style={styles.header} className="no-print">
         <div data-ui="headerLeft" style={styles.headerLeft}>
-          <img data-ui="logo" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
+          <img data-ui="logo" src={`${import.meta.env.BASE_URL}assets/app-mark.svg`} alt="Pathology Management System" style={styles.logo} />
           <span data-ui="labName" style={styles.labName}>{APP_NAME} · v{appVersion || APP_VERSION}</span>
         </div>
         <div data-ui="headerRight" style={styles.headerRight}>
+          <BackupHealth compact/>
           <span data-ui="clock" style={styles.clock}>{clock}</span>
           {window.electronApp && (
             <button data-ui={['logoutBtn',(alwaysOnTop)?'pinActive':''].filter(Boolean).join(' ')}

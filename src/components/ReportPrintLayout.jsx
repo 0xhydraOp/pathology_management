@@ -4,7 +4,7 @@ import '../print-layout.css';
 const PX_PER_MM=96/25.4;
 const heading=['Test','Result','Unit','Reference interval'];
 function Patient({report}){
- return <div className="mm-patient"><strong>{!report.issued && <span className="mm-draft">DRAFT — not finalized · </span>}{report.patient_name}</strong><span>Patient ID: {report.pt_id} · Order #{report.id}</span><span>Age: {report.age ?? 'unknown'} years · Sex: {report.sex || 'unknown'} · Referrer: {report.referred_by || '—'}</span>{(report.phone || report.address) && <span>{[report.phone,report.address].filter(Boolean).join(' · ')}</span>}</div>;
+ return <div className="mm-patient"><strong>{!report.issued && <span className="mm-draft">DRAFT — not finalized · </span>}{report.patient_name}</strong><span>Patient ID: {report.pt_id} · Order #{report.id}{report.report_version ? ` · Version ${report.report_version}${report.report_version>1 ? ` — AMENDED (from v${report.parent_version})` : ' — Original'}` : ''}</span><span>Age: {report.age ?? 'unknown'} years · Sex: {report.sex || 'unknown'} · Referrer: {report.referred_by || '—'}</span>{(report.phone || report.address) && <span>{[report.phone,report.address].filter(Boolean).join(' · ')}</span>}</div>;
 }
 function LabHeader({report}){const lab=report.lab_config || {};return <div className="mm-lab-header"><img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Lab logo" /><div><strong>{lab.name}</strong>{lab.address && <span>{lab.address}</span>}{(lab.phone || lab.registration_no) && <span>{[lab.phone,lab.registration_no].filter(Boolean).join(' · ')}</span>}</div></div>;}
 function LabFooter({report}){const lab=report.lab_config || {};return <div className="mm-lab-footer"><span>Read by: {lab.pathologist_name || '—'} · Issued by: {report.report_printed_by || report.issued_by || '—'} · {report.report_date || 'DRAFT'}</span><span>{lab.clinical_correlation_text || ''}</span></div>;}
@@ -20,6 +20,7 @@ export default function ReportPrintLayout({report,profile,onReady}){
  const numberHeight=profile.fontSizeMm*1.35;
  const bottom=profile.paperHeightMm-profile.reservedFooterMm-numberHeight-4;
  const rows=(report.results || []).map((r,index)=>({index,cells:[r.test_name,String(r.result_value ?? r.result_text ?? '—')+(r.flag?`\nFlag: ${r.flag}`:''),r.unit || '—',[r.refRange || 'Reference interval not configured',r.review_message].filter(Boolean).join('\n')]}));
+ if(report.report_version>1)rows.unshift({index:-1,cells:[`AMENDED REPORT — version ${report.report_version}`,`Replaces version ${report.parent_version}`,'',`Reason: ${report.amendment_reason || 'Not recorded'}`]});
  useEffect(()=>{
   let cancelled=false;setError('');callback.current?.({ready:false,pages:0});
   void(async()=>{
@@ -57,7 +58,7 @@ export default function ReportPrintLayout({report,profile,onReady}){
    {profile.mode==='full' && <div className="mm-header-region" style={{left:`${profile.patientXmm+profile.offsetXmm}mm`,top:'2mm',width:`${profile.paperWidthMm-profile.patientXmm-profile.offsetXmm-2}mm`}}><LabHeader report={report}/></div>}
    <div className="mm-patient-position" style={{left:`${profile.patientXmm+profile.offsetXmm}mm`,top:`${profile.patientYmm+profile.offsetYmm}mm`,width:`${profile.paperWidthMm-profile.patientXmm-profile.offsetXmm-2}mm`}}><Patient report={report}/></div>
    <table className="mm-table mm-positioned-table" style={{left:`${profile.tableXmm+profile.offsetXmm}mm`,top:`${profile.tableYmm+profile.offsetYmm}mm`,width:`${width}mm`}}><Columns widths={profile.columnWidthsMm}/><thead><tr>{heading.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{page.map((r,i)=><tr key={`${r.index}-${i}`} data-result-index={r.index} data-continued={r.continued || undefined}>{r.cells.map((text,c)=><td key={c}>{r.continued && c===0 && <span className="mm-continued">{r.label}<br/></span>}{text}</td>)}</tr>)}</tbody></table>
-   <div className="mm-page-number" style={{left:`${profile.tableXmm+profile.offsetXmm}mm`,top:`${profile.paperHeightMm-profile.reservedFooterMm-numberHeight-1}mm`,width:`${width}mm`}}>Patient {report.pt_id} · Order #{report.id} · Page {index+1} of {visiblePages.length}{!report.issued?' · DRAFT':''}</div>
+   <div className="mm-page-number" style={{left:`${profile.tableXmm+profile.offsetXmm}mm`,top:`${profile.paperHeightMm-profile.reservedFooterMm-numberHeight-1}mm`,width:`${width}mm`}}>Patient {report.pt_id} · Order #{report.id} · Page {index+1} of {visiblePages.length}{!report.issued?' · DRAFT':''}{report.report_version ? ` · Version ${report.report_version}` : ''}</div>
    {profile.mode==='full' && <div className="mm-footer-region" style={{left:`${profile.patientXmm+profile.offsetXmm}mm`,top:`${profile.paperHeightMm-profile.reservedFooterMm+1}mm`,width:`${profile.paperWidthMm-profile.patientXmm-profile.offsetXmm-2}mm`}}><LabFooter report={report}/></div>}
   </div>)}</div>
  </div>;

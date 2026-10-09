@@ -68,6 +68,7 @@ class DatabaseManager {
       if(original) recovery.inspect(this.SQL,original);
       this._newDatabase = original===null;
       this.db = original ? new this.SQL.Database(Buffer.from(original)) : new this.SQL.Database();
+      if(original && this.get('PRAGMA user_version').user_version<2)this._backupReferenceUpgrade(original,'before-professional-readiness');
       const hasVersions = this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='reference_migrations'");
       if(original && this.get('PRAGMA user_version').user_version<1)this._backupReferenceUpgrade(original,'before-credential-recovery-upgrade');
       if (original && (!hasVersions || this.get('SELECT COUNT(*) AS n FROM reference_migrations WHERE version IN (1,2,3)').n!==3)) this._backupReferenceUpgrade(original);
@@ -79,7 +80,7 @@ class DatabaseManager {
           const count = this.get('SELECT COUNT(*) as c FROM parameters');
           if (count && count.c === 0) this.loadCatalogueFromJson();
           this.migrateReferenceIntervals();
-          this.db.run("PRAGMA user_version=1");
+          require('./professionalMigration.cjs').upgrade(this);
         } finally { this._initializing = false; }
       });
     } catch (error) {
@@ -109,12 +110,11 @@ class DatabaseManager {
   }
 
   acquireLock() {
-    if(this._lockFile)return;
-    const file=this.dbPath+'.lock';
-    try { const fd=fs.openSync(file,'wx',0o600);this._lockFile=file;try{fs.writeFileSync(fd,JSON.stringify({pid:process.pid}));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}this._lockFile=file; }
-    catch(e){if(e.code!=='EEXIST')throw e;let pid;try{pid=JSON.parse(fs.readFileSync(file,'utf8')).pid;}catch{}if(Number.isInteger(pid)){try{process.kill(pid,0);}catch(err){if(err.code==='ESRCH'){fs.unlinkSync(file);return this.acquireLock();}}}throw new Error('Database is in use or its ownership lock needs manual recovery. Close other instances.');}
+    if(this._ownershipHandle)return;
+    this._ownershipHandle=require('./databaseOwnership.cjs').acquire(this.dbPath+'.lock');
+    this._lockFile=this._ownershipHandle.file;
   }
-  releaseLock(){if(this._lockFile){fs.unlinkSync(this._lockFile);this._lockFile=null;}}
+  releaseLock(){if(this._ownershipHandle){require('./databaseOwnership.cjs').release(this._ownershipHandle);this._ownershipHandle=null;this._lockFile=null;}}
   save() {
     if(this._initializing || this._initializationFailed)return;
     if(this._restoring)throw new Error('Database recovery is in progress.');
@@ -122,7 +122,7 @@ class DatabaseManager {
   }
   credentialState(){return {setupRequired:this.get('SELECT COUNT(*) AS n FROM users').n===0};}
   setupAdmin(username,password){if(!require('./onboarding.cjs').isFreshInstall(this) && this.credentialState().setupRequired)throw new Error('Existing lab data without accounts requires offline administrator recovery.');if(!this.credentialState().setupRequired)throw new Error('Administrator setup is already complete');if(typeof username!=='string'||!/^[A-Za-z0-9._-]{1,100}$/.test(username))throw new Error('Invalid username');credentials.validate(password);return this._referenceAtomic(()=>{if(!require('./onboarding.cjs').isFreshInstall(this))throw new Error('Setup changed or recovery is required');this.db.run("INSERT INTO users(username,password_hash,role,display_name) VALUES(?,?,'admin',?)",[username,hashPassword(password),username]);const actor=this.get('SELECT id,username FROM users WHERE username=?',[username]);require('./applicationOperations.cjs').audit(this,actor,'administrator-setup',actor.id);return {ok:true};});}
-  restoreValidated(bytes,actor){const summary=recovery.inspect(this.SQL,bytes,{current:true,expected:this.db});if(!summary.users)throw new Error('Backup must contain an administrator');if(this._restoring)throw new Error('Recovery already in progress');const original=Buffer.from(this.db.export());const recoveryPath=this._backupReferenceUpgrade(original,'before-restore');this._restoring=true;let candidate;try{candidate=new this.SQL.Database(Buffer.from(bytes));const previous=this.db;this.db=candidate;try{require('./applicationOperations.cjs').audit(this,actor,'database-restored',null,{recoverySnapshot:true});}finally{this.db=previous;}const committed=Buffer.from(candidate.export());recovery.inspect(this.SQL,committed,{current:true,expected:previous});recovery.replace(this.dbPath,committed);previous.close();this.db=candidate;candidate=null;return {ok:true,recoveryPath};}finally{candidate?.close();this._restoring=false;}}
+  restoreValidated(bytes,actor){bytes=require('./professionalMigration.cjs').normalize(this.SQL,bytes);const summary=recovery.inspect(this.SQL,bytes,{current:true,expected:this.db});if(!summary.users)throw new Error('Backup must contain an administrator');if(this._restoring)throw new Error('Recovery already in progress');const original=Buffer.from(this.db.export());const recoveryPath=this._backupReferenceUpgrade(original,'before-restore');this._restoring=true;let candidate;try{candidate=new this.SQL.Database(Buffer.from(bytes));const previous=this.db;this.db=candidate;try{require('./applicationOperations.cjs').audit(this,actor,'database-restored',null,{recoverySnapshot:true});}finally{this.db=previous;}candidate.run('UPDATE backup_health SET last_external_at=NULL,last_external_kind=NULL,last_external_name=NULL,last_external_size=NULL,last_external_digest=NULL WHERE id=1');const committed=Buffer.from(candidate.export());recovery.inspect(this.SQL,committed,{current:true,expected:previous});recovery.replace(this.dbPath,committed);previous.close();this.db=candidate;candidate=null;return {ok:true,recoveryPath};}finally{candidate?.close();this._restoring=false;}}
 
   migrate() {
     const alters = [
@@ -588,6 +588,7 @@ class DatabaseManager {
       const saved = new Map(this.all('SELECT * FROM order_results WHERE order_id=?',[orderId]).map(r => [r.parameter_id,r]));
       const computed = new Map();
       const rawComputed = new Map();
+      const calculationReviews=new Map(),calculationSnapshots=new Map();
       const visiting = new Set();
       const derive = t => {
         if (computed.has(t.id)) return computed.get(t.id);
@@ -597,6 +598,8 @@ class DatabaseManager {
         try {
           const f = this.get('SELECT formula_expression,dependencies FROM formulas WHERE parameter_id=?',[t.id]);
           if (f) {
+            const provenance=require('./formulaProvenance.cjs').capture(t,f,tests);
+            calculationSnapshots.set(t.id,provenance);
             let expr = f.formula_expression;
             const vals = {};
             for (const code of (f.dependencies || '').split(',').map(s=>s.trim()).filter(Boolean)) {
@@ -613,10 +616,10 @@ class DatabaseManager {
             const n = Function(`"use strict"; return (${expr})`)();
             if (typeof n === 'number' && Number.isFinite(n)) {
               value = parseNumericResult(n.toFixed(t.decimal_places ?? 0));
-              rawComputed.set(t.id,n);
-            }
-          }
-        } catch { value = null; }
+              rawComputed.set(t.id,n);calculationSnapshots.set(t.id,{...provenance,raw_value:n});
+            } else throw new Error('Non-finite derived result');
+          } else throw new Error('Derived formula is missing');
+        } catch(error) { value = null; calculationReviews.set(t.id,error.message==='Formula units differ from the existing source; calculation withheld for manual review'?error.message:'Derived result unavailable: missing/invalid inputs or calculation applicability requires review'); }
         visiting.delete(t.id);
         computed.set(t.id,value);
         return value;
@@ -625,9 +628,10 @@ class DatabaseManager {
       for (const t of tests.filter(t=>t.type==='derived')) {
         const value = derive(t);
         const ref = this.referenceFor(t.id,patient || {},t.unit || '');
-        const flag = require('./referenceIntervals.cjs').rules.classify(rawComputed.get(t.id) ?? value,ref.interval,ref.critical);
+        const flag = calculationReviews.has(t.id)?'':require('./referenceIntervals.cjs').rules.classify(rawComputed.get(t.id) ?? value,ref.interval,ref.critical);
         put({id:t.id,value,text:null,flag});
-        this.db.run('UPDATE order_results SET raw_result_value=? WHERE order_id=? AND parameter_id=?',[rawComputed.get(t.id) ?? null,orderId,t.id]);
+        if(value===null)this.db.run("INSERT OR IGNORE INTO order_results(order_id,parameter_id,result_value,result_text,flag) VALUES(?,?,NULL,NULL,'')",[orderId,t.id]);
+        this.db.run('UPDATE order_results SET raw_result_value=?,calculation_review=?,calculation_snapshot=? WHERE order_id=? AND parameter_id=?',[rawComputed.get(t.id) ?? null,calculationReviews.get(t.id)||null,calculationSnapshots.has(t.id)?JSON.stringify(calculationSnapshots.get(t.id)):null,orderId,t.id]);
       }
       for (const t of tests.filter(t=>t.type!=='derived')) {
         const result = this.get('SELECT result_value FROM order_results WHERE order_id=? AND parameter_id=?',[orderId,t.id]);
@@ -783,14 +787,14 @@ class DatabaseManager {
     const exportDir = this._exportDir();
     if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const outPath = path.join(exportDir, `orders_export_${timestamp}.xlsx`);
+    const outPath = path.join(exportDir, `orders_export_${timestamp}_${require('crypto').randomUUID()}.xlsx`);
 
     let sql = `SELECT o.id, o.order_date, o.status, p.patient_id, p.name as patient_name, p.age, p.sex, p.referred_by
                FROM orders o JOIN patients p ON o.patient_id = p.id WHERE 1=1`;
     const args = [];
     if (params.dateFrom) { sql += ' AND date(o.order_date) >= ?'; args.push(params.dateFrom); }
     if (params.dateTo) { sql += ' AND date(o.order_date) <= ?'; args.push(params.dateTo); }
-    sql += ' ORDER BY o.order_date DESC, o.id DESC LIMIT 5000';
+    sql += ' ORDER BY o.order_date DESC, o.id DESC';
 
     const rows = this.all(sql, args);
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -805,7 +809,7 @@ class DatabaseManager {
     const exportDir = this._exportDir();
     if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const outPath = path.join(exportDir, `referrals_export_${timestamp}.xlsx`);
+    const outPath = path.join(exportDir, `referrals_export_${timestamp}_${require('crypto').randomUUID()}.xlsx`);
 
     let sql = `SELECT p.referred_by as Referrer, COUNT(DISTINCT p.id) as PatientCount
                FROM patients p JOIN orders o ON o.patient_id = p.id
@@ -845,7 +849,7 @@ class DatabaseManager {
   }
 
   computeOrderBill(orderId) {
-    if (this._billingHistoryProtected(orderId)) {
+    if (this._billingHistoryProtected(orderId) || this.get('SELECT 1 AS posted FROM billing_accounts WHERE order_id=? LIMIT 1',[orderId])) {
       return this.get('SELECT total_amount FROM orders WHERE id=?', [orderId])?.total_amount ?? 0;
     }
     const DEFAULT_RATE = 50;
@@ -855,19 +859,21 @@ class DatabaseManager {
     const rateMap = {};
     const rateRows = this.all('SELECT parameter_id, rate FROM test_rates');
     (rateRows || []).forEach((r) => { rateMap[r.parameter_id] = parseFloat(r.rate) || 0; });
-    let total = 0;
+    let totalMinor = 0;
+    const money=require('./money.cjs');
     for (const t of tests) {
       const rate = rateMap[t.parameter_id] ?? DEFAULT_RATE;
       this.run('UPDATE order_tests SET rate = ? WHERE id = ?', [rate, t.id], batch);
-      total += rate;
+      totalMinor = money.add(totalMinor,money.parseMoney(String(rate)));
     }
+    const total=money.toLegacyAmount(totalMinor);
     this.run('UPDATE orders SET total_amount = ? WHERE id = ?', [total, orderId], batch);
     this.save();
     return total;
   }
 
   updateOrderCommission(orderId) {
-    if (this._billingHistoryProtected(orderId)) return;
+    if (this._billingHistoryProtected(orderId) || this.get('SELECT 1 AS posted FROM billing_accounts WHERE order_id=? LIMIT 1',[orderId])) return;
     const order = this.get('SELECT o.total_amount, p.referred_by FROM orders o JOIN patients p ON o.patient_id = p.id WHERE o.id = ?', [orderId]);
     if (!order) return;
     const refName = normalizeReferrerName(order.referred_by);
@@ -876,7 +882,7 @@ class DatabaseManager {
     const lab = this.get('SELECT commission_default_percent FROM lab WHERE id = 1');
     const pct = refPct != null ? parseFloat(refPct.commission_percent) : (parseFloat(lab?.commission_default_percent) ?? 45);
     const amount = parseFloat(order.total_amount) || 0;
-    const commission = Math.round((amount * pct / 100) * 100) / 100;
+    const commission = require('./money.cjs').toLegacyAmount(require('./money.cjs').percent(require('./money.cjs').legacyMoney(amount),String(pct)));
     this.run('DELETE FROM order_commission_log WHERE order_id = ?', [orderId]);
     this.run(
       'INSERT INTO order_commission_log (order_id, referrer_name, order_amount, commission_amount, commission_percent) VALUES (?, ?, ?, ?, ?)',
@@ -894,6 +900,8 @@ class DatabaseManager {
 
   /** Remove all patients, orders, results, print/commission logs, and patient ID sequence. Keeps users, lab config, catalogue, rates, referrer commission rules. */
   clearAllPatients() {
+    if(this.get('SELECT COUNT(*) AS n FROM issued_reports').n || this.get('SELECT COUNT(*) AS n FROM billing_events').n)throw new Error('Issued reports and posted billing history cannot be erased. Preserve or archive this database.');
+    this.db.run('DELETE FROM registration_requests');this.db.run('DELETE FROM report_amendment_requests');this.db.run('DELETE FROM report_amendment_drafts');this.db.run('DELETE FROM report_versions');this.db.run('DELETE FROM billing_accounts');
     const batch = true;
     // Preserve configuration, issuance and security audit history during an authorized wipe.
     this.run('DELETE FROM issued_reports', [], batch);
@@ -925,5 +933,6 @@ class DatabaseManager {
 
 Object.assign(DatabaseManager.prototype, require('./referenceIntervals.cjs'));
 Object.assign(DatabaseManager.prototype, require('./printProfile.cjs').methods);
+Object.assign(DatabaseManager.prototype, require('./reportAmendments.cjs'));
 DatabaseManager.hashPassword = hashPassword;
 module.exports = DatabaseManager;

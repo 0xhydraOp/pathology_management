@@ -5,12 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pngPath = path.join(__dirname, '../assets/icon.png');
+const pngPath = path.join(__dirname, '../public/assets/app-mark.svg');
 const squarePath = path.join(__dirname, '../build/icon-256.png');
 const icoPath = path.join(__dirname, '../build/icon.ico');
 
 if (!fs.existsSync(pngPath)) {
-  console.error('Icon PNG not found at', pngPath);
+  console.error('App mark not found at', pngPath);
   process.exit(1);
 }
 

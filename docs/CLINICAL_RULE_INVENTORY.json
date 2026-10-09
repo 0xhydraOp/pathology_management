@@ -1,0 +1,2489 @@
+{
+  "status": "PENDING QUALIFIED LAB APPROVAL — software inventory only",
+  "input": "pathology_parameters.json",
+  "catalogueVersion": "1.5",
+  "catalogueSha256": "5db336bbe842fe49457fb83c69f0e7d6d62a20b60991bdecd641ddc466adccab",
+  "sourceClaimUnverified": "Indian population (Apollo multicentric study, Indian J Clin Biochem 2014; labs: Dr Lal PathLabs, Thyrocare, Murshidabad Clinical Lab)",
+  "scope": "Shipped catalogue, not a customer lab database; local approved intervals may differ.",
+  "rounding": "JavaScript Number binary64; derived results use Number.toFixed(decimal), then numeric storage. Derived dependencies use their stored rounded results. Classification uses raw final calculation. Human review required for near-boundary differences.",
+  "parameters": [
+    {
+      "code": "HB",
+      "name": "Hemoglobin",
+      "type": "numeric",
+      "unit": "g/dL",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 12.3,
+          "high": 17
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 9.9,
+          "high": 14.3
+        }
+      ],
+      "critical": {
+        "low": 7,
+        "high": 20
+      },
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "RBC",
+      "name": "RBC Count",
+      "type": "numeric",
+      "unit": "million/uL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 4.5,
+          "high": 5.5
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 3.5,
+          "high": 5.2
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "WBC",
+      "name": "WBC Count",
+      "type": "numeric",
+      "unit": "/uL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 4200,
+          "high": 9800
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 4000,
+          "high": 10400
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 4000,
+          "high": 11000
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "PLT",
+      "name": "Platelet Count",
+      "type": "numeric",
+      "unit": "/uL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 130000,
+          "high": 380000
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 130000,
+          "high": 420000
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 150000,
+          "high": 400000
+        }
+      ],
+      "critical": {
+        "low": 20000,
+        "high": 1000000
+      },
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "PCV",
+      "name": "Packed Cell Volume",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 37,
+          "high": 51
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 30,
+          "high": 43
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "MCV",
+      "name": "Mean Corpuscular Volume",
+      "type": "numeric",
+      "unit": "fL",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 78,
+          "high": 97
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 72,
+          "high": 96
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 80,
+          "high": 100
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "MCH",
+      "name": "Mean Corpuscular Hemoglobin",
+      "type": "numeric",
+      "unit": "pg",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 26,
+          "high": 33
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 23,
+          "high": 32
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 27,
+          "high": 32
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "MCHC",
+      "name": "Mean Corpuscular Hemoglobin Concentration",
+      "type": "numeric",
+      "unit": "g/dL",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 31,
+          "high": 36
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 30,
+          "high": 35
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 32,
+          "high": 36
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "ESR",
+      "name": "Erythrocyte Sedimentation Rate",
+      "type": "numeric",
+      "unit": "mm/hr",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 2,
+          "high": 22
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 4,
+          "high": 55
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "NEUT",
+      "name": "Neutrophils",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 40,
+          "high": 70
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "LYMPH",
+      "name": "Lymphocytes",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 20,
+          "high": 45
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "EOS",
+      "name": "Eosinophils",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 1,
+          "high": 8
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "MONO",
+      "name": "Monocytes",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 2,
+          "high": 10
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "BASO",
+      "name": "Basophils",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 2
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "RDW",
+      "name": "Red Cell Distribution Width",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 11.5,
+          "high": 14.5
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "PERIPHERAL_SMEAR",
+      "name": "Peripheral Smear",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "RETICULOCYTE",
+      "name": "Reticulocyte Count",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0.5,
+          "high": 2.5
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "AEC",
+      "name": "Absolute Eosinophil Count",
+      "type": "numeric",
+      "unit": "/µL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 40,
+          "high": 400
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "FBS",
+      "name": "Fasting Blood Sugar",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 78,
+          "high": 110
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 76,
+          "high": 108
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 70,
+          "high": 100
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "PPBS",
+      "name": "Post Prandial Blood Sugar",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 68,
+          "high": 136
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "HBA1C",
+      "name": "Glycated Hemoglobin (HbA1c)",
+      "type": "numeric",
+      "unit": "%",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 4,
+          "high": 5.6
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "GTT",
+      "name": "Glucose Tolerance Test",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "INSULIN",
+      "name": "Insulin",
+      "type": "numeric",
+      "unit": "µIU/mL",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 2.6,
+          "high": 24.9
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "C_PEPTIDE",
+      "name": "C-Peptide",
+      "type": "numeric",
+      "unit": "ng/mL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0.9,
+          "high": 7.1
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "SGOT",
+      "name": "Aspartate Aminotransferase (SGOT/AST)",
+      "type": "numeric",
+      "unit": "U/L",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 14,
+          "high": 42
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 12,
+          "high": 37
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 0,
+          "high": 40
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "SGPT",
+      "name": "Alanine Aminotransferase (SGPT/ALT)",
+      "type": "numeric",
+      "unit": "U/L",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 41
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "ALP",
+      "name": "Alkaline Phosphatase",
+      "type": "numeric",
+      "unit": "U/L",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 44,
+          "high": 147
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "BIL_TOTAL",
+      "name": "Bilirubin Total",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 0.3,
+          "high": 1.2
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 0.3,
+          "high": 1
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 0,
+          "high": 1.2
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "BIL_DIRECT",
+      "name": "Bilirubin Direct",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 0.3
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "TP",
+      "name": "Total Protein",
+      "type": "numeric",
+      "unit": "g/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 6.7,
+          "high": 8.5
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "ALB",
+      "name": "Albumin",
+      "type": "numeric",
+      "unit": "g/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 3.9,
+          "high": 5.1
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 3.7,
+          "high": 4.9
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 3.4,
+          "high": 5.4
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "GLOB",
+      "name": "Globulin",
+      "type": "derived",
+      "unit": "g/dL",
+      "decimals": 2,
+      "formula": "TP - ALB",
+      "dependencies": [
+        {
+          "code": "TP",
+          "unit": "g/dL",
+          "type": "numeric"
+        },
+        {
+          "code": "ALB",
+          "unit": "g/dL",
+          "type": "numeric"
+        }
+      ],
+      "applicability": "All ordered dependencies must be valid finite numbers; non-finite calculations withheld.",
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "AGRATIO",
+      "name": "Albumin/Globulin Ratio",
+      "type": "derived",
+      "unit": "",
+      "decimals": 2,
+      "formula": "ALB / GLOB",
+      "dependencies": [
+        {
+          "code": "ALB",
+          "unit": "g/dL",
+          "type": "numeric"
+        },
+        {
+          "code": "GLOB",
+          "unit": "g/dL",
+          "type": "derived"
+        }
+      ],
+      "applicability": "Existing code withholds when GLOB = 0; all non-finite calculations withheld.",
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "GGT",
+      "name": "Gamma-Glutamyl Transferase",
+      "type": "numeric",
+      "unit": "U/L",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 13,
+          "high": 61
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 10,
+          "high": 39
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "UREA",
+      "name": "Blood Urea Nitrogen",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 13,
+          "high": 35
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 11,
+          "high": 31
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 15,
+          "high": 40
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "CREAT",
+      "name": "Creatinine",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 0.7,
+          "high": 1.2
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 0.6,
+          "high": 0.9
+        }
+      ],
+      "critical": {
+        "high": 5
+      },
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "URIC",
+      "name": "Uric Acid",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 3.5,
+          "high": 8.2
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 2.7,
+          "high": 6.5
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "SODIUM",
+      "name": "Sodium",
+      "type": "numeric",
+      "unit": "mEq/L",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 136,
+          "high": 145
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "POTASSIUM",
+      "name": "Potassium",
+      "type": "numeric",
+      "unit": "mEq/L",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 3.5,
+          "high": 5.1
+        }
+      ],
+      "critical": {
+        "low": 2.5,
+        "high": 6
+      },
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "CHLORIDE",
+      "name": "Chloride",
+      "type": "numeric",
+      "unit": "mEq/L",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 98,
+          "high": 106
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "CALCIUM",
+      "name": "Calcium",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 8.6,
+          "high": 10.2
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "PHOSPHORUS",
+      "name": "Phosphorus",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 2.5,
+          "high": 4.5
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "MAGNESIUM",
+      "name": "Magnesium",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 1.7,
+          "high": 2.2
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "TC",
+      "name": "Total Cholesterol",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 115,
+          "high": 254
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 117,
+          "high": 252
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 0,
+          "high": 200
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "TG",
+      "name": "Triglycerides",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 55,
+          "high": 267
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 52,
+          "high": 207
+        },
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 17,
+          "low": 0,
+          "high": 150
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "HDL",
+      "name": "High Density Lipoprotein Cholesterol",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "male",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 25,
+          "high": 61
+        },
+        {
+          "sex": "female",
+          "min_age": 18,
+          "max_age": 150,
+          "low": 29,
+          "high": 70
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "LDL",
+      "name": "Low Density Lipoprotein Cholesterol",
+      "type": "derived",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": "TC - HDL - (TG / 5)",
+      "dependencies": [
+        {
+          "code": "TC",
+          "unit": "mg/dL",
+          "type": "numeric"
+        },
+        {
+          "code": "HDL",
+          "unit": "mg/dL",
+          "type": "numeric"
+        },
+        {
+          "code": "TG",
+          "unit": "mg/dL",
+          "type": "numeric"
+        }
+      ],
+      "applicability": "Existing code withholds calculation when TG > 400; threshold provenance unknown. No additional unapproved clinical applicability criteria are inferred.",
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "VLDL",
+      "name": "Very Low Density Lipoprotein Cholesterol",
+      "type": "derived",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": "TG / 5",
+      "dependencies": [
+        {
+          "code": "TG",
+          "unit": "mg/dL",
+          "type": "numeric"
+        }
+      ],
+      "applicability": "All ordered dependencies must be valid finite numbers; non-finite calculations withheld.",
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "CRP",
+      "name": "C-Reactive Protein",
+      "type": "numeric",
+      "unit": "mg/L",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 6
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "RA_FACTOR",
+      "name": "Rheumatoid Factor",
+      "type": "numeric",
+      "unit": "IU/mL",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 15
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "ASO",
+      "name": "ASO (Anti-Streptolysin O)",
+      "type": "numeric",
+      "unit": "IU/mL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 200
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "ANTI_HCV",
+      "name": "Anti Hepatitis C Virus Antibody",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "TSH",
+      "name": "Thyroid Stimulating Hormone",
+      "type": "numeric",
+      "unit": "µIU/mL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0.4,
+          "high": 4
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "T3",
+      "name": "Triiodothyronine (Total T3)",
+      "type": "numeric",
+      "unit": "ng/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 80,
+          "high": 200
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "T4",
+      "name": "Thyroxine (Total T4)",
+      "type": "numeric",
+      "unit": "µg/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 4.5,
+          "high": 12.5
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "FREE_T3",
+      "name": "Free Triiodothyronine",
+      "type": "numeric",
+      "unit": "pg/mL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 2.3,
+          "high": 4.2
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "FREE_T4",
+      "name": "Free Thyroxine",
+      "type": "numeric",
+      "unit": "ng/dL",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0.8,
+          "high": 1.8
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "IGE",
+      "name": "Total IgE",
+      "type": "numeric",
+      "unit": "IU/mL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 0,
+          "high": 100
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "MP",
+      "name": "Malaria Antigen",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "DENGUE",
+      "name": "Dengue NS1 Antigen",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "DENGUE_IGM",
+      "name": "Dengue IgM Antibody",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "WIDAL",
+      "name": "Widal Test (Typhoid Agglutination)",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "TYPHOID",
+      "name": "Typhoid Widal Test",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "TYPHOID_IGM",
+      "name": "Typhoid IgM Antibody",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "RBS",
+      "name": "Random Blood Sugar",
+      "type": "numeric",
+      "unit": "mg/dL",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 70,
+          "high": 140
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "BLOOD_GRP",
+      "name": "Blood Group and Rh Typing",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "RH_FACTOR",
+      "name": "Rhesus Factor",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "HBSAG",
+      "name": "Hepatitis B Surface Antigen",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "HIV",
+      "name": "Human Immunodeficiency Virus Antibody",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "VDRL",
+      "name": "VDRL/RPR (Syphilis Screening)",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "PT",
+      "name": "Prothrombin Time",
+      "type": "numeric",
+      "unit": "sec",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "INR",
+      "name": "International Normalized Ratio",
+      "type": "numeric",
+      "unit": "",
+      "decimals": 2,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "URINE_R",
+      "name": "Urine Routine Examination",
+      "type": "text",
+      "unit": "",
+      "decimals": 0,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "BT",
+      "name": "Bleeding Time",
+      "type": "numeric",
+      "unit": "min",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "CT",
+      "name": "Clotting Time",
+      "type": "numeric",
+      "unit": "min",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    },
+    {
+      "code": "APTT",
+      "name": "Activated Partial Thromboplastin Time",
+      "type": "numeric",
+      "unit": "sec",
+      "decimals": 1,
+      "formula": null,
+      "dependencies": [],
+      "applicability": null,
+      "ranges": [
+        {
+          "sex": "any",
+          "min_age": 0,
+          "max_age": 150,
+          "low": 25,
+          "high": 35
+        }
+      ],
+      "critical": null,
+      "diagnosticCutoffs": "No separate diagnostic-cutoff rules present in shipped catalogue; reference intervals are not diagnostic cutoffs.",
+      "minAllowedValue": null,
+      "maxAllowedValue": null,
+      "clinicalProvenance": "Unknown/unverified per-rule provenance. Catalogue-wide source claim does not establish clinical approval.",
+      "softwareSources": [
+        "electron/database.js:saveOrderResults",
+        "electron/referenceIntervals.cjs",
+        "src/pages/ResultEntrySimple.jsx",
+        "src/utils/referenceIntervals.js"
+      ]
+    }
+  ],
+  "syntheticWorkedExamples": [
+    {
+      "formula": "GLOB",
+      "inputs": {
+        "TP": 7.25,
+        "ALB": 4.13
+      },
+      "raw": 3.12,
+      "display": "3.12"
+    },
+    {
+      "formula": "AGRATIO",
+      "inputs": {
+        "ALB": 4.13,
+        "GLOB": 3.12
+      },
+      "raw": 1.3237179487179487,
+      "display": "1.32"
+    },
+    {
+      "formula": "LDL",
+      "inputs": {
+        "TC": 200,
+        "HDL": 50,
+        "TG": 150
+      },
+      "raw": 120,
+      "display": "120"
+    },
+    {
+      "formula": "VLDL",
+      "inputs": {
+        "TG": 150
+      },
+      "raw": 30,
+      "display": "30"
+    },
+    {
+      "formula": "LDL",
+      "inputs": {
+        "TC": 200,
+        "HDL": 50,
+        "TG": 400
+      },
+      "raw": 70,
+      "display": "70",
+      "note": "Existing code threshold accepts 400; not clinical endorsement."
+    },
+    {
+      "formula": "LDL",
+      "inputs": {
+        "TC": 200,
+        "HDL": 50,
+        "TG": 400.01
+      },
+      "raw": null,
+      "display": "Not calculable"
+    },
+    {
+      "formula": "AGRATIO",
+      "inputs": {
+        "ALB": 4,
+        "GLOB": 0
+      },
+      "raw": null,
+      "display": "Missing/not calculable"
+    },
+    {
+      "formula": "ANY",
+      "inputs": {
+        "dependency": ""
+      },
+      "raw": null,
+      "display": "Missing/not calculable"
+    },
+    {
+      "formula": "ANY",
+      "inputs": {
+        "dependency": "12abc"
+      },
+      "outcome": "Reject entire save; keep previous saved state"
+    },
+    {
+      "formula": "SYNTHETIC_ONLY",
+      "inputs": {
+        "A": 1.004,
+        "B": 1
+      },
+      "raw": 1.004,
+      "display": "1.00",
+      "referenceHigh": 1.003,
+      "classification": "H",
+      "note": "Flag raw calculation, not displayed rounded text; never use this invented range clinically."
+    },
+    {
+      "formula": "LDL/VLDL",
+      "inputs": {
+        "TG": 150
+      },
+      "unit": "mmol/L",
+      "outcome": "Must withhold derived calculation; no automatic unit conversion"
+    }
+  ]
+}

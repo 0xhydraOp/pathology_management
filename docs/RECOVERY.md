@@ -16,6 +16,12 @@ Password replacement requires the current password. Admin account creation/reset
 
 ## Portable encrypted backups
 
+### Backup readiness and rehearsals
+
+Settings → Backup shows a configurable, non-blocking reminder (1–365 days). Staff may view status; only local administrators can change the reminder policy or create portable backups. A verified user-selected copy outside the application data folder advances the reminder only after database validation and exact file verification. Cancelled, failed, damaged and local-folder backups do not advance it. Encrypted output is authenticated before recording success. No passphrase is retained in reminder metadata or audit entries.
+
+The status distinguishes local automatic recovery copies from user-selected copies. A selected file may still be on the same disk: this does not prove an offsite backup, ongoing file availability or a successful restore. After restore the recorded external-copy fields are cleared; make a new verified copy. A future recorded date produces a clock warning rather than a reassuring age. Follow [RESTORE_REHEARSAL.md](RESTORE_REHEARSAL.md) using a separate test installation before relying on a backup.
+
 Settings provides administrator-only encrypted backups in the app folder or a selected location. Supply a unique passphrase of at least 12 characters and keep it separately from the backup. **A lost passphrase cannot recover an encrypted backup.** The application embeds no decryption secret.
 
 Version 2 envelope: `LABBAK02` magic, 16-byte random salt, 12-byte random nonce, AES-256-GCM ciphertext and 16-byte authentication tag. The entire header is authenticated additional data. Keys use the fixed scrypt parameters above; unsupported envelopes cannot request arbitrary KDF work. Wrong passphrase, changed metadata, changed ciphertext/tag and truncation fail authentication before database inspection. Backup selection is capped at 256 MiB.
@@ -50,7 +56,7 @@ On an installed Windows computer:
 5. Keep the verified pre-reset snapshot protected. Close recovery, reopen the normal app and log in. Only the selected credential and OS-authenticated audit entry change; clinical records and previous audits remain intact.
 
 ```powershell
-& "C:\Program Files\Patholy Management System\Patholy Management System.exe" --recover-administrator
+& "C:\Program Files\Pathology Management System\Pathology Management System.exe" --recover-administrator
 ```
 
 The regular shortcuts still open normal operation. Recovery exposes dedicated sender-checked operations in a sandboxed local window, without generic SQL, actor input or a remote endpoint. The ownership lock is held until the recovery window closes; do not remove a live/ambiguous lock to force recovery. Password fields hide input; credentials are not placed on command lines or logged.
@@ -73,8 +79,14 @@ Electron's application instance lock is retained. A per-database exclusive `lab.
 
 ## Persistence and remaining limitations
 
-Full-snapshot saves and reference transactions now use verified sibling temporary-file replacement with file flushes. Numeric result saves retain their existing flushed transaction replacement. Ordinary save failure restores the last persisted in-memory state; atomic operations restore their pre-operation state. Initialization failure cannot flush partial migration data during close. Unversioned installations receive a verified pre-upgrade copy before schema marker `PRAGMA user_version=1` is committed. Parameter IDs, medical values, billing rules, approval and report payloads are retained.
+Full-snapshot saves and reference transactions now use verified sibling temporary-file replacement with file flushes. Numeric result saves retain their existing flushed transaction replacement. Ordinary save failure restores the last persisted in-memory state; atomic operations restore their pre-operation state. Initialization failure cannot flush partial migration data during close. Unversioned installations receive a verified pre-upgrade copy before schema marker `PRAGMA user_version=2` is committed. Supported schema-1 backups normalize in memory to the additive professional layout before replacement. New report lineage, draft identity, unique request indices, eligible ledger amounts and backup metadata are also validated. Parameter IDs, medical values, billing rules, approval and report payloads are retained.
 
 This is still SQL.js full-snapshot persistence, not a storage-engine replacement. File flush and same-filesystem rename improve recovery but do not guarantee durability through every power-loss, disk/firmware failure, network share or OneDrive synchronization conflict. Directory metadata is not portably flushed on Windows. A file-replacement error can arise from antivirus or another reader; keep verified backups outside the synchronized active directory. Locks do not protect against deliberate OS-level modification, copying the folder to another writer, or synchronization between machines. Local files and raw recovery copies are not encrypted by this task.
 
 Packaged Electron/OS dialog testing, physical printer alignment, real-device power-loss testing and a supported automated offline legacy-backup converter remain outstanding release work. Browser and synthetic fault tests do not establish these properties. The application is not claimed fully secured.
+
+## Ownership gate recovery
+
+Database acquisition and release now use a serialized ownership gate and an exact owner token. A dead normal ownership lock can be reclaimed after process termination. A crash during the short gate operation leaves an uncertain gate and fails closed rather than risking two writers. Do not remove a live, malformed or ambiguous lock to force the app to start.
+
+With all application/recovery processes closed, an authorized Windows administrator should preserve the complete data folder, inspect the PID/token and process state, and obtain specialist assistance if ownership cannot be established. Only after proving that no process owns that directory may an abandoned `lab.db.lock.gate` be quarantined outside the data directory. Retain the quarantined file for diagnosis, then restart and verify the database/backup. No automatic or remote lock bypass is provided. Older executables do not participate in the new gate protocol: never run old/new versions or their recovery tools concurrently against the same database.

@@ -1,5 +1,5 @@
-PATHOLY MANAGEMENT SYSTEM — OFFLINE 1.1.0-rc.2
-Unsigned Windows x64 prerelease; wider installation and lab validation remain pending.
+PATHOLOGY MANAGEMENT SYSTEM — OFFLINE 1.1.0
+Unsigned Windows x64 release; wider installation and lab validation remain pending.
 
 1. Verify SHA256SUMS.txt, then run the matching Offline Setup installer.
 2. Choose the installation folder. No internet, activation key or remote account is required.
@@ -14,3 +14,5 @@ Uninstallation leaves lab data in place. Close the app before packaged administr
 See RECOVERY.md and OFFLINE_RELEASE.md beside the installed executable.
 Windows 10/11 x64 supported; Windows 11 tested. Physical printing, elevated installation/upgrade
 and actual power loss are NOT TESTED. v1.1.0-rc.1 activation requirements are historical only.
+
+Installer builder: Inno Setup. Older NSIS installs must be backed up and uninstalled without deleting lab data before installing this version. Read INNO_INSTALLATION.md.

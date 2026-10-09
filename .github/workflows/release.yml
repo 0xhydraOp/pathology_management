@@ -23,5 +23,5 @@ jobs:
         with:
           name: offline-unsigned-candidate
           path: |
-            release/*Offline*Setup*.exe
-            release/*Offline*Windows-Install-Package.zip
+            release/final-*/*Offline*Setup*.exe
+            release/final-*/*Windows-Install-Package.zip

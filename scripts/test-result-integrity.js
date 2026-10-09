@@ -176,11 +176,11 @@ test('batch and normal saves refresh derived results; missing and infinity stay 
   assert.equal(db.get('SELECT result_value FROM order_results WHERE parameter_id=9004').result_value,5);
   db.saveOrderResults(9001,[change(9002,'0')]);
   assert.equal(status(db),'partial');
-  assert.equal(db.get('SELECT * FROM order_results WHERE parameter_id=9004'),null);
+  var unavailable=db.get('SELECT * FROM order_results WHERE parameter_id=9004');assert.equal(unavailable.result_value,null);assert.equal(unavailable.raw_result_value,null);assert.equal(unavailable.flag,'');assert.match(unavailable.calculation_review,/review/);
   db.saveOrderResults(9001,[change(9002,'')]);
   db = await reopen();
   assert.equal(status(db),'partial');
-  assert.equal(db.get('SELECT * FROM order_results WHERE parameter_id=9004'),null);
+  var unavailable=db.get('SELECT * FROM order_results WHERE parameter_id=9004');assert.equal(unavailable.result_value,null);assert.equal(unavailable.raw_result_value,null);assert.equal(unavailable.flag,'');assert.match(unavailable.calculation_review,/review/);
 }));
 
 test('backend derived calculation rejects executable expressions', () => fixture(async db => {
@@ -188,5 +188,5 @@ test('backend derived calculation rejects executable expressions', () => fixture
   db.run("INSERT INTO formulas(parameter_id,formula_expression,dependencies) VALUES(9004,'process.exit(99)','')");
   db.saveOrderResults(9001,[change(9001,'1'),change(9002,'2')]);
   assert.equal(status(db),'partial');
-  assert.equal(db.get('SELECT * FROM order_results WHERE parameter_id=9004'),null);
+  var unavailable=db.get('SELECT * FROM order_results WHERE parameter_id=9004');assert.equal(unavailable.result_value,null);assert.equal(unavailable.raw_result_value,null);assert.equal(unavailable.flag,'');assert.match(unavailable.calculation_review,/review/);
 }));

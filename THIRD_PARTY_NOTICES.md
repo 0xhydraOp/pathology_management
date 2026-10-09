@@ -1,6 +1,6 @@
 # Third-party notices
 
-MIT applies to Patholy original code, not dependencies. These files preserve upstream licence texts from the installed, locked distributions. Electron distributions also retain LICENSE.electron.txt and LICENSES.chromium.html beside the executable. SQLite incorporated by sql.js is public domain; sql.js retains its own MIT licence. The former licensing Worker and its exclusive dependencies have been removed.
+MIT applies to Pathology Management System original code, not dependencies. These files preserve upstream licence texts from the installed, locked distributions. Electron distributions also retain LICENSE.electron.txt and LICENSES.chromium.html beside the executable. SQLite incorporated by sql.js is public domain; sql.js retains its own MIT licence. The former licensing Worker and its exclusive dependencies have been removed.
 
 | Component | Version | Upstream licence | Notice file |
 | --- | --- | --- | --- |
@@ -19,3 +19,5 @@ MIT applies to Patholy original code, not dependencies. These files preserve ups
 | electron | 44.7.0 | MIT | third-party-licenses/electron-* |
 
 SheetJS 0.20.3 retains Apache-2.0. Chromium has additional terms in LICENSES.chromium.html. Dependencies and source-only development tooling retain their upstream licences; consult their distributions.
+
+Windows installers are built using Inno Setup 7.1.0, copyright Jordan Russell and Martijn Laan. Its separate licence applies to the installer framework; it is not relicensed under MIT. See third-party-licenses/inno-setup-LICENSE.txt and https://jrsoftware.org/.

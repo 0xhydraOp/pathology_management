@@ -180,26 +180,27 @@ module.exports = {
   _reportPreview(orderId,legacy=false) {
     const order=this.get('SELECT o.*,p.patient_id AS pt_id,p.name AS patient_name,p.age,p.sex,p.phone,p.address,p.referred_by FROM orders o JOIN patients p ON p.id=o.patient_id WHERE o.id=?',[orderId]);
     if(!order)return null;
-    const results=this.all(`SELECT p.id AS parameter_id,p.code,p.name AS test_name,p.unit,p.decimal_places,p.section,r.result_value,r.raw_result_value,r.result_text,r.flag FROM order_results r JOIN parameters p ON p.id=r.parameter_id WHERE r.order_id=? ${legacy?'':'AND EXISTS(SELECT 1 FROM order_tests t WHERE t.order_id=r.order_id AND t.parameter_id=r.parameter_id)'} ORDER BY p.section,p.display_order`,[orderId]).map(r=> {
+    const calculationColumns=this.all('PRAGMA table_info(order_results)').some(c=>c.name==='calculation_review')?'r.calculation_review,r.calculation_snapshot':'NULL AS calculation_review,NULL AS calculation_snapshot';
+    const results=this.all(`SELECT p.id AS parameter_id,p.code,p.name AS test_name,p.unit,p.decimal_places,p.type AS parameter_type,p.section,${calculationColumns},r.result_value,r.raw_result_value,r.result_text,r.flag FROM order_results r JOIN parameters p ON p.id=r.parameter_id WHERE r.order_id=? ${legacy?'':'AND EXISTS(SELECT 1 FROM order_tests t WHERE t.order_id=r.order_id AND t.parameter_id=r.parameter_id)'} ORDER BY p.section,p.display_order`,[orderId]).map(r=> {
       if(legacy) {
         const old=this.all('SELECT * FROM parameter_ranges WHERE parameter_id=?',[r.parameter_id]).filter(x=>(x.sex==='any'||x.sex===order.sex) && Number.isFinite(order.age) && order.age>=(x.min_age ?? 0) && order.age<=(x.max_age ?? 150)).sort((a,b)=>(a.sex==='any')-(b.sex==='any'))[0];
         const interval=old && (old.low_value!=null || old.high_value!=null)?{...old,low_inclusive:true,high_inclusive:true,unit:r.unit}:null;
         return {...r,refRange:format(interval),reference_interval:interval};
       }
       const ref=this.referenceFor(r.parameter_id,order,r.unit || '');
-      return {...r,refRange:ref.refRange,reference_interval:ref.interval,review_message:ref.reviewMessage,flag:classify(r.raw_result_value ?? r.result_value,ref.interval,ref.critical)};
+      return {...r,refRange:ref.refRange,reference_interval:ref.interval,clinical_provenance:{parameter:{type:r.parameter_type,code:r.code,unit:r.unit,decimal_places:r.decimal_places},critical_rule:ref.critical,formula:r.calculation_snapshot?JSON.parse(r.calculation_snapshot):null},review_message:[ref.reviewMessage,r.calculation_review].filter(Boolean).join('; '),flag:r.calculation_review?'':classify(r.raw_result_value ?? r.result_value,ref.interval,ref.critical)};
     });
     return {...order,results,issued:false};
   },
   getReport(orderId) {
     const issued=this.get('SELECT payload FROM issued_reports WHERE order_id=?',[orderId]);
-    return issued?JSON.parse(issued.payload):this._reportPreview(orderId);
+    if(issued){const row=this.get('SELECT MAX(version) AS n FROM report_versions WHERE order_id=?',[orderId]);return row?.n?this.getReportVersion(orderId,row.n):JSON.parse(issued.payload);}return this._reportPreview(orderId);
   },
   issueReport(actor,orderId) {
     const user=this._referenceActor(actor);
     if (!Number.isSafeInteger(orderId)) throw new Error('Invalid order identity');
     const existing=this.get('SELECT payload FROM issued_reports WHERE order_id=?',[orderId]);
-    if(existing)return JSON.parse(existing.payload);
+    if(existing)return this.getReport(orderId);
     return this._referenceAtomic(() => {
       if (this.get('SELECT 1 AS missing FROM order_tests t LEFT JOIN parameters p ON p.id=t.parameter_id WHERE t.order_id=? AND p.id IS NULL LIMIT 1',[orderId])) throw new Error('Invalid ordered catalogue identity');
       const tests=this.all('SELECT DISTINCT p.id,p.type FROM order_tests t JOIN parameters p ON p.id=t.parameter_id WHERE t.order_id=?',[orderId]);
@@ -226,8 +227,9 @@ module.exports = {
       }
       this.db.run("UPDATE orders SET status='complete',report_status='issued' WHERE id=?",[orderId]);
       this.db.run('INSERT INTO issued_reports VALUES(?,?,?,?,?)',[orderId,JSON.stringify(report),user.username,report.issued_at,report.provenance]);
+      this.db.run("INSERT INTO report_versions VALUES(?,1,NULL,?,?,?,'','[]')",[orderId,JSON.stringify(report),user.username,report.issued_at]);
       require('./applicationOperations.cjs').audit(this,user,'issue-report',orderId,{testCount:tests.length});
-      return report;
+      return this.getReportVersion(orderId,1);
     });
   },};
 module.exports.rules={match,format,classify,validate};

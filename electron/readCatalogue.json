@@ -42,12 +42,12 @@
   "dashboard.todayPatients": {
     "permission": "staff",
     "mode": "get",
-    "sql": "SELECT COUNT(*) as c FROM patients WHERE date(created_at) = ?"
+    "sql": "SELECT COUNT(*) as c FROM patients WHERE date(created_at, 'localtime') = ?"
   },
   "dashboard.periodPatients": {
     "permission": "staff",
     "mode": "get",
-    "sql": "SELECT COUNT(*) as c FROM patients WHERE date(created_at) >= ? AND date(created_at) <= ?"
+    "sql": "SELECT COUNT(*) as c FROM patients WHERE date(created_at, 'localtime') >= ? AND date(created_at, 'localtime') <= ?"
   },
   "dashboard.pendingCount": {
     "permission": "staff",

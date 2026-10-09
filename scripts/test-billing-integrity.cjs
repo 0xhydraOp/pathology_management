@@ -19,10 +19,10 @@ async function fixture(fn){
  await fn({get db(){return db;},invoke,staff,register,snapshot,reopen});
  }finally{db.close();fs.rmSync(dir,{recursive:true,force:true});}
 }
-test('registration snapshots current rates including zero; pending unpaid recalculation stays available',()=>fixture(async f=>{
+test('registration snapshots current rates including zero; posted original charges remain frozen',()=>fixture(async f=>{
  const first=f.register();assert.equal(f.snapshot(first).order.total_amount,100);assert.equal(f.snapshot(first).rates[0].rate,100);
  f.db.run('UPDATE test_rates SET rate=0 WHERE parameter_id=9901');const free=f.register();assert.equal(f.snapshot(free).order.total_amount,0);assert.equal(f.snapshot(free).rates[0].rate,0);
- f.db.run('UPDATE test_rates SET rate=125 WHERE parameter_id=9901');f.invoke('computeOrderBillAndCommission',first);assert.equal(f.snapshot(first).order.total_amount,125);assert.equal(f.snapshot(first).commission[0].commission_amount,25);
+ f.db.run('UPDATE test_rates SET rate=125 WHERE parameter_id=9901');f.invoke('computeOrderBillAndCommission',first);assert.equal(f.snapshot(first).order.total_amount,100);assert.equal(f.snapshot(first).commission[0].commission_amount,20);const latest=f.register();assert.equal(f.snapshot(latest).order.total_amount,125);
 }));
 for(const state of ['complete','paid','issued'])test(state+' bills preserve stored prices and commissions after settings changes and restart',()=>fixture(async f=>{
  const order=f.register();if(state==='paid')f.invoke('setPaymentStatus',order,'paid');
@@ -35,7 +35,7 @@ for(const state of ['complete','paid','issued'])test(state+' bills preserve stor
 }));
 for (const statement of ['UPDATE order_tests SET rate', 'UPDATE orders SET total_amount']) {
 test('failed '+statement+' rolls back prices, totals, commission and audit on restart',()=>fixture(async f=>{
- const order=f.register(),before=f.snapshot(order),audits=f.db.all('SELECT * FROM audit_log');
+ const order=f.register();f.db.run('DELETE FROM billing_events WHERE order_id=?',[order]);f.db.run('DELETE FROM billing_accounts WHERE order_id=?',[order]);const before=f.snapshot(order),audits=f.db.all('SELECT * FROM audit_log');
  f.db.run('UPDATE test_rates SET rate=150 WHERE parameter_id=9901');
  const original=f.db.run.bind(f.db);f.db.run=(sql,...args)=>{if(String(sql).startsWith(statement))throw new Error('Synthetic bill write failure');return original(sql,...args);};
  assert.throws(()=>f.invoke('computeOrderBillAndCommission',order),/Synthetic bill write failure/);
@@ -45,14 +45,14 @@ test('failed '+statement+' rolls back prices, totals, commission and audit on re
 }
 
 test('backend recalculation failure rolls back the bill, commission and audit after reopening',()=>fixture(async f=>{
- const order=f.register(),before=f.snapshot(order),audits=f.db.all('SELECT * FROM audit_log');f.db.run('UPDATE test_rates SET rate=150 WHERE parameter_id=9901');
+ const order=f.register();f.db.run('DELETE FROM billing_events WHERE order_id=?',[order]);f.db.run('DELETE FROM billing_accounts WHERE order_id=?',[order]);const before=f.snapshot(order),audits=f.db.all('SELECT * FROM audit_log');f.db.run('UPDATE test_rates SET rate=150 WHERE parameter_id=9901');
  const original=f.db.run.bind(f.db);f.db.run=(sql,...args)=>{if(String(sql).startsWith('INSERT INTO order_commission_log'))throw new Error('Synthetic commission write failure');return original(sql,...args);};
  assert.throws(()=>f.invoke('computeOrderBillAndCommission',order),/Synthetic commission/);assert.deepEqual(f.snapshot(order),before);assert.deepEqual(f.db.all('SELECT * FROM audit_log'),audits);
  await f.reopen();assert.deepEqual(f.snapshot(order),before);assert.deepEqual(f.db.all('SELECT * FROM audit_log'),audits);
 }));
 test('staff reversing paid status cannot unfreeze historical prices or commissions',()=>fixture(async f=>{
  const order=f.register();f.staff('setPaymentStatus',order,'paid');const frozen=f.snapshot(order);
- f.staff('setPaymentStatus',order,'unpaid');
+ assert.throws(()=>f.staff('setPaymentStatus',order,'unpaid'),/refund|reversal/i);const account=f.invoke('getBillingAccount',order),payment=account.events.find(e=>e.kind==='payment');f.invoke('postBillingEvent',{orderId:order,kind:'refund',amount:'100.00',relatedEventId:payment.id,reason:'Synthetic corrected collection',requestId:require('crypto').randomUUID()});
  assert.throws(()=>f.staff('setRates',[{parameterId:9901,rate:200}]),/Admin authorization/);
  f.invoke('setRates',[{parameterId:9901,rate:200}]);f.invoke('setCommissions',{entries:[{name:'Synthetic Referral',percent:75}]});
  f.staff('computeOrderBillAndCommission',order);
@@ -71,9 +71,11 @@ test('clearing a completed draft result cannot unfreeze its historical bill',()=
  assert.deepEqual(f.snapshot(order),{...frozen,order:{...frozen.order,status:'pending'}});
 }));
 test('authorized clearing does not transfer old financial freezes to reused order identities',()=>fixture(async f=>{
- const old=f.register();f.staff('setPaymentStatus',old,'paid');f.invoke('clearAllPatientData');
+ const old=f.register();f.staff('setPaymentStatus',old,'paid');assert.throws(()=>f.invoke('clearAllPatientData'),/issued|posted|ledger|payment/i);f.db.run('DELETE FROM billing_events WHERE order_id=?',[old]);f.db.run('DELETE FROM billing_accounts WHERE order_id=?',[old]);f.invoke('clearAllPatientData');
  f.db.run("UPDATE sqlite_sequence SET seq=0 WHERE name IN ('orders','patients')");
  const current=f.register();assert.equal(current,old);
  f.invoke('setRates',[{parameterId:9901,rate:150}]);f.staff('computeOrderBillAndCommission',current);
- assert.equal(f.snapshot(current).order.total_amount,150);
+ assert.equal(f.snapshot(current).order.total_amount,100);assert.equal(f.invoke('getBillingAccount',current).legacy_paid_minor,0);
 }));
+
+test('explicitly settling a zero-price bill records no invented payment and repeats safely',()=>fixture(async f=>{f.invoke('setRates',[{parameterId:9901,rate:0}]);const id=f.register();f.staff('setPaymentStatus',id,'paid');f.staff('setPaymentStatus',id,'paid');assert.equal(f.snapshot(id).order.payment_status,'paid');assert.equal(f.invoke('getBillingAccount',id).events.filter(e=>e.kind==='payment').length,0);assert.equal(f.db.get("SELECT COUNT(*) AS n FROM audit_log WHERE action='zero-outstanding-confirmed'").n,1);await f.reopen();assert.equal(f.snapshot(id).order.payment_status,'paid');}));

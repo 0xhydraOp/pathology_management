@@ -74,7 +74,7 @@ test('backend catalogue reload rejects before deletion and approval survives res
 test('failed startup keeps exact original file and a readable pre-mutation backup',()=>fixture(async(db,admin,reopen,dir)=>{
  const catalogue=db.get("SELECT id FROM parameters WHERE code='HB'");
  db.run('UPDATE parameters SET name=? WHERE id=?',['Synthetic local name',catalogue.id]);
- db.run('PRAGMA user_version=0');
+ require('./legacy-schema-fixture.cjs')(db,0);
  for(const table of ['reference_migrations','reference_interval_sets','parameter_critical_rules','issued_reports'])db.run(`DROP TABLE ${table}`);
  db.close();const original=fs.readFileSync(path.join(dir,'lab.db'));
  const rename=fs.renameSync;fs.renameSync=()=>{throw new Error('Synthetic startup replacement failure');};
@@ -149,7 +149,7 @@ test('version-1 report upgrade preserves old content and labels unavailable hist
  db.saveOrderResults(9001,[{parameterId:9001,value:3}]);const original=db.issueReport(admin,9001);
  const old={...original};delete old.lab_config;delete old.report_date;delete old.report_printed_by;delete old.presentation_provenance;
  db.run('UPDATE issued_reports SET payload=? WHERE order_id=9001',[JSON.stringify(old)]);
- db.run('PRAGMA user_version=0');db.run('DELETE FROM reference_migrations WHERE version=2');
+ require('./legacy-schema-fixture.cjs')(db,0);db.run('DELETE FROM reference_migrations WHERE version=2');
  db.run("UPDATE lab SET pathologist_name='Synthetic upgrade reader' WHERE id=1");
  db=await reopen();const upgraded=db.getReport(9001);
  assert.deepEqual(upgraded.results,original.results);assert.equal(upgraded.presentation_provenance,'captured-at-upgrade');
@@ -159,7 +159,7 @@ test('version-1 report upgrade preserves old content and labels unavailable hist
 }));
 
 test('backup failure stops startup before touching the original file',()=>fixture(async(db,admin,reopen,dir)=>{
- db.run('PRAGMA user_version=0');db.run('DELETE FROM reference_migrations WHERE version=2');db.close();const original=fs.readFileSync(path.join(dir,'lab.db'));
+ require('./legacy-schema-fixture.cjs')(db,0);db.run('DELETE FROM reference_migrations WHERE version=2');db.close();const original=fs.readFileSync(path.join(dir,'lab.db'));
  const write=fs.writeFileSync;fs.writeFileSync=(target,...args)=>{if(typeof target==='number')throw new Error('Synthetic backup write failure');return write(target,...args);};
  try{await assert.rejects(reopen(),/backup write failure/);}finally{fs.writeFileSync=write;}
  assert.deepEqual(fs.readFileSync(path.join(dir,'lab.db')),original);

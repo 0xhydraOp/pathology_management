@@ -20,7 +20,7 @@ test('direct profile IPC rejects unauthenticated/staff calls and audits the auth
  assert.throws(()=>guardGenericSql("UPDATE lab_print_profile SET payload='{}'",true),/authorized/i);
 }));
 test('profile migration backs up version-2 bytes, recovers from failure and runs only once',()=>fixture(async(db,reopen,dir)=>{
- const parameterCount=db.get('SELECT COUNT(*) AS n FROM parameters').n;db.run('DROP TABLE lab_print_profile');db.run('PRAGMA user_version=0');db.run('DELETE FROM reference_migrations WHERE version=3');db.close();const before=fs.readFileSync(path.join(dir,'lab.db'));
+ const parameterCount=db.get('SELECT COUNT(*) AS n FROM parameters').n;db.run('DROP TABLE lab_print_profile');require('./legacy-schema-fixture.cjs')(db,0);db.run('DELETE FROM reference_migrations WHERE version=3');db.close();const before=fs.readFileSync(path.join(dir,'lab.db'));
  const rename=fs.renameSync;fs.renameSync=()=>{throw new Error('Synthetic profile migration failure');};
  try{await assert.rejects(reopen(),/profile migration failure/);}finally{fs.renameSync=rename;}
  assert.deepEqual(fs.readFileSync(path.join(dir,'lab.db')),before);

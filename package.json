@@ -1,7 +1,7 @@
 {
   "name": "mondal-diagnostic-centre",
-  "version": "1.1.0-rc.2",
-  "description": "Patholy Management System \u2014 fully offline pathology laboratory workspace",
+  "version": "1.1.0",
+  "description": "Pathology Management System \u2014 fully offline pathology laboratory workspace",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -9,9 +9,9 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=1 electron .\"",
     "build:icon": "node scripts/build-icon.mjs",
-    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js scripts/test-reference-intervals.cjs scripts/test-reference-hardening.cjs scripts/test-print-profile.cjs scripts/test-authorization.cjs scripts/test-recovery.cjs scripts/test-administrator-recovery.cjs scripts/test-onboarding.cjs scripts/test-billing-integrity.cjs scripts/test-offline-migration.cjs scripts/test-login-throttling.cjs",
+    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js scripts/test-reference-intervals.cjs scripts/test-reference-hardening.cjs scripts/test-print-profile.cjs scripts/test-authorization.cjs scripts/test-recovery.cjs scripts/test-administrator-recovery.cjs scripts/test-onboarding.cjs scripts/test-billing-integrity.cjs scripts/test-offline-migration.cjs scripts/test-login-throttling.cjs scripts/test-report-amendments.cjs scripts/test-billing-ledger.cjs scripts/test-clinical-software.cjs scripts/test-backup-health.cjs scripts/test-professional-migration.cjs scripts/test-database-ownership.cjs scripts/test-release-review.cjs scripts/test-inno-configuration.cjs",
     "release": "node scripts/create-release.js",
-    "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/package-install-zip.js",
+    "electron:build": "node scripts/build-windows.cjs",
     "release:clean": "node scripts/clean-release.js",
     "start": "electron ."
   },
@@ -36,7 +36,7 @@
   },
   "build": {
     "appId": "com.mondal.diagnostic",
-    "productName": "Patholy Management System",
+    "productName": "Pathology Management System",
     "directories": {
       "output": "release"
     },
@@ -77,12 +77,40 @@
       {
         "from": "docs/OFFLINE_RELEASE.md",
         "to": "OFFLINE_RELEASE.md"
+      },
+      {
+        "from": "docs/MANUAL_UPDATE.md",
+        "to": "MANUAL_UPDATE.md"
+      },
+      {
+        "from": "docs/RESTORE_REHEARSAL.md",
+        "to": "RESTORE_REHEARSAL.md"
+      },
+      {
+        "from": "docs/CLINICAL_REVIEW_PACK.md",
+        "to": "CLINICAL_REVIEW_PACK.md"
+      },
+      {
+        "from": "docs/CLINICAL_RULE_INVENTORY.json",
+        "to": "CLINICAL_RULE_INVENTORY.json"
+      },
+      {
+        "from": "docs/REPORT_AMENDMENTS.md",
+        "to": "REPORT_AMENDMENTS.md"
+      },
+      {
+        "from": "docs/BILLING_LEDGER.md",
+        "to": "BILLING_LEDGER.md"
+      },
+      {
+        "from": "docs/INNO_INSTALLATION.md",
+        "to": "INNO_INSTALLATION.md"
       }
     ],
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "dir",
           "arch": [
             "x64"
           ]
@@ -90,26 +118,9 @@
       ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": true,
-      "artifactName": "Patholy Management System Offline Setup ${version}.exe"
+      "artifactName": "Pathology Management System Offline Setup ${version}.exe"
     },
     "forceCodeSigning": false,
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "allowElevation": true,
-      "include": "build/installer.nsh",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
-      "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true,
-      "shortcutName": "Patholy Management System",
-      "menuCategory": "Patholy Management System",
-      "runAfterFinish": false,
-      "license": "build/license.txt",
-      "deleteAppDataOnUninstall": false
-    },
     "icon": "build/icon.ico"
   },
   "overrides": {

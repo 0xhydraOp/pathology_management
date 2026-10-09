@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import RecoverySettings from '../components/RecoverySettings';
+import BackupHealth from '../components/BackupHealth';
 import ReferenceIntervalEditor from '../components/ReferenceIntervalEditor';
 import PrintProfileSettings from '../components/PrintProfileSettings';
 import { getUiFontScale, setUiFontScale } from '../utils/uiFontScale';
@@ -77,6 +78,7 @@ export default function Settings() {
 
   useEffect(() => {
     refreshSupportStats();
+    if (backupMessage) window.dispatchEvent(new Event('patholy-backup-updated'));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional reload when backup/export completes
   }, [backupMessage]);
 
@@ -323,16 +325,13 @@ export default function Settings() {
             Quick backup saves under the app data folder. You can also save a copy anywhere on this PC (Desktop, Documents, USB drive).
           </p>
           <p data-ui="desc" style={{ ...styles.desc, fontSize: 13, color: '#555' }}>Quick backups use the <code style={{ fontSize: 12 }}>backups</code> folder under the path shown in Support (same place as your database).</p>
+          <BackupHealth refreshKey={backupMessage}/>
           {lastBackupDate ? (
             <p data-ui="desc" style={{ ...styles.desc, marginBottom: 4 }}>
-              Last backup: {new Date(lastBackupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              {(() => {
-                const days = Math.floor((Date.now() - new Date(lastBackupDate)) / 86400000);
-                return days > 7 ? <span style={{ color: '#c00', fontWeight: 600 }}> — {days} days ago, consider backing up</span> : null;
-              })()}
+              Latest local recovery copy: {new Date(lastBackupDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
           ) : (
-            <p data-ui="desc" style={{ ...styles.desc, marginBottom: 4, color: '#888' }}>No backup recorded yet on this computer.</p>
+            <p data-ui="desc" style={{ ...styles.desc, marginBottom: 4, color: '#888' }}>No local recovery copy found.</p>
           )}
           {dbSize != null && (
             <p data-ui="desc" style={{ ...styles.desc, marginBottom: 8, fontSize: 13 }}>Database size: {(dbSize / 1024 / 1024).toFixed(2)} MB</p>

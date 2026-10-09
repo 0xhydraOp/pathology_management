@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export default function RateChart() {
   const [tests, setTests] = useState([]);
@@ -7,6 +7,7 @@ export default function RateChart() {
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [rates, setRates] = useState({});
+  const saveBusy = useRef(false);
 
   const loadTests = useCallback(async () => {
     if (!window.db) {
@@ -18,7 +19,7 @@ export default function RateChart() {
       const rows = await window.db.read('catalogue.rates', []);
       setTests(rows || []);
       const ratesMap = {};
-      (rows || []).forEach((r) => { ratesMap[r.id] = parseFloat(r.rate) || 0; });
+      (rows || []).forEach((r) => { ratesMap[r.id] = String(r.rate ?? 0); });
       setRates(ratesMap);
     } catch (e) {
       console.error(e);
@@ -33,28 +34,33 @@ export default function RateChart() {
   }, [loadTests]);
 
   const handleRateChange = (paramId, value) => {
-    const num = parseFloat(value.replace(/[^\d.]/g, '')) || 0;
-    setRates((prev) => ({ ...prev, [paramId]: num }));
+    setRates((prev) => ({ ...prev, [paramId]: value }));
   };
 
   const handleSave = async () => {
-    if (!window.db || saving) return;
+    if (!window.db || saveBusy.current) return;
+    saveBusy.current = true;
     setSaving(true);
     setMessage('');
     try {
-      await window.db.setRates(Object.entries(rates).map(([parameterId,rate])=>({parameterId:Number(parameterId),rate:Number(rate)})));
+      const changes=Object.entries(rates).map(([parameterId,raw])=>{
+        if(!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(String(raw)) || !Number.isFinite(Number(raw)))throw new Error('Enter a non-negative price with at most two decimal places. Blank or malformed prices are not saved.');
+        return {parameterId:Number(parameterId),rate:Number(raw)};
+      });
+      await window.db.setRates(changes);
       setMessage('Saved');
       setTimeout(() => setMessage(''), 2500);
     } catch (e) {
       setMessage('Error: ' + (e.message || e));
     } finally {
+      saveBusy.current = false;
       setSaving(false);
     }
   };
 
   const handleReset = () => {
     const ratesMap = {};
-    tests.forEach((r) => { ratesMap[r.id] = parseFloat(r.rate) ?? 0; });
+    tests.forEach((r) => { ratesMap[r.id] = String(r.rate ?? 0); });
     setRates(ratesMap);
     setMessage('Reset to saved values');
     setTimeout(() => setMessage(''), 2000);
@@ -117,9 +123,10 @@ export default function RateChart() {
                   <span data-ui="inpWrap" style={styles.inpWrap}>
                     <input data-ui="rateInput"
                       aria-label={`${t.name} rate`}
-                      type="number"
-                      min={0}
-                      step={1}
+                      type="text"
+                      inputMode="decimal"
+                      maxLength={32}
+                      disabled={saving}
                       value={rates[t.id] ?? 0}
                       onChange={(e) => handleRateChange(t.id, e.target.value)}
                       style={styles.rateInput}

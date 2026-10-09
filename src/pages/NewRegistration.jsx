@@ -35,6 +35,8 @@ export default function NewRegistration() {
     tests: [],
   });
   const [saving, setSaving] = useState(false);
+  const submitBusy=useRef(false);
+  const registrationRequest=useRef(null);
   const [saveFeedback, setSaveFeedback] = useState('');
   const STORAGE_KEY = 'mondal_new_registration_draft';
 
@@ -73,6 +75,7 @@ export default function NewRegistration() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        registrationRequest.current=typeof parsed?.requestId==='string'&&/^[a-f0-9-]{36}$/i.test(parsed.requestId)?parsed.requestId:null;
         if (parsed && typeof parsed === 'object') {
           const ref = parsed.referred_by != null ? String(parsed.referred_by).trim() : '';
           const refNorm = ref !== '' ? normalizeReferrerName(parsed.referred_by) : null;
@@ -102,6 +105,7 @@ export default function NewRegistration() {
     if (!form.name && !meaningfulRef && !form.phone && !form.address && form.tests.length === 0) return;
     try {
       const draft = {
+        requestId:registrationRequest.current,
         name: form.name,
         age: form.age,
         sex: form.sex,
@@ -145,16 +149,20 @@ export default function NewRegistration() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if(submitBusy.current)return;
     if (!form.name.trim() || !window.db) return;
     if (form.tests.length === 0) {
       showToast('Please select at least one test.', 'warning');
       return;
     }
-    setSaving(true);
+    submitBusy.current=true;setSaving(true);
     try {
       const refStored = normalizeReferrerName(form.referred_by);
-      const registered=await window.db.registerPatientOrder({name:form.name.trim(),age:parseOptionalAge(form.age),sex:form.sex,phone:form.phone || null,address:form.address || null,referred_by:refStored,tests:form.tests,orderDate:toLocalDateStr(new Date())});
+      registrationRequest.current ||= crypto.randomUUID();
+      try {const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');localStorage.setItem(STORAGE_KEY,JSON.stringify({...stored,requestId:registrationRequest.current}));}catch{}
+      const registered=await window.db.registerPatientOrder({requestId:registrationRequest.current,name:form.name.trim(),age:parseOptionalAge(form.age),sex:form.sex,phone:form.phone || null,address:form.address || null,referred_by:refStored,tests:form.tests,orderDate:toLocalDateStr(new Date())});
       const orderId=registered.orderId;
+      registrationRequest.current=null;
 
       setForm(emptyRegistrationForm());
       try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
@@ -169,6 +177,7 @@ export default function NewRegistration() {
       console.error(err);
       showToast(err.message || 'Error saving. Please try again.', 'error');
     } finally {
+      submitBusy.current=false;
       setSaving(false);
     }
   };

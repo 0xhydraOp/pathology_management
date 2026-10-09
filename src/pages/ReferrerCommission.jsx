@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const DEFAULT_COMMISSION = 45;
+function validatedPercent(raw){
+  if(!/^(0|[1-9]\d*)(\.\d+)?$/.test(String(raw)) || String(raw).length>32 || !Number.isFinite(Number(raw)) || Number(raw)>100)throw new Error('Enter a commission percentage from 0 to 100. Blank or malformed percentages are not saved.');
+  return Number(raw);
+}
 
 export default function ReferrerCommission() {
   const [referrers, setReferrers] = useState([]);
@@ -10,6 +14,7 @@ export default function ReferrerCommission() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
+  const saveBusy=useRef(false);
 
   const loadData = useCallback(async () => {
     if (!window.db) {
@@ -28,15 +33,15 @@ export default function ReferrerCommission() {
       const names = [...new Set([...fromPatients, ...fromPct])].sort();
       const pctMap = {};
       (pctRows || []).forEach((r) => {
-        pctMap[r.referrer_name] = parseFloat(r.commission_percent) ?? DEFAULT_COMMISSION;
+        pctMap[r.referrer_name] = String(r.commission_percent ?? DEFAULT_COMMISSION);
       });
       const commissionsMap = {};
       names.forEach((n) => {
-        commissionsMap[n] = pctMap[n] ?? (parseFloat(labRow?.commission_default_percent) ?? DEFAULT_COMMISSION);
+        commissionsMap[n] = pctMap[n] ?? String(labRow?.commission_default_percent ?? DEFAULT_COMMISSION);
       });
       setReferrers(names);
       setCommissions(commissionsMap);
-      setDefaultPct(parseFloat(labRow?.commission_default_percent) ?? DEFAULT_COMMISSION);
+      setDefaultPct(String(labRow?.commission_default_percent ?? DEFAULT_COMMISSION));
     } catch (e) {
       console.error(e);
       setReferrers([]);
@@ -50,31 +55,33 @@ export default function ReferrerCommission() {
   }, [loadData]);
 
   const handleCommissionChange = (name, value) => {
-    const num = parseFloat(value.replace(/[^\d.]/g, '')) || 0;
-    setCommissions((prev) => ({ ...prev, [name]: Math.min(100, Math.max(0, num)) }));
+    setCommissions((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDefaultChange = (value) => {
-    const num = parseFloat(value.replace(/[^\d.]/g, '')) || 0;
-    setDefaultPct(Math.min(100, Math.max(0, num)));
+    setDefaultPct(value);
   };
 
   const handleSave = async () => {
-    if (!window.db || saving) return;
+    if (!window.db || saveBusy.current) return;
+    saveBusy.current=true;
     setSaving(true);
     setMessage('');
     try {
-      await window.db.setCommissions({defaultPercent:defaultPct,entries:Object.entries(commissions).map(([name,percent])=>({name,percent}))});
+      await window.db.setCommissions({defaultPercent:validatedPercent(defaultPct),entries:Object.entries(commissions).map(([name,percent])=>({name,percent:validatedPercent(percent)}))});
       setMessage('Saved');
       setTimeout(() => setMessage(''), 2500);
     } catch (e) {
       setMessage('Error: ' + (e.message || e));
     } finally {
+      saveBusy.current=false;
       setSaving(false);
     }
   };
 
   const handleAddReferrer = async () => {
+    if(saveBusy.current)return;
+    let percentage;try{percentage=validatedPercent(defaultPct);}catch(e){setMessage('Error: '+e.message);return;}
     const name = prompt('Enter referrer name:');
     if (name && name.trim()) {
       const n = name.trim();
@@ -84,14 +91,17 @@ export default function ReferrerCommission() {
         return;
       }
       if (!window.db) return;
+      saveBusy.current=true;setSaving(true);
       try {
-        await window.db.setCommissions({entries:[{name:n,percent:defaultPct}]});
+        await window.db.setCommissions({entries:[{name:n,percent:percentage}]});
         setReferrers((prev) => [...prev, n].sort());
         setCommissions((prev) => ({ ...prev, [n]: defaultPct }));
         setMessage('Added');
         setTimeout(() => setMessage(''), 2000);
       } catch (e) {
         setMessage('Error: ' + (e.message || e));
+      } finally {
+        saveBusy.current=false;setSaving(false);
       }
     }
   };
@@ -115,7 +125,7 @@ export default function ReferrerCommission() {
           onChange={(e) => setSearch(e.target.value)}
           style={styles.searchInput}
         />
-        <button data-ui="addBtn" type="button" style={styles.addBtn} onClick={handleAddReferrer}>
+        <button data-ui="addBtn" type="button" style={styles.addBtn} onClick={handleAddReferrer} disabled={saving}>
           + Add Referrer
         </button>
         <button data-ui="saveBtn" type="button" style={styles.saveBtn} onClick={handleSave} disabled={saving}>
@@ -127,10 +137,10 @@ export default function ReferrerCommission() {
       <div data-ui="defaultSection" style={styles.defaultSection}>
         <label data-ui="defaultLabel" htmlFor="referrercommission-field-1" style={styles.defaultLabel}>Default commission (for new referrers):</label>
         <input data-ui="percentInput" id="referrercommission-field-1"
-          type="number"
-          min={0}
-          max={100}
-          step={0.5}
+          type="text"
+          inputMode="decimal"
+          maxLength={32}
+          disabled={saving}
           value={defaultPct}
           onChange={(e) => handleDefaultChange(e.target.value)}
           style={styles.percentInput}
@@ -152,10 +162,10 @@ export default function ReferrerCommission() {
               <span data-ui="inpWrap" style={styles.inpWrap}>
                 <input data-ui="percentInput"
                   aria-label={`${name} commission percentage`}
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
+                  type="text"
+                  inputMode="decimal"
+                  maxLength={32}
+                  disabled={saving}
                   value={commissions[name] ?? defaultPct}
                   onChange={(e) => handleCommissionChange(name, e.target.value)}
                   style={styles.percentInput}

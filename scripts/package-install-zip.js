@@ -7,7 +7,7 @@ if(!fs.existsSync(setup))throw Error('Expected exact installer is missing; build
 if(process.platform!=='win32')throw Error('Installer archive creation requires Windows.');
 const notes=path.join(dir,'READ_ME_FIRST_Windows_Install.txt');fs.copyFileSync(path.join(root,'WINDOWS_INSTALL.txt'),notes);
 const prerelease=path.join(dir,'OFFLINE_RELEASE.md');fs.copyFileSync(path.join(root,'docs/OFFLINE_RELEASE.md'),prerelease);
-const dest=path.join(dir,'Patholy Management System Offline Prerelease '+pkg.version+' Windows-Install-Package.zip');
+const dest=path.join(dir,'Pathology Management System '+pkg.version+' Windows-Install-Package.zip');
 if(fs.existsSync(dest))throw Error('Refusing to overwrite an existing install archive.');
 const quote=s=>"'"+s.replaceAll("'","''")+"'";
 // Use the Windows .NET ZIP API directly; the optional Archive module may be absent.
@@ -16,4 +16,4 @@ const command = 'Add-Type -AssemblyName System.IO.Compression; Add-Type -Assembl
   'try { foreach($taskArchiveFile in @('+[setup,notes,prerelease].map(quote).join(',')+')) { '+
   '[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($taskArchive,$taskArchiveFile,[IO.Path]::GetFileName($taskArchiveFile),[IO.Compression.CompressionLevel]::Optimal) | Out-Null } } finally { $taskArchive.Dispose() }';
 execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{stdio:'inherit',windowsHide:true});
-console.log('Created exact-version offline prerelease installer archive.');
+console.log('Created exact-version offline installer archive.');

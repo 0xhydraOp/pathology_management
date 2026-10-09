@@ -38,6 +38,37 @@ export default function Billing() {
   const [recalcMessage, setRecalcMessage] = useState('');
   const [labConfig, setLabConfig] = useState({ name: 'MONDAL DIAGNOSTIC CENTRE', email: '', phone: '', default_printed_by: 'Admin' });
   const [invoicePrintHint, setInvoicePrintHint] = useState('');
+  const [ledger, setLedger] = useState(null);
+  const [ledgerError, setLedgerError] = useState('');
+  const [ledgerBusy, setLedgerBusy] = useState(false);
+  const ledgerBusyRef = useRef(false);
+  const ledgerRequestRef = useRef(null);
+  const [ledgerKind, setLedgerKind] = useState('payment');
+  const [ledgerAmount, setLedgerAmount] = useState('');
+  const [ledgerReason, setLedgerReason] = useState('');
+  const [ledgerRelated, setLedgerRelated] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [reconciliation, setReconciliation] = useState(null);
+  const minorDisplay = (n) => `${n < 0 ? '-' : ''}${Math.floor(Math.abs(n) / 100)}.${String(Math.abs(n) % 100).padStart(2, '0')}`;
+  useEffect(() => { window.db?.getSession?.().then(s => setIsAdmin(s?.role === 'admin')).catch(() => {}); }, []);
+  useEffect(() => {
+    let active = true; setLedger(null); setLedgerError(''); setLedgerAmount(''); setLedgerReason(''); setLedgerRelated(''); setLedgerKind('payment'); ledgerRequestRef.current = null;
+    if (invoiceOrder && window.db?.getBillingAccount) window.db.getBillingAccount(invoiceOrder.id).then(a => { if (active) setLedger(a); }).catch(e => { if (active) setLedgerError(e.message); });
+    return () => { active = false; };
+  }, [invoiceOrder?.id]);
+  const submitLedger = async (e) => {
+    e.preventDefault(); if (ledgerBusyRef.current || !invoiceOrder) return;
+    ledgerBusyRef.current = true; setLedgerBusy(true); setLedgerError('');
+    const payload = { orderId: invoiceOrder.id, kind: ledgerKind, amount: ledgerAmount, reason: ledgerReason || null, relatedEventId: ledgerRelated || null, method: ledgerKind === 'payment' ? 'cash' : null };
+    const binding = JSON.stringify(payload);
+    if (ledgerRequestRef.current?.binding !== binding) ledgerRequestRef.current = { binding, id: crypto.randomUUID() };
+    try {
+      const result = await window.db.postBillingEvent({ ...payload, requestId: ledgerRequestRef.current.id });
+      if (invoiceOrderIdRef.current === payload.orderId) { setLedger(result); setLedgerAmount(''); setLedgerReason(''); setLedgerRelated(''); setInvoiceData(prev=>prev ? {...prev,order:{...prev.order,payment_status:result.balance_minor<=0?'paid':'unpaid'}}:prev); }
+      ledgerRequestRef.current = null; await loadOrders();
+    } catch (error) { setLedgerError(error.message || 'Payment could not be saved. Retry the same entry.'); }
+    finally { ledgerBusyRef.current = false; setLedgerBusy(false); }
+  };
   const invoiceOrderIdRef = useRef(null);
 
   /** Electron: window.print() often shows “no print preview” on Windows; PDF preview works. */
@@ -166,15 +197,12 @@ export default function Billing() {
     const orderId = order.id;
     try {
       const tests = await window.db.read('billing.invoiceTests', [orderId]);
-      const rateMap = {};
-      const rateRows = await window.db.read('billing.rates', []);
-      (rateRows || []).forEach((r) => { rateMap[r.parameter_id] = parseFloat(r.rate) || 0; });
-
       const items = (tests || []).map((t) => ({
         name: t.test_name,
-        rate: parseFloat(t.rate) || rateMap[t.parameter_id] || 0,
+        rate: t.rate == null ? 0 : Number(t.rate),
+        priceMissing: t.rate == null,
       }));
-      const total = items.reduce((s, i) => s + i.rate, 0);
+      const total = order.total_amount == null ? items.reduce((s, i) => s + i.rate, 0) : Number(order.total_amount);
       let accessCode = order.access_code;
       if ((!accessCode || !String(accessCode).trim()) && orderId) {
         try {
@@ -237,9 +265,10 @@ export default function Billing() {
     if (!window.db || updating || !order) return;
     const orderId = order.id;
     const isPaid = String(order.payment_status || '').toLowerCase() === 'paid';
-    const next = isPaid ? 'unpaid' : 'paid';
+    if (isPaid) { handleViewInvoice(order); return; }
+    const next = 'paid';
     const label = order.patient_name || order.patient_id || `Order #${orderId}`;
-    const amount = parseFloat(order.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    const amount = parseFloat(order.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const ok = window.confirm(
       next === 'paid'
         ? `Mark this bill as PAID?\n\n${label}\nAmount: ₹${amount}`
@@ -259,7 +288,7 @@ export default function Billing() {
           : prev);
       }
     } catch (e) {
-      console.error(e);
+      setRecalcMessage(e.message || 'Payment update failed.');
     } finally {
       setUpdating(null);
     }
@@ -356,6 +385,11 @@ export default function Billing() {
         </button>
       </div>
 
+      <section className="no-print" aria-label="Daily reconciliation" style={{ border: '1px solid var(--border, #DCE3EB)', padding: 16, marginBottom: 16, borderRadius: 8 }}>
+        <button type="button" onClick={async () => { try { const [dateFrom,dateTo] = getDateRange(filter,customFrom,customTo); setReconciliation(await window.db.getBillingReconciliation({dateFrom,dateTo})); setRecalcMessage(''); } catch(e) { setRecalcMessage(e.message); } }}>Reconcile selected local dates</button>
+        {reconciliation && <div aria-live="polite"><p>{reconciliation.dateFrom} to {reconciliation.dateTo}: charges ₹{minorDisplay(reconciliation.charges_minor)} · collections ₹{minorDisplay(reconciliation.collections_minor)} · refunds/reversals ₹{minorDisplay(reconciliation.refunds_minor)} · cancellations ₹{minorDisplay(reconciliation.cancellations_minor)}</p><p>Current outstanding ₹{minorDisplay(reconciliation.current_outstanding_minor)} · customer credit ₹{minorDisplay(reconciliation.current_credit_minor)}. These balances cover all bills, not only the selected dates.</p>{reconciliation.incomplete_history_accounts > 0 && <p>Legacy history is incomplete for {reconciliation.incomplete_history_accounts} bill(s); no historical payment dates were invented.</p>}</div>}
+      </section>
+
       <div data-ui="toolbar" style={styles.toolbar}>
         <div data-ui="periodRow" style={styles.periodRow}>
           {PERIODS.map((p) => (
@@ -448,7 +482,7 @@ export default function Billing() {
         <div data-ui="statsRow" style={styles.statsRow}>
           <span data-ui="statHighlight" style={styles.statHighlight}>{filteredOrders.length} orders</span>
           <span data-ui="statDivider" style={styles.statDivider}>|</span>
-          <span data-ui="stat" style={styles.stat}>₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })} total</span>
+          <span data-ui="stat" style={styles.stat}>₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total</span>
           <span data-ui="statDivider" style={styles.statDivider}>|</span>
           <span data-ui="statPaid" style={styles.statPaid}>{paidCount} paid</span>
           <span data-ui="statUnpaid" style={styles.statUnpaid}>{unpaidCount} due</span>
@@ -521,7 +555,7 @@ export default function Billing() {
                       <td data-ui="tdMono" style={styles.tdMono}>{o.patient_id}</td>
                       <td data-ui="tdMuted" style={styles.tdMuted}>{o.referred_by || '—'}</td>
                       <td data-ui="td" style={styles.td}>{o.test_count}</td>
-                      <td data-ui="tdAmount" style={styles.tdAmount}>₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td data-ui="tdAmount" style={styles.tdAmount}>₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td data-ui="td" style={styles.td} onClick={(e) => e.stopPropagation()}><span className="billing-payment-chip" data-payment={chip.label.toLowerCase()} style={chip.style}>{chip.label}</span></td>
                       <td data-ui="tdActions" style={styles.tdActions} onClick={(e) => e.stopPropagation()}>
                         <button data-ui="tableActionBtn" type="button" style={styles.tableActionBtn} onClick={() => handleViewInvoice(o, false)}>View</button>
@@ -532,7 +566,7 @@ export default function Billing() {
                           onClick={() => handlePaymentToggle(o)}
                           disabled={updating === o.id}
                         >
-                          {updating === o.id ? '…' : o.payment_status === 'paid' ? 'Unpaid' : 'Paid'}
+                          {updating === o.id ? '…' : o.payment_status === 'paid' ? 'History' : 'Pay balance'}
                         </button>
                       </td>
                     </tr>
@@ -604,7 +638,7 @@ export default function Billing() {
                     <div data-ui="cardReferrer" style={styles.cardReferrer}>{o.referred_by}</div>
                   )}
                   <div data-ui="cardAmount" style={styles.cardAmount}>
-                    ₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    ₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div data-ui="cardActions" style={styles.cardActions} onClick={(e) => e.stopPropagation()}>
                     <button data-ui="cardIconBtn"
@@ -629,7 +663,7 @@ export default function Billing() {
                       onClick={() => handlePaymentToggle(o)}
                       disabled={updating === o.id}
                     >
-                      {updating === o.id ? '…' : o.payment_status === 'paid' ? 'Unpaid' : 'Paid'}
+                      {updating === o.id ? '…' : o.payment_status === 'paid' ? 'History' : 'Pay balance'}
                     </button>
                   </div>
                 </div>
@@ -660,6 +694,21 @@ export default function Billing() {
                 <button data-ui="closeBtn" aria-label="Close invoice" type="button" style={styles.closeBtn} onClick={closeInvoice}>×</button>
               </div>
             </div>
+            <section className="no-print" aria-label="Bill payment ledger" style={{ padding: 20, borderBottom: '1px solid #DCE3EB', maxHeight: '45vh', overflowY: 'auto', flexShrink: 0 }}>
+              <h4>Payment history</h4>
+              {ledgerError && <p role="alert">{ledgerError}</p>}
+              {ledger && <><p>Original charge ₹{ledger.charge} · outstanding ₹{ledger.balance}{ledger.credit_minor > 0 && ` · credit ₹${minorDisplay(ledger.credit_minor)}`}</p>
+                {ledger.history_incomplete === 1 && <p>Legacy bill: historical payment details are incomplete. The preserved paid baseline is ₹{minorDisplay(ledger.legacy_paid_minor)}.</p>}
+                <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Local date</th><th>Entry</th><th>Amount</th><th>Recorded by</th><th>Reason</th></tr></thead><tbody>{ledger.events.map(ev => <tr key={ev.id}><td>{ev.business_date}</td><td>{ev.kind}</td><td>₹{minorDisplay(ev.amount_minor)}</td><td>{ev.actor}</td><td>{ev.reason || '—'}</td></tr>)}</tbody></table></div>
+                <form onSubmit={submitLedger} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end', marginTop: 14 }}>
+                  <label>Entry<select aria-label="Entry" value={ledgerKind} onChange={e=>setLedgerKind(e.target.value)} disabled={ledgerBusy}><option value="payment">Payment</option>{isAdmin && <><option value="refund">Refund</option><option value="reversal">Payment reversal</option><option value="cancellation">Cancel bill charge</option></>}</select></label>
+                  <label>Amount (₹)<input inputMode="decimal" required value={ledgerAmount} onChange={e=>setLedgerAmount(e.target.value)} disabled={ledgerBusy} placeholder="0.00" /></label>
+                  {['refund','reversal'].includes(ledgerKind) && <label>Recorded payment<select aria-label="Recorded payment" required value={ledgerRelated} onChange={e=>setLedgerRelated(e.target.value)} disabled={ledgerBusy}><option value="">Select payment</option>{ledger.events.filter(ev=>ev.kind==='payment').map(ev=><option key={ev.id} value={ev.id}>{ev.business_date} — ₹{minorDisplay(ev.amount_minor)}</option>)}</select></label>}
+                  <label>Reason<input required={ledgerKind!=='payment'} value={ledgerReason} maxLength={500} onChange={e=>setLedgerReason(e.target.value)} disabled={ledgerBusy} /></label>
+                  <button type="submit" disabled={ledgerBusy}>{ledgerBusy ? 'Saving…' : 'Save entry'}</button>
+                </form><p>Posted entries are preserved. Refunds and cancellations do not change issued clinical reports.</p>
+              </>}
+            </section>
             <div data-ui="invoiceBody" style={styles.invoiceBody} className="invoice-sheet-body">
               <div data-ui="invoiceHero" style={styles.invoiceHero}>
                 <div data-ui="invoiceHeroAccent" style={styles.invoiceHeroAccent} aria-hidden />
@@ -744,7 +793,7 @@ export default function Billing() {
                         <span data-ui="invoiceTestDot" style={styles.invoiceTestDot} aria-hidden />
                         {item.name}
                       </span>
-                      <span data-ui="invoiceTestRate" style={styles.invoiceTestRate}>₹{(Number(item.rate) || 0).toLocaleString('en-IN')}</span>
+                      <span data-ui="invoiceTestRate" style={styles.invoiceTestRate}>{item.priceMissing ? 'Historical price not recorded' : `₹${Number(item.rate).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2})}`}</span>
                     </div>
                   ))}
                 </div>
@@ -754,7 +803,7 @@ export default function Billing() {
                 <div data-ui="invoiceGrandTotalInner" style={styles.invoiceGrandTotalInner} className="invoice-grand-total-row">
                   <span data-ui="invoiceGrandLabel" style={styles.invoiceGrandLabel}>Grand total</span>
                   <span data-ui="invoiceGrandAmount" style={styles.invoiceGrandAmount}>
-                    ₹{invoiceData.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    ₹{invoiceData.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -908,8 +957,8 @@ const styles = {
     boxShadow: '0 24px 48px rgba(15, 40, 71, 0.22), 0 0 0 1px rgba(13,115,119,0.08)',
     width: '210mm',
     maxWidth: '95vw',
-    height: '148.5mm',
-    minHeight: '148.5mm',
+    height: '90vh',
+    minHeight: 0,
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',

@@ -8,7 +8,7 @@ Each protected call rechecks account existence, role, username and a credential 
 
 The existing staff/admin roles are retained. Staff have lab-wide operational access; this task does not introduce per-patient assignments or new roles. Complete database backups include account hashes and therefore require admin, even when encrypted. Operational Excel exports remain staff-accessible to preserve existing referral/billing workflows.
 
-The database/application policy includes **56 registered invoke channels**: 49 database and 7 application channels. Four separate licensing invoke channels are listed below. Print-trigger, permission-denied and licence-status subscriptions receive events and do not execute backend operations. Font-size preference and registration-draft storage are renderer-local, not privileged backend operations.
+The database/application policies enumerate every invoke channel below. Print-trigger and permission-denied subscriptions receive events and do not execute backend operations. The fully offline app has no licensing or remote authentication channels. Font-size preference and registration-draft storage are renderer-local, not privileged backend operations.
 
 ## Permission matrix
 
@@ -19,11 +19,7 @@ The exhaustive channel and named-read tables below are generated from the dispat
 | Channel | Required permission | Scope |
 | --- | --- | --- |
 | db:credentialState | public | Setup state only; no credentials |
-| db:setupAdmin | public trusted main frame + valid signed licence | Atomic fresh setup only: zero users/patients/orders and no prior setup audit; otherwise login or offline recovery |
-| licensing:onboarding | trusted main frame | Fresh eligibility and redacted licence state; initialized installations receive only freshInstallation=false |
-| licensing:status | staff | Redacted installation status, no activation key |
-| licensing:activate | admin, or trusted fresh bootstrap | Fresh eligibility/initialized session checked before request and again before signed-grant persistence |
-| licensing:refresh | staff, or trusted fresh bootstrap | Same asynchronous authorization recheck; failure never extends grant |
+| db:setupAdmin | public trusted main frame | Atomic fresh setup only: zero users/patients/orders and no prior setup audit; otherwise login or offline recovery |
 | db:changePassword | credential | Authenticated self-service; current password required, restricted sessions allowed |
 | db:prepareRestore | admin | File selection, lease recheck, authenticated backup/schema validation |
 | db:confirmRestore | admin | Candidate/session/generation check, verified recovery copy and replacement |
@@ -36,6 +32,12 @@ The exhaustive channel and named-read tables below are generated from the dispat
 | db:saveReferenceDraft | admin | Versioned reference edit and previous/new audit |
 | db:approveReferenceDraft | admin | Approve pending reference version |
 | db:getReport | staff | Read draft preview or immutable issued snapshot |
+| db:listReportVersions / db:getReportVersion | staff | Read immutable issued versions |
+| db:getReportAmendment / db:createReportAmendment / db:saveReportAmendment / db:finalizeReportAmendment / db:cancelReportAmendment | admin | Versioned result corrections, reason, optimistic revision and atomic audit |
+| db:getBillingAccount / db:getBillingReconciliation | staff | Scoped money history and totals |
+| db:postBillingEvent | staff; corrections admin | Actor-bound persistent idempotency; admin reason and eligible recorded payment for refunds/reversals |
+| db:getBackupHealth | staff | Local recovery and verified selected-copy status |
+| db:configureBackupReminder | admin | Non-blocking local reminder policy |
 | db:issueReport | staff | Explicit atomic issuance; authenticated issuer |
 | db:getPrintProfile | staff | Current physical printing profile |
 | db:validatePrintProfile | staff | Pure geometry validation |
@@ -43,11 +45,11 @@ The exhaustive channel and named-read tables below are generated from the dispat
 | db:reloadCatalogue | disabled | Disabled; catalogue identities protected |
 | db:read | staff | Named patient/catalogue/result/billing/referral reads |
 | db:registerPatientOrder | staff | Atomic new patient/order/ordered tests + existing bill computation |
-| db:setPaymentStatus | staff | Only paid/unpaid for an existing order |
+| db:setPaymentStatus | staff | Post full outstanding payment; cannot erase payment history |
 | db:saveOrderResults | staff | Existing atomic result save; issued results locked |
 | db:nextPatientId | disabled | Standalone reservation disabled; atomic registration supplies IDs |
 | db:logPrint | staff | Issued report only; authenticated print actor |
-| db:computeOrderBillAndCommission | staff | Existing billing calculation for one order |
+| db:computeOrderBillAndCommission | staff | Legacy unposted bill calculation; posted account prices/commissions stay fixed |
 | db:getLabConfig | staff | Safe lab presentation fields |
 | db:getDatabaseSize | staff | File size only |
 | db:getLastBackupDate | staff | Backup timestamp only |
@@ -166,6 +168,6 @@ Remaining release blockers/limitations:
 
 The earlier bootstrap/default-encryption/disabled-restore limitations are superseded by [RECOVERY.md](RECOVERY.md). There are no production bootstrap credentials. Legacy PBKDF2 is upgrade-on-login; authenticated portable backup and explicit validated restore are implemented. Existing filesystem, execution and release QA limitations remain.
 
-## Licensing identity boundary
+## Offline identity boundary
 
-System-owner licensing administration is a separate server identity, never a local lab role. Lab administrators manage local users/settings and may activate an installation using an owner-issued key; staff retain permitted daily workflows. Neither role can create licences/trials, add seats, extend validity or access the owner console. Main-process licence enforcement restricts registration, result editing and finalization when the signed allowance ends; login, viewing, issued reprints, backup/export and recovery remain available. The licensing service receives no clinical records and exposes no clinical deletion or remote-access operation. See [LICENSING.md](LICENSING.md) and [OWNER_ADMINISTRATION.md](OWNER_ADMINISTRATION.md).
+The app has only local administrator/staff identities. No licence key, remote owner account, cloud login or network grant is required. Local roles, recovery and stale-session protections remain enforced. Historical licensing documentation describes superseded builds.

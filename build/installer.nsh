@@ -1,9 +1,9 @@
 ; Extra guarantee: Desktop + Start Menu shortcuts (runs after app files are installed).
 ; Variables are provided by electron-builder (see app-builder-lib NSIS templates).
 
-; Remove only as part of a separately reviewed activation-ready production release.
+ ; Unsigned offline candidate: no activation service is required.
 !macro customInit
-  MessageBox MB_OK|MB_ICONEXCLAMATION "Patholy Management System — activation-pending prerelease.$\r$\n$\r$\nNo production activation service is configured. New registration, result editing and report finalization are unavailable.$\r$\n$\r$\nThis unsigned evaluation build is not for production lab use. Read PRERELEASE.md before continuing." /SD IDOK
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Pathology Management System - unsigned offline candidate.$\r$\n$\r$\nSetup and daily operation require no internet or activation. Create your local administrator account on first run.$\r$\n$\r$\nBack up before upgrading. Read OFFLINE_RELEASE.md and RECOVERY.md. Clinical validation and wider Windows/printer testing remain pending." /SD IDOK
 !macroend
 
 !macro customInstall

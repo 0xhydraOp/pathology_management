@@ -120,8 +120,8 @@ function showAboutDialog() {
   dialog.showMessageBox(parent || null, {
     type: 'info',
     title: 'About',
-    message: `Patholy Management System — v${app.getVersion()}`,
-    detail: `Patholy Management System\n\nVersion ${app.getVersion()}`,
+    message: `Pathology Management System — v${app.getVersion()}`,
+    detail: `Pathology Management System\n\nVersion ${app.getVersion()}`,
     buttons: ['OK'],
   }).catch(() => {});
 }
@@ -130,7 +130,7 @@ function createApplicationMenu() {
   const isDev = !app.isPackaged && process.env.ELECTRON_DEV === '1';
   const helpSubmenu = [
     {
-      label: 'About Patholy Management System',
+      label: 'About Pathology Management System',
       click: () => showAboutDialog(),
     },
   ];
@@ -208,7 +208,7 @@ function createSplashWindow() {
   .spinner{border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;width:36px;height:36px;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
-  <div class="logo">Patholy</div>
+  <div class="logo">Pathology</div>
   <div class="sub">Pathology Lab Management System</div>
   <div class="spinner"></div>
   <div class="sub">Loading...</div>
@@ -224,7 +224,7 @@ function createWindow() {
   const defaults = { width: 1280, height: 800, x: undefined, y: undefined };
 
   mainWindow = new BrowserWindow({
-    title: `Patholy Management System — v${app.getVersion()}`,
+    title: `Pathology Management System — v${app.getVersion()}`,
     width: state?.width ?? defaults.width,
     height: state?.height ?? defaults.height,
     x: state?.x,
@@ -287,8 +287,7 @@ async function doPrintPreview(copies = 1, profile, access) {
     const windowPrintOptions = nativePrintOptions(copies,profile);
     const options=pdfPrintOptions(profile);
     const pdfData = await win.webContents.printToPDF(options);
-    pdfPath = path.join(os.tmpdir(), `mondal-report-preview-${Date.now()}.pdf`);
-    fs.writeFileSync(pdfPath, pdfData);
+    pdfPath = require('./previewFile.cjs').create(pdfData);
     const prevState = loadPreviewState();
     const pw = prevState?.width ?? 900;
     const ph = prevState?.height ?? 700;
@@ -298,7 +297,7 @@ async function doPrintPreview(copies = 1, profile, access) {
       minWidth: 500,
       minHeight: 400,
       show: false,
-      title: `Print Preview — Patholy Management System v${app.getVersion()} (Ctrl+P to print)`,
+      title: `Print Preview — Pathology Management System v${app.getVersion()} (Ctrl+P to print)`,
       icon: getIconPath(),
       webPreferences: {
         nodeIntegration: false,
@@ -390,7 +389,7 @@ app.whenReady().then(async () => {
 
   db = new Database(userDataDir,{migrateLegacy:!isolatedDataDir});
   try {await db.init(); require('./offlineMigration.cjs').migrateOfflineInstallation(db,{licensingDirectory:isolatedDataDir?path.join(isolatedDataDir,'activation-material'):path.join(app.getPath('appData'),'PatholyManagementSystem','licensing')});}catch(error){
-    const recoveryWindow=new BrowserWindow({width:740,height:500,title:`Patholy Management System — v${app.getVersion()} · Recovery`,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,devTools:!app.isPackaged}});
+    const recoveryWindow=new BrowserWindow({width:740,height:500,title:`Pathology Management System — v${app.getVersion()} · Recovery`,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,devTools:!app.isPackaged}});
     restrictWindow(recoveryWindow,'data:');splashWindow?.destroy();
     const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     recoveryWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(`<html><body style="background:#F5F7FA;color:#18283B;font:16px Segoe UI;padding:40px"><h1>Database recovery required</h1><p>${escape(error.message)}</p><p>The original database has not been replaced. Close the app, preserve the data folder, and follow RECOVERY.md. Do not delete lab.db or create a fresh database over it.</p><p>Data folder: ${escape(userDataDir)}</p><p>Restore a verified local recovery copy with the app closed, or ask your administrator for assistance.</p></body></html>`));return;
@@ -411,7 +410,7 @@ app.whenReady().then(async () => {
   appHandle('printPreview','staff', (event,copies,profile)=>{const token=auth.lease(event);return doPrintPreview(copies || 1,profile,{senderId:event.sender.id,authorize:()=>auth.requireLease(event,token)});});
   appHandle('setTitle','staff', (_, title) => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();
-    if (w && !w.isDestroyed()) w.setTitle(title || `Patholy Management System — v${app.getVersion()}`);
+    if (w && !w.isDestroyed()) w.setTitle(title || `Pathology Management System — v${app.getVersion()}`);
   });
   appHandle('setAlwaysOnTop','staff', (_, on) => {
     const w = mainWindow || BrowserWindow.getFocusedWindow();

@@ -33,7 +33,7 @@ function start({ app, BrowserWindow, ipcMain, dialog }) {
     } finally { busy = false; if (quitPending) { selected?.close(); selected = null; app.quit(); } }
   });
   app.whenReady().then(() => {
-    window = new BrowserWindow({ width: 780, height: 740, title: `Patholy Management System — v${app.getVersion()} · Administrator recovery`, webPreferences: { preload: path.join(__dirname, 'recoveryPreload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, devTools: !app.isPackaged } });
+    window = new BrowserWindow({ width: 780, height: 740, title: `Pathology Management System — v${app.getVersion()} · Administrator recovery`, webPreferences: { preload: path.join(__dirname, 'recoveryPreload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, devTools: !app.isPackaged } });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, target) => { if (target !== url) event.preventDefault(); });
     window.webContents.on('will-attach-webview', event => event.preventDefault());

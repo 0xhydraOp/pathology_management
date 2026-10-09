@@ -86,7 +86,7 @@ test('migration preserves IDs, clinical values and legacy printed snapshots; run
  db.saveOrderResults(9001,[{parameterId:9001,value:3}]);db.logPrint(9001,'Synthetic Editor');
  const patients=db.all('SELECT * FROM patients'),parameters=db.all('SELECT id,code,unit FROM parameters');
  const ranges=db.all('SELECT * FROM parameter_ranges');
- db.run('PRAGMA user_version=0');
+ require('./legacy-schema-fixture.cjs')(db,0);
  for(const table of ['reference_migrations','reference_interval_sets','parameter_critical_rules','issued_reports'])db.run(`DROP TABLE ${table}`);
  db=await reopen();
  assert.deepEqual(db.all('SELECT * FROM patients'),patients);assert.deepEqual(db.all('SELECT id,code,unit FROM parameters'),parameters);assert.deepEqual(db.all('SELECT * FROM parameter_ranges'),ranges);
@@ -149,7 +149,7 @@ test('editing a pending source records its previous value in the audit',()=>fixt
 
 test('failed first migration keeps original data and can be retried',()=>fixture(async(db,admin,reopen)=>{
  const original=db.all('SELECT id,code,unit FROM parameters');
- db.run('PRAGMA user_version=0');
+ require('./legacy-schema-fixture.cjs')(db,0);
  for(const table of ['reference_migrations','reference_interval_sets','parameter_critical_rules','issued_reports'])db.run(`DROP TABLE ${table}`);
  db.close();
  const rename=fs.renameSync;fs.renameSync=()=>{throw new Error('Synthetic migration write failure');};

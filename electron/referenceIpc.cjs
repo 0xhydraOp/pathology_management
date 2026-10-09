@@ -1,5 +1,5 @@
 const {createAuthorization}=require('./authorization.cjs');
-const permissions={credentialState:'public',setupAdmin:'public',changePassword:'credential',verifyUser:'public',getSession:'public',logout:'public',listReferenceSets:'staff',getReferenceContext:'staff',saveReferenceDraft:'admin',approveReferenceDraft:'admin',getReport:'staff',issueReport:'staff',getPrintProfile:'staff',validatePrintProfile:'staff',setPrintProfile:'admin',reloadCatalogue:'disabled'};
+const permissions={credentialState:'public',setupAdmin:'public',changePassword:'credential',verifyUser:'public',getSession:'public',logout:'public',listReferenceSets:'staff',getReferenceContext:'staff',saveReferenceDraft:'admin',approveReferenceDraft:'admin',getReport:'staff',listReportVersions:'staff',getReportVersion:'staff',getReportAmendment:'admin',createReportAmendment:'admin',saveReportAmendment:'admin',finalizeReportAmendment:'admin',cancelReportAmendment:'admin',issueReport:'staff',getPrintProfile:'staff',validatePrintProfile:'staff',setPrintProfile:'admin',reloadCatalogue:'disabled'};
 function guardGenericSql(){throw new Error('Permission denied: generic SQL is disabled; use an authorized operation. Issued status and explicit order columns are protected.');}
 function registerReferenceIpc(ipcMain,db,{authorization=createAuthorization(db)}={}){
  const auth=authorization;
@@ -14,6 +14,8 @@ function registerReferenceIpc(ipcMain,db,{authorization=createAuthorization(db)}
  handle('approveReferenceDraft',(_,actor,id)=>db.approveReferenceDraft(actor,id));handle('getReport',(_,actor,id)=>db.getReport(id));handle('issueReport',(_,actor,id)=>db.issueReport(actor,id));
  handle('getPrintProfile',()=>db.getPrintProfile());handle('validatePrintProfile',(_,actor,profile)=>require('./printProfile.cjs').validatePrintProfile(profile));handle('setPrintProfile',(_,actor,profile)=>db.setPrintProfile(actor,profile));
  handle('reloadCatalogue',()=>{throw new Error('Permission denied: Catalogue reload is disabled to preserve parameter IDs and local intervals.');});
+ for(const name of ['listReportVersions','getReportVersion'])handle(name,(_,actor,...args)=>db[name](...args));
+ for(const name of ['getReportAmendment','createReportAmendment','saveReportAmendment','finalizeReportAmendment','cancelReportAmendment'])handle(name,(_,actor,...args)=>db[name](actor,...args));
  return {guardGenericSql,authorization:auth};
 }
 module.exports={registerReferenceIpc,guardGenericSql,permissions};

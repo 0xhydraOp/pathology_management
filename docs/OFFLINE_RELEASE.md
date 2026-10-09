@@ -1,3 +1,17 @@
+# Pathology Management System - 1.1.0 (unsigned)
+
+Fully offline, unsigned Windows x64 release. Adds controlled report amendments, exact-money billing history, verified backup status and a clinical review pack. New release publication is authorized after verification; earlier tags/releases/artifacts remain unchanged.
+
+The Inno installer replaces the earlier installer framework; see INNO_INSTALLATION.md for the manual NSIS transition.
+
+Schema 2 is additive: startup creates and verifies a usable pre-upgrade database copy before changing it. Existing issued JSON is adopted unchanged as version 1. Legacy bills keep their original REAL values and an explicitly incomplete rounded-to-paise baseline; no historical payment events are invented. Supported schema-1 portable backups normalize in memory; unsupported newer schemas and inconsistent report/ledger histories are rejected. Portable authenticated encryption is unchanged. Never run an older executable against the upgraded database.
+
+Qualified clinical approval, Windows 10, physical printers/PDF drivers, elevated installer/reinstall/upgrade/uninstall, assistive technology and real power-loss testing remain pending or NOT TESTED. Chromium PDFs and synthetic write failures do not prove those cases. See WINDOWS_READINESS_MATRIX.md, MANUAL_UPDATE.md, CLINICAL_REVIEW_PACK.md and PROFESSIONAL_VERIFICATION.md. No domain or Cloudflare resources are changed.
+
+---
+
+## Historical offline-conversion notes (1.1.0-rc.2)
+
 # Offline conversion candidate — 1.1.0-rc.2
 
 This unsigned Windows x64 prerelease removes the complete licensing and remote owner-authentication system. No activation, trial, expiry, seats, periodic check or online account is required. First run creates a user-chosen local administrator, followed by login. Existing accounts keep their credentials and authorization.
