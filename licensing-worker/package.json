@@ -13,5 +13,10 @@
   },
   "overrides": {
     "sharp": "0.35.5"
+  },
+  "dependencies": {
+    "@workos-inc/node": "11.0.0",
+    "iron-webcrypto": "2.0.0",
+    "jose": "6.2.12"
   }
 }

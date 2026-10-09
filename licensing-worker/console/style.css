@@ -5,3 +5,5 @@
 .invite-card{margin:0}
 
 .audit-pagination{margin:20px 22px 12px;font-size:12px;color:var(--muted)}.audit-more{margin:0 22px 22px}
+
+.owner-session-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.owner-session-actions a{color:var(--accent);font-size:12px}.owner-session-actions button{padding:6px 10px}.owner-session-actions a:focus-visible{outline:3px solid #69b7c1;outline-offset:3px}@media(max-width:700px){header{flex-wrap:wrap}.owner-session-actions{width:100%}}

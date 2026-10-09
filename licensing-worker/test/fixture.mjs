@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFile } from "node:fs/promises";
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
@@ -12,6 +13,9 @@ export async function startSyntheticWorker({
   mfaContract = "access-idp-amr-top-level-v1",
   createLicense = true,
   customerPortal = true,
+  authMode = "access-certified",
+  workosBindings = {},
+  outboundService,
 } = {}) {
   const ed = generateKeyPairSync("ed25519"),
     rsa = generateKeyPairSync("rsa", { modulusLength: 2048 }),
@@ -24,26 +28,25 @@ export async function startSyntheticWorker({
       workers: [
         {
           name: "synthetic",
-          modules: await Promise.all(
-            [
-              "src/index.js",
-              "src/ownerApi.js",
-              "src/hostBoundary.js",
-              "src/ownerConsole.js",
-              "src/ownerMfa.js",
-              "console/assets.js",
-            ].map(async (file) => ({
-              type: "ESModule",
-              path: fileURLToPath(new URL("../" + file, import.meta.url)),
-              contents: await readFile(
-                new URL("../" + file, import.meta.url),
-                "utf8",
-              ),
-            })),
-          ),
+          modules: true,
+          script: (
+            await build({
+              entryPoints: [
+                fileURLToPath(new URL("../src/index.js", import.meta.url)),
+              ],
+              bundle: true,
+              write: false,
+              format: "esm",
+              platform: "browser",
+              conditions: ["workerd"],
+              external: ["node:*"],
+              logLevel: "silent",
+            })
+          ).outputFiles[0].text,
           compatibilityDate: "2026-10-08",
           compatibilityFlags: ["nodejs_compat"],
           d1Databases: ["DB"],
+          ...(outboundService ? { outboundService } : {}),
           bindings: {
             OWNER_ORIGIN: "https://owner.example.invalid",
             API_ORIGIN: "https://license.example.invalid",
@@ -59,9 +62,11 @@ export async function startSyntheticWorker({
             ACCESS_AUDIENCE: "synthetic-audience",
             ACCESS_JWKS_JSON: JSON.stringify({ keys: [jwk] }),
             ACCESS_ADMIN_SUBJECTS: JSON.stringify(ownerSubjects),
+            OWNER_AUTH_MODE: authMode,
             CUSTOMER_ACCESS_AUDIENCE: "synthetic-customer-audience",
             OWNER_MFA_CONTRACT: mfaContract,
-            CUSTOMER_PORTAL_ENABLED: customerPortal ? 'true' : 'false',
+            CUSTOMER_PORTAL_ENABLED: customerPortal ? "true" : "false",
+            ...workosBindings,
           },
         },
       ],
@@ -100,6 +105,24 @@ export async function startSyntheticWorker({
         )
       ).replaceAll("\n", " "),
     );
+  if (customerMigration)
+    await db.exec(
+      (
+        await readFile(
+          new URL("../migrations/0005_owner_authkit.sql", import.meta.url),
+          "utf8",
+        )
+      ).replaceAll("\n", " "),
+    );
+  if (customerMigration)
+    await db.exec(
+      (
+        await readFile(
+          new URL("../migrations/0006_owner_lifecycle.sql", import.meta.url),
+          "utf8",
+        )
+      ).replaceAll("\n", " "),
+    );
   await mf.ready;
   const base = "https://owner.example.invalid",
     api = "https://license.example.invalid";
@@ -113,7 +136,7 @@ export async function startSyntheticWorker({
           aud: ["synthetic-audience"],
           sub: "synthetic-admin",
           type: "app",
-          email: "synthetic-owner@example.invalid",
+          email: "iamrobiul94@gmail.com",
           ...(mfaContract === "access-oidc-custom-amr-v1"
             ? { custom: { amr: ["mfa"] } }
             : { amr: ["mfa"] }),

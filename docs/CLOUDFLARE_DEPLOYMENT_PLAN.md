@@ -1,5 +1,7 @@
 # Molla Digital / Patholy deployment review — 9 October 2026
 
+**Current owner authentication:** the later email/password plus mandatory second-factor requirement supersedes this document's Access/IdP login proposal. See [OWNER_AUTHENTICATION.md](OWNER_AUTHENTICATION.md) for the prepared WorkOS integration, authenticated bootstrap and live gates. Do not configure an alternate owner login from the historical plan below. Public hosting/TLS details are updated in [DEPLOYMENT_PREREQUISITES.md](DEPLOYMENT_PREREQUISITES.md).
+
 Prepared only. No resources, DNS, subscriptions, invitations or account settings changed. The immutable v1.1.0-rc.1 release is unchanged. This plan supersedes the previous single-origin proposal.
 
 ## Read-only account evidence

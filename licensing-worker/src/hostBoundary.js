@@ -11,7 +11,8 @@ export function permitsHost(request, env) {
   const path = url.pathname;
   if (url.origin === owner.origin) {
     return (request.method === 'GET' && (path === '/' || path === '/owner' || path.startsWith('/owner/'))) ||
-      (request.method === 'POST' && (path.startsWith('/v1/owner/') || /^\/v1\/admin\/(create|renew|revoke|transfer)$/.test(path)));
+      (request.method === 'POST' && (path.startsWith('/v1/owner/') || /^\/v1\/admin\/(create|renew|revoke|transfer)$/.test(path) ||
+        (env.OWNER_AUTH_MODE === 'workos' && /^\/v1\/owner-auth\/(bootstrap|login|enroll|totp|status|session|logout|password|backup-enroll|backup-verify|backup-cleanup|recover|recovery-enroll|recovery-verify|reconcile|reconcile-info)$/.test(path))));
   }
   if (url.origin === api.origin) {
     if (request.method === 'GET') return env.CUSTOMER_PORTAL_ENABLED === 'true' && (path === '/invite' || path.startsWith('/invite/'));

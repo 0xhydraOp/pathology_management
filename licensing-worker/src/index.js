@@ -2,6 +2,8 @@ import { ownerConsoleResponse } from "./ownerConsole.js";
 import { ownerApi, acceptInvitation } from "./ownerApi.js";
 import { hasOwnerMfaEvidence } from "./ownerMfa.js";
 import { permitsHost } from "./hostBoundary.js";
+import { OWNER_EMAIL, authorizeOwner, handleAuthRequest } from "./ownerAuth.js";
+import { ownerAuthConsoleResponse } from "./ownerAuthConsole.js";
 export class RequestDenied extends Error {}
 // D1 emits database errors rather than exposing a typed constraint code.
 // Recognize only our explicit authorization/concurrency guards; infrastructure
@@ -92,6 +94,11 @@ export async function authenticateOwner(
   env,
   { requireToken = true } = {},
 ) {
+  if (env.OWNER_AUTH_MODE === "workos") {
+    try { return (await authorizeOwner(request, env)).id; }
+    catch { throw new RequestDenied("auth"); }
+  }
+  if (env.OWNER_AUTH_MODE !== "access-certified") throw new RequestDenied("auth");
   if (
     requireToken &&
     (!env.ADMIN_API_TOKEN ||
@@ -108,6 +115,7 @@ export async function authenticateOwner(
     !Array.isArray(subjects) ||
     subjects.length !== 1 ||
     subjects[0] !== claims.sub ||
+    claims.email !== OWNER_EMAIL ||
     !hasOwnerMfaEvidence(claims, env.OWNER_MFA_CONTRACT)
   )
     throw new RequestDenied("auth");
@@ -527,6 +535,24 @@ export default {
     try {
       if (!permitsHost(request, env))
         return response({ error: "Not found." }, 404);
+      const path = new URL(request.url).pathname;
+      if (env.OWNER_AUTH_MODE === "workos") {
+        if (request.method === "POST" && path.startsWith("/v1/owner-auth/"))
+          return await handleAuthRequest(request, env);
+        if (request.method === "GET") {
+          // Public authentication shells disclose no customer or licence data.
+          // Setup still requires a private, operator-issued single-use token.
+          // Security/recovery pages are empty shells. Their APIs require a
+          // verified setup session or a purpose-bound maintenance ceremony;
+          // they expose no customer or licence data before owner readiness.
+          const authPage = ownerAuthConsoleResponse(path);
+          if (authPage) return authPage;
+          if (path === "/" || path === "/owner" || path === "/owner/") {
+            try { await authenticateOwner(request, env, { requireToken: false }); }
+            catch { return new Response(null, { status: 302, headers: { Location: "/owner/login", "Cache-Control": "no-store" } }); }
+          }
+        }
+      }
       if (
         !env.SIGNING_PRIVATE_KEY ||
         !env.SIGNING_KID ||
@@ -539,7 +565,6 @@ export default {
         Number(env.RATE_LIMIT_WINDOW) < 1
       )
         return response({ error: "Licensing service unavailable." }, 503);
-      const path = new URL(request.url).pathname;
       if (path === "/" && request.method === "GET") {
         await authenticateOwner(request, env, { requireToken: false });
         return new Response(null, {
@@ -558,7 +583,7 @@ export default {
           await verifyAccess(request, env, env.CUSTOMER_ACCESS_AUDIENCE);
         else await authenticateOwner(request, env, { requireToken: false });
         return (
-          ownerConsoleResponse(path, env.API_ORIGIN, env.CUSTOMER_PORTAL_ENABLED) ||
+          ownerConsoleResponse(path, env.API_ORIGIN, env.CUSTOMER_PORTAL_ENABLED, env.OWNER_AUTH_MODE) ||
           response({ error: "Not found." }, 404)
         );
       }
@@ -588,5 +613,15 @@ export default {
         now() - 86400 * 30,
       ),
     ]);
+    if (env.OWNER_AUTH_MODE === "workos") {
+      // Retain administrative audits; remove expired authentication transport
+      // metadata only. Failed migrations surface rather than creating tables.
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM owner_auth_rate WHERE window < ?").bind(Math.floor(now() / 60) - 2),
+        env.DB.prepare("DELETE FROM owner_auth_pending WHERE expires_at < ?").bind(now() - 86400),
+        env.DB.prepare("DELETE FROM owner_auth_sessions WHERE expires_at < ?").bind(now() - 86400 * 30),
+        env.DB.prepare("DELETE FROM owner_auth_operator_tickets WHERE expires_at < ?").bind(now() - 86400 * 30),
+      ]);
+    }
   },
 };
