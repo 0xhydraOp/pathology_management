@@ -1,4 +1,4 @@
-const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+const {registerApplicationFixture}=require('./registerApplicationFixture.cjs');
 // Real UI + real preload API + authenticated IPC. Only explicit synthetic temporary DBs.
 const fs=require('fs'),os=require('os'),path=require('path'),assert=require('node:assert/strict'),{EventEmitter}=require('events');
 const Database=require('../electron/database'),{registerApplicationIpc,registerAppIpc}=require('../electron/applicationIpc.cjs');
@@ -9,7 +9,7 @@ async function main(){
  try{
   await db.init();if(db.credentialState().setupRequired)db.setupAdmin('admin','synthetic-admin-password');db.run("UPDATE lab SET name='Synthetic Laboratory',pathologist_name='Synthetic reviewer',clinical_correlation_text='Synthetic report footer' WHERE id=1");db.run("INSERT INTO users(id,username,password_hash,role,display_name) SELECT 9001,'synthetic-staff',password_hash,'staff','Synthetic Staff' FROM users WHERE id=1");
   db.run("INSERT INTO parameters(id,code,name,type,unit,section,decimal_places) VALUES(9001,'SYNUI','Synthetic measurement','numeric','mg/L','Synthetic',2)");db.run("INSERT INTO patients(id,patient_id,name,age,sex) VALUES(9001,'SYN-UI-9001','Synthetic Patient',30,'female')");db.run("INSERT INTO orders(id,patient_id,order_date,status) VALUES(9001,9001,date('now'),'pending')");db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,9001)');db.saveOrderResults(9001,[{parameterId:9001,value:3}]);
-  const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:1})};const {authorization:auth}=await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{withLicenceIpc:true});let previewCount=0;
+  const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:1})};const {authorization:auth}=await registerApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{});let previewCount=0;
   registerAppIpc({handle:(name,fn)=>handlers.set(name,fn)},auth,{print:()=>({ok:false,cancelled:true}),printPreview:()=>{previewCount++;return {ok:true};},getVersion:()=> 'synthetic-test',getPath:()=>dir,setTitle:()=>{},setAlwaysOnTop:()=>{},getAlwaysOnTop:()=>false});
   fs.writeFileSync(harness,`<div id="root"></div><script type="module">import React from 'react';import {createRoot} from 'react-dom/client';import App from '/src/App.jsx';import '/src/index.css';createRoot(document.getElementById('root')).render(React.createElement(App));</script>`);
   server=await createServer({root,server:{host:'127.0.0.1',port:0}});await server.listen();browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));

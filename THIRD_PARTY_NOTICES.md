@@ -1,6 +1,6 @@
 # Third-party notices
 
-MIT applies to Patholy original code, not dependencies. These files preserve upstream licence texts from the installed, locked distributions. Electron distributions also retain LICENSE.electron.txt and LICENSES.chromium.html beside the executable. SQLite incorporated by sql.js is public domain; sql.js retains its own MIT licence. Development-only Worker tooling is not packaged in the desktop.
+MIT applies to Patholy original code, not dependencies. These files preserve upstream licence texts from the installed, locked distributions. Electron distributions also retain LICENSE.electron.txt and LICENSES.chromium.html beside the executable. SQLite incorporated by sql.js is public domain; sql.js retains its own MIT licence. The former licensing Worker and its exclusive dependencies have been removed.
 
 | Component | Version | Upstream licence | Notice file |
 | --- | --- | --- | --- |
@@ -17,9 +17,5 @@ MIT applies to Patholy original code, not dependencies. These files preserve ups
 | sql.js | 1.14.2 | MIT | third-party-licenses/sql.js-* |
 | xlsx | 0.20.3 | Apache-2.0 | third-party-licenses/xlsx-* |
 | electron | 44.7.0 | MIT | third-party-licenses/electron-* |
-| @workos-inc/node (licensing Worker only) | 11.0.0 | MIT | third-party-licenses/workos-node-LICENSE |
-| iron-webcrypto (licensing Worker only) | 2.0.0 | MIT | third-party-licenses/iron-webcrypto-LICENSE.md |
-| jose (licensing Worker only) | 6.2.12 | MIT | third-party-licenses/jose-LICENSE.md |
-| uint8array-extras (licensing Worker only) | 1.6.0 | MIT | third-party-licenses/uint8array-extras-LICENSE |
 
 SheetJS 0.20.3 retains Apache-2.0. Chromium has additional terms in LICENSES.chromium.html. Dependencies and source-only development tooling retain their upstream licences; consult their distributions.

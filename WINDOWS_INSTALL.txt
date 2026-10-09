@@ -1,66 +1,16 @@
-================================================================================
-  IMPORTANT — READ THIS FIRST (Windows)
-================================================================================
+PATHOLY MANAGEMENT SYSTEM — OFFLINE 1.1.0-rc.2
+Unsigned Windows x64 prerelease; wider installation and lab validation remain pending.
 
-ACTIVATION-PENDING PRERELEASE 1.1.0-rc.1 — NOT FOR PRODUCTION LAB USE.
-Windows binaries are unsigned. No production activation service is configured.
-New registration, result editing and report finalization are unavailable.
-Existing-record viewing, issued reprints, backup/export and recovery remain available.
-Use synthetic data only. Read the included PRERELEASE.md before installation.
+1. Verify SHA256SUMS.txt, then run the matching Offline Setup installer.
+2. Choose the installation folder. No internet, activation key or remote account is required.
+3. On first launch create your own local administrator username/password.
+4. Log in with those credentials. There are no default credentials.
+5. Configure the local lab and validate its clinical rules before use.
 
-If you downloaded the **ZIP** named like:
-    Patholy Management System-<version>-Windows-Install-Package.zip
-
-  1. Extract the ZIP (right-click → Extract All…).
-  2. Inside the folder you will find:
-       •  Patholy Management System Setup <version>.exe   ← RUN THIS to install
-       •  READ_ME_FIRST_Windows_Install.txt              (this guide)
-  3. Double-click the **Setup .exe** — you should see the install wizard
-     (license, choose folder, progress). That is a proper installation.
-  4. After install, use the **Desktop** or **Start Menu** shortcut.
-
-Do NOT look for a “portable” app .exe inside this ZIP — the package is only
-the **installer** + instructions. There is no extract-and-run portable build.
-
-If the program opens with NO wizard (no license, no “Installing…”):
-  → You ran the wrong file, or an old portable zip from an older release.
-  → Always run the file whose name contains **Setup** and ends in **.exe**.
-
-================================================================================
-AFTER INSTALL — WHERE IS MY DATA?
-================================================================================
-  • Program: folder you chose in Setup (often under Program Files).
-  • Database, backups, exports:
-        %APPDATA%\mondal-diagnostic-centre\
-  • In the app: Settings → Support shows the exact path.
-
-================================================================================
-GitHub Releases / two assets
-================================================================================
-  You may see BOTH:
-    • The same **Setup .exe** alone (direct download), AND
-    • The **Windows-Install-Package.zip** (Setup + this readme together).
-
-  Either way, run **Setup .exe** for a normal installation.
-
-================================================================================
-Build machine (developer)
-================================================================================
-  After:  npm run electron:build
-
-  In release\ you should see:
-    • Patholy Management System Setup <version>.exe  (NSIS installer)
-    • Patholy Management System-<version>-Windows-Install-Package.zip
-    • win-unpacked\  (intermediate; not for end users)
-
-================================================================================
-
-DATA AND RECOVERY
-Uninstallation preserves lab data. Preserve the data folder before reinstalling or recovery.
-A fresh lab requires administrator setup; there is no default password.
-See the included RECOVERY.md for encrypted backup/restore, lost-password recovery and limitations.
-Close the lab application, then open the included Recover Administrator.cmd in the installation folder.
-Alternatively run "Patholy Management System.exe" --recover-administrator.
-Select the existing data folder, choose an existing administrator, enter a new password and confirm.
-The installed app supplies its own runtime. Windows access to the data folder is required.
-See RECOVERY.md; no hidden account is provided.
+Existing users/data keep their application and directory identity. Do not delete lab.db.
+Offline conversion creates a verified recovery database before recognized activation cleanup.
+Back up before upgrading. Portable encrypted backups require your chosen passphrase.
+Uninstallation leaves lab data in place. Close the app before packaged administrator recovery.
+See RECOVERY.md and OFFLINE_RELEASE.md beside the installed executable.
+Windows 10/11 x64 supported; Windows 11 tested. Physical printing, elevated installation/upgrade
+and actual power loss are NOT TESTED. v1.1.0-rc.1 activation requirements are historical only.

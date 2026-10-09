@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('fs'),os=require('os'),path=require('path'),{EventEmitter}=require('events');
 const Database=require('../electron/database');
-const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+const {registerApplicationIpc:registerLocalApplicationFixture}=require('../electron/applicationIpc.cjs');
 async function fixture(fn){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lab-billing-integrity-'));let db=new Database(dir,{migrateLegacy:false});
  try{await db.init();db.setupAdmin('synthetic-admin','synthetic-billing-password');
@@ -9,7 +9,7 @@ async function fixture(fn){
  db.run('INSERT INTO test_rates(parameter_id,rate) VALUES(9901,100)');
  db.run("INSERT INTO referrer_commission_pct(referrer_name,commission_percent) VALUES('Synthetic Referral',20)");
  const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:991})};
- await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
+ await registerLocalApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
  const invoke=(name,...args)=>handlers.get('db:'+name)(event,...args);invoke('verifyUser','synthetic-admin','synthetic-billing-password');
  db.run("INSERT INTO users(username,password_hash,role,display_name) SELECT 'synthetic-staff',password_hash,'staff','Synthetic Staff' FROM users WHERE username='synthetic-admin'");
  const staffEvent={sender:Object.assign(new EventEmitter(),{id:992})},staff=(name,...args)=>handlers.get('db:'+name)(staffEvent,...args);staff('verifyUser','synthetic-staff','synthetic-billing-password');

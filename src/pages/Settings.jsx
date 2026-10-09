@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import RecoverySettings from '../components/RecoverySettings';
-import LicenceSettings from '../components/LicenceSettings';
 import ReferenceIntervalEditor from '../components/ReferenceIntervalEditor';
 import PrintProfileSettings from '../components/PrintProfileSettings';
 import { getUiFontScale, setUiFontScale } from '../utils/uiFontScale';
@@ -222,7 +221,6 @@ export default function Settings() {
       </div>
 
       <div data-ui="grid" style={styles.grid}>
-<LicenceSettings />
 <div data-ui="section sectionLab" style={{ ...styles.section, ...styles.sectionLab }} className="settings-section">
           <div data-ui="sectionIconBadge" style={styles.sectionIconBadge}>
             <span data-ui="sectionIcon" style={styles.sectionIcon}>🔬</span>

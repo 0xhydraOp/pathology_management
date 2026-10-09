@@ -4,17 +4,17 @@ const fs = require('fs'), path = require('path'), os = require('os'), assert = r
 async function main() {
   const { _electron } = require(process.env.T001_PLAYWRIGHT_PATH || 'playwright');
   assert.ok(process.env.REFERENCE_TEST_PYTHON,'Set REFERENCE_TEST_PYTHON with pypdf and pypdfium2 for packaged PDF verification.');
-  const executable = path.resolve(process.argv[2] || 'release/licensing-synthetic-qa/win-unpacked/Patholy Management System.exe');
+  const executable = path.resolve(process.argv[2] || 'release/offline-product/win-unpacked/Patholy Management System.exe');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'patholy-upgrade-'));
   const data = path.join(root, 'Synthetic lab বাংলা'); fs.mkdirSync(data);
   fs.writeFileSync(path.join(data, 'synthetic-qa.json'), JSON.stringify({ purpose: 'synthetic-packaged-qa', directory: data }));
   const artifacts = path.resolve(process.env.REFERENCE_TEST_ARTIFACT_DIR || 'release/dependency-upgrade-verification/packaged'); fs.mkdirSync(artifacts, { recursive: true });
   const env = { ...process.env, APPDATA: path.join(root, 'roaming'), LOCALAPPDATA: path.join(root, 'local'), ELECTRON_DEV: '1' };
-  let app, page;
+  let app, page;const outbound=[];
   async function launch(args = ['--isolated-data-dir=' + data]) {
     app = await _electron.launch({ executablePath: executable, args, env }); await app.firstWindow();
     for (let i = 0; i < 100; i++) { page = app.windows().find(p => p.url().startsWith('file:')); if (page) break; await new Promise(r => setTimeout(r, 50)); }
-    assert.ok(page, 'Packaged local window required'); page.setDefaultTimeout(10000);
+    assert.ok(page, 'Packaged local window required');await page.context().route(/^https?:/,route=>{outbound.push(route.request().url());return route.abort();}); page.setDefaultTimeout(10000);
   }
   async function login(password) {
     await page.getByRole('button', { name: 'Login', exact: true }).waitFor();
@@ -41,11 +41,9 @@ async function main() {
     fs.writeFileSync(path.join(artifacts, name + '.pdf'), Buffer.from(bytes, 'base64'));
   }
   try {
-    await launch();await page.getByRole('button',{name:'Activate installation',exact:true}).waitFor();assert.ok(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY,'Run through the local synthetic licensing runner.');await page.getByLabel('Licence key',{exact:true}).fill(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY);await page.getByRole('button',{name:'Activate installation',exact:true}).click();await page.getByRole('button', { name: 'Create administrator', exact: true }).waitFor();
+    await launch();await page.getByRole('button', { name: 'Create administrator', exact: true }).waitFor();
     await page.getByLabel('Username', { exact: true }).fill('synthetic-admin'); await page.getByLabel('New password', { exact: true }).fill('synthetic-original-password'); await page.getByLabel('Confirm new password', { exact: true }).fill('synthetic-original-password'); await page.getByRole('button', { name: 'Create administrator', exact: true }).click(); await login('synthetic-original-password');
     const runtime = await app.evaluate(() => ({ electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome })); assert.equal(runtime.electron, '44.7.0');
-    assert.ok(process.env.PATHOLY_SYNTHETIC_LICENCE_KEY,'Run through the local synthetic licensing runner.');
-    await page.evaluate(key=>window.licensing.activate(key),process.env.PATHOLY_SYNTHETIC_LICENCE_KEY);
     const created = await page.evaluate(async () => {
       const params = await window.db.read('catalogue.referenceParameters', []), numeric = params.find(p => p.code === 'HB'), qualitative = params.find(p => p.type === 'text');
       const order = await window.db.registerPatientOrder({ name: 'Synthetic upgraded runtime', age: 0, sex: 'unknown', tests: [numeric.id, qualitative.id], orderDate: '2026-10-08' });
@@ -110,6 +108,7 @@ async function main() {
     await page.getByLabel('New password', { exact: true }).fill('synthetic-recovered-password'); await page.getByLabel('Repeat new password', { exact: true }).fill('synthetic-recovered-password'); await page.getByLabel('Type RESET ADMINISTRATOR to confirm', { exact: true }).fill('RESET ADMINISTRATOR'); await page.getByRole('button', { name: 'Replace administrator password', exact: true }).click(); await page.getByRole('status').filter({ hasText: 'Password replaced' }).waitFor();
     await page.screenshot({ path: path.join(artifacts, 'packaged-recovery.png') }); await app.close(); app = null;
     await launch(); await login('synthetic-recovered-password'); assert.deepEqual(await page.evaluate(id => window.db.getReport(id), created.orderId), issued);
+    assert.equal(await page.evaluate(()=>typeof window.licensing),'undefined');assert.deepEqual(outbound,[]);
     fs.writeFileSync(path.join(artifacts, 'runtime.json'), JSON.stringify(runtime, null, 2));
     console.log('Packaged upgrade passed: runtime, preview/cancel/finalization, immutable PDFs, export, encrypted restore/cancel/stale candidate, restart/second instance and closed-app packaged recovery. Artifacts: ' + artifacts);
   } finally {

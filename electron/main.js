@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, Menu, dialog, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, Menu, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -6,7 +6,7 @@ const { pathToFileURL } = require('url');
 const Database = require('./database');
 
 if (process.argv.includes('--recover-administrator')) {
-  require('./recoveryEntry.cjs').start({ app, BrowserWindow, ipcMain, dialog });
+  require('./recoveryEntry.cjs').start({ app, BrowserWindow, ipcMain, dialog, session });
 } else {
 
 // Explicit isolated QA storage never consults the legacy lab directory.
@@ -251,10 +251,8 @@ function createWindow() {
   restrictWindow(mainWindow,allowedRendererURL);
   if (useDevServer) {
     mainWindow.loadURL('http://localhost:5173');
-  } else if (fs.existsSync(distPath)) {
-    mainWindow.loadFile(distPath);
   } else {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadFile(distPath);
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -379,6 +377,8 @@ function printFocusedWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Packaged operation is local-only, including splash, reports and recovery.
+  if(app.isPackaged)session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,callback)=>callback({cancel:true}));
   const userDataDir = app.getPath('userData');
   try {
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -389,17 +389,14 @@ app.whenReady().then(async () => {
   createSplashWindow();
 
   db = new Database(userDataDir,{migrateLegacy:!isolatedDataDir});
-  try {await db.init();}catch(error){
+  try {await db.init(); require('./offlineMigration.cjs').migrateOfflineInstallation(db,{licensingDirectory:isolatedDataDir?path.join(isolatedDataDir,'activation-material'):path.join(app.getPath('appData'),'PatholyManagementSystem','licensing')});}catch(error){
     const recoveryWindow=new BrowserWindow({width:740,height:500,title:`Patholy Management System — v${app.getVersion()} · Recovery`,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,devTools:!app.isPackaged}});
     restrictWindow(recoveryWindow,'data:');splashWindow?.destroy();
     const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     recoveryWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(`<html><body style="background:#F5F7FA;color:#18283B;font:16px Segoe UI;padding:40px"><h1>Database recovery required</h1><p>${escape(error.message)}</p><p>The original database has not been replaced. Close the app, preserve the data folder, and follow RECOVERY.md. Do not delete lab.db or create a fresh database over it.</p><p>Data folder: ${escape(userDataDir)}</p><p>Restore a verified local recovery copy with the app closed, or ask your administrator for assistance.</p></body></html>`));return;
   }
 
-  const licensing=await require('./licensingRuntime.cjs').createAppLicensing(app,safeStorage,isolatedDataDir);
-  app.on('will-quit',()=>licensing.close());
   const {authorization:auth}=require('./applicationIpc.cjs').registerApplicationIpc(ipcMain,db,{
-    licensing,
     isTrusted:event=>event.sender===mainWindow?.webContents && (event.senderFrame?.url || event.sender.getURL()).split('#')[0]===allowedRendererURL,
     onRevoke:senderId=>{for(const access of [...previewPermissions.values()])if(access.senderId===senderId && !access.window.isDestroyed())access.window.destroy();},
     chooseRestorePath:event=>dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender),{title:'Select encrypted backup to validate',defaultPath:isolatedDataDir || undefined,properties:['openFile'],filters:[{name:'Encrypted lab backup',extensions:['enc']}]}),
@@ -408,14 +405,6 @@ app.whenReady().then(async () => {
       return dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender),{title:encrypted?'Save encrypted backup on your PC':'Save backup on your PC',defaultPath:path.join(isolatedDataDir || app.getPath('desktop'),encrypted?`lab_backup_${timestamp}.db.enc`:`lab_backup_${timestamp}.db`),filters:[{name:encrypted?'Encrypted backup':'SQLite backup',extensions:[encrypted?'enc':'db']}]});
     },
   });
-  const licenceScheduler=new (require('./licensingScheduler.cjs').LicensingScheduler)(licensing,{
-    onStatus:status=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('licensing:status',status);},
-  });
-  app.on('will-quit',()=>licenceScheduler.close());
-  require('./licensingIpc.cjs').registerLicensingIpc(ipcMain,auth,licensing,{onChange:()=>licenceScheduler.changed(),isFreshInstall:()=>require('./onboarding.cjs').isFreshInstall(db)});
-  // Startup verification and bounded retries retain the original signed
-  // deadline on network errors. No clinical information is transmitted.
-  licenceScheduler.start();
   const appOperations={};
   const appHandle=(name,permission,fn)=>{if(require('./applicationIpc.cjs').appPermissions[name]!==permission)throw new Error('Application permission mismatch');appOperations[name]=fn;};
   appHandle('print','staff', (_, copies, profile) => doPrint(copies || 1,profile));

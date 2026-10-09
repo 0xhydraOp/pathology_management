@@ -1,4 +1,4 @@
-const {registerLicensedReferenceFixture}=require('./registerLicensedFixture.cjs');
+const {registerReferenceFixture}=require('./registerApplicationFixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('fs');const os=require('os');const path=require('path');
@@ -109,7 +109,7 @@ test('critical thresholds are separate and do not manufacture a normal flag',()=
 
 test('main-process sessions bind authorization and SQL cannot bypass interval operations',()=>fixture(async(db)=>{
  const {EventEmitter}=require('events');const {registerReferenceIpc,guardGenericSql}=require('../electron/referenceIpc.cjs');
- const handlers=new Map();await registerLicensedReferenceFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
+ const handlers=new Map();await registerReferenceFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
  const sender=Object.assign(new EventEmitter(),{id:77});const event={sender};
  const call=(name,...args)=>handlers.get('db:'+name)(event,...args);
  assert.throws(()=>call('saveReferenceDraft',9001,[rule()],null),/authorized/i);

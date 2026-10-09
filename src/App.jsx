@@ -7,7 +7,6 @@ import NewRegistration from './pages/NewRegistration';
 import ResultEntrySimple from './pages/ResultEntrySimple';
 import Layout from './components/Layout';
 import ToastProvider from './components/ToastProvider';
-import LicenceSettings from './components/LicenceSettings';
 
 const Reports = lazy(() => import('./pages/Reports'));
 const Billing = lazy(() => import('./pages/Billing'));
@@ -77,7 +76,6 @@ function App() {
                 <Route path="referrer-commission" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><ReferrerCommission /></Suspense>} />
                 <Route path="rate-chart" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><RateChart /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<div style={{ padding: 24, color: '#666' }}>Loading...</div>}><Settings /></Suspense>} />
-                <Route path="activation" element={<div className="ui-page"><h1>Licence & activation</h1><LicenceSettings /></div>} />
               </Route>
             </Routes>
           )}

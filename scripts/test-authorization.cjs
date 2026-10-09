@@ -1,4 +1,4 @@
-const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+const {registerApplicationIpc:registerLocalApplicationFixture}=require('../electron/applicationIpc.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('fs'),os=require('os'),path=require('path'),{EventEmitter}=require('events');
 const Database=require('../electron/database'),{registerApplicationIpc,permissions}=require('../electron/applicationIpc.cjs'),{createAuthorization,SESSION_MAX_AGE_MS}=require('../electron/authorization.cjs');
@@ -7,7 +7,7 @@ async function fixture(fn){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lab-a
  db.run("INSERT INTO parameters(id,code,name,type,unit,section,decimal_places) VALUES(9001,'SYNAUTH','Synthetic test','numeric','mg/L','Synthetic',2)");
  db.run("INSERT INTO patients(id,patient_id,name,age,sex) VALUES(9001,'SYN-AUTH','Synthetic Patient',30,'female')");db.run("INSERT INTO orders(id,patient_id,order_date,status) VALUES(9001,9001,'2026-10-08','pending')");db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,9001)');
  const handlers=new Map(),event=id=>({sender:Object.assign(new EventEmitter(),{id})}),admin=event(1),staff=event(2),anonymous=event(3);
- const {authorization:auth}=await registerLicensedApplicationFixture({handle:(name,fn)=>{assert.ok(!handlers.has(name));handlers.set(name,fn);}},db,{chooseBackupPath:async()=>({filePath:path.join(dir,'chosen.db')})});const invoke=(e,method,...args)=>handlers.get('db:'+method)(e,...args);invoke(admin,'verifyUser','admin','synthetic-admin-password');invoke(staff,'verifyUser','synthetic-staff','synthetic-admin-password');
+ const {authorization:auth}=await registerLocalApplicationFixture({handle:(name,fn)=>{assert.ok(!handlers.has(name));handlers.set(name,fn);}},db,{chooseBackupPath:async()=>({filePath:path.join(dir,'chosen.db')})});const invoke=(e,method,...args)=>handlers.get('db:'+method)(e,...args);invoke(admin,'verifyUser','admin','synthetic-admin-password');invoke(staff,'verifyUser','synthetic-staff','synthetic-admin-password');
  const reopen=async()=>{auth.invalidateAll();db.close();db=new Database(dir,{migrateLegacy:false});await db.init();return db;};await fn({db,dir,handlers,admin,staff,anonymous,invoke,auth,event,reopen});
  }finally{db.close();fs.rmSync(dir,{recursive:true,force:true});}}
 test('every registered database channel has a policy and denies unauthenticated protected calls',()=>fixture(async f=>{
@@ -63,7 +63,7 @@ test('sessions reject logout, destruction, ID reuse, role/password/deletion chan
  let clock=1;const auth=createAuthorization(f.db,{now:()=>clock});auth.login(f.admin,'admin','synthetic-admin-password');clock+=SESSION_MAX_AGE_MS;assert.throws(()=>auth.requireActor(f.admin),/Sign in again/);
 }));
 test('pending backup dialogs cannot survive logout or a different login',()=>fixture(async f=>{
- let resolve;const handlers=new Map();const {authorization:auth}=await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},f.db,{chooseBackupPath:()=>new Promise(r=>resolve=r)});const invoke=(method,...args)=>handlers.get('db:'+method)(f.admin,...args);invoke('verifyUser','admin','synthetic-admin-password');const destination=path.join(f.dir,'stale-dialog.db');
+ let resolve;const handlers=new Map();const {authorization:auth}=await registerLocalApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},f.db,{chooseBackupPath:()=>new Promise(r=>resolve=r)});const invoke=(method,...args)=>handlers.get('db:'+method)(f.admin,...args);invoke('verifyUser','admin','synthetic-admin-password');const destination=path.join(f.dir,'stale-dialog.db');
  const pending=invoke('backupChooseLocation');invoke('logout');invoke('verifyUser','admin','synthetic-admin-password');resolve({filePath:destination});await assert.rejects(pending,/session changed/);assert.ok(!fs.existsSync(destination));auth.invalidateAll();
 }));
 test('main-frame and origin/session binding reject other frames and close sensitive sessions',()=>fixture(async f=>{

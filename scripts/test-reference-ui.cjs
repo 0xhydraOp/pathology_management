@@ -1,4 +1,4 @@
-const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+const {registerApplicationFixture}=require('./registerApplicationFixture.cjs');
 // Optional browser/PDF integration: T001_PLAYWRIGHT_PATH and REFERENCE_TEST_PYTHON select installed tools.
 const fs=require('fs'),path=require('path'),os=require('os'),assert=require('node:assert/strict');
 const {execFileSync}=require('child_process');
@@ -18,7 +18,7 @@ async function main(){
   db.run("INSERT INTO orders(id,patient_id,status,order_date) VALUES(9001,9001,'complete','2026-10-08')");
   db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,9001)');db.saveOrderResults(9001,[{parameterId:9001,value:3}]);
   const handlers=new Map(),sender=Object.assign(new EventEmitter(),{id:1}),event={sender};
-  await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{withLicenceIpc:true});
+  await registerApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{});
   const invoke=(method,...args)=>handlers.get('db:'+method)(event,...args);
   invoke('verifyUser','admin','synthetic-admin-password');
   fs.writeFileSync(harness,`<div id="root"></div><script type="module">

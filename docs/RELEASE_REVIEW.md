@@ -1,3 +1,5 @@
+> Historical verification record: applies to the version/date below. Current offline behavior and readiness are documented in README.md and OFFLINE_RELEASE.md; historical activation instructions do not apply.
+
 # Release review — 1.1.0-rc.1
 
 Reviewed 8 October 2026 with independent security/repository, clinical/recovery and packaging/licensing reviewers. Target branch is `feature/editable-reference-intervals`; repository is public. GitHub authentication is available; rulesets are empty and main protection returns "not protected". Publication targets the feature commit, without merging main, force-pushing or deploying Cloudflare.

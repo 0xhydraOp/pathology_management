@@ -1,3 +1,5 @@
+> Historical verification record: applies to the version/date below. Current offline behavior and readiness are documented in README.md and OFFLINE_RELEASE.md; historical activation instructions do not apply.
+
 # Packaged Windows QA — 8 October 2026
 
 This document records the earlier Electron 33/v1.0.2 QA build. The subsequent supported Electron 44/v1.0.3 build and dependency resolutions are recorded in [DEPENDENCY_SECURITY.md](DEPENDENCY_SECURITY.md); historical results below are retained.

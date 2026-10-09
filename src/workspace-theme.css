@@ -1,18 +1,5 @@
 /* Screen-only workspace system. Report/invoice/calibration print rules remain independent. */
 @media screen {
- .licence-banner {display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:#FFF7E6;color:#704709;border-bottom:1px solid #E8D6B4;font-size:13px;line-height:1.4;}
- .licence-banner span {flex:1;min-width:240px;}
- .licence-banner a {font-weight:600;color:#08717C;white-space:nowrap;}
- .licence-settings {border:1px solid #DCE3EB;border-radius:10px;background:white;padding:20px;margin:18px 0;max-width:920px;}
- .licence-settings h2 {font-size:19px;margin:0 0 12px;}
- .licence-settings p {line-height:1.5;}
- .licence-settings dl {display:grid;grid-template-columns:160px 1fr;gap:8px;margin:16px 0;}
- .licence-settings dt {color:#526174;}.licence-settings dd {margin:0;}
- .licence-settings input {display:block;width:min(100%,520px);margin:8px 0 12px;}
- .licence-settings button {margin:4px 12px 8px 0;}
- .licence-settings [role="alert"] {color:#A32936;}.licence-support-id code {overflow-wrap:anywhere;font-size:12px;}
-}
-@media screen {
  :root {
   --ui-canvas:#F5F7FA; --ui-surface:#FFFFFF; --ui-nav:#14283F; --ui-accent:#087F8C;
   --ui-text:#18283B; --ui-muted:#526174; --ui-border:#DCE3EB; --ui-soft:#EDF4F5;

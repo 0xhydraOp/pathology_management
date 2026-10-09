@@ -16,16 +16,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm ci
-        working-directory: licensing-worker
-      - run: npm test
-        working-directory: licensing-worker
       - run: npm run electron:build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
-          name: activation-pending-unsigned-candidate
+          name: offline-unsigned-candidate
           path: |
-            release/*Activation-Pending*Setup*.exe
-            release/*Activation-Pending*Windows-Install-Package.zip
+            release/*Offline*Setup*.exe
+            release/*Offline*Windows-Install-Package.zip

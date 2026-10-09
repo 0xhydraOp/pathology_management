@@ -1,4 +1,4 @@
-const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+const {registerApplicationFixture}=require('./registerApplicationFixture.cjs');
 // Optional real-browser regression. Set T001_PLAYWRIGHT_PATH to a Playwright module path.
 const fs = require('fs');
 const path = require('path');
@@ -26,7 +26,7 @@ async function main() {
       db.run('INSERT INTO order_tests(order_id,parameter_id) VALUES(9001,?)',[id]);
     }
     if (baselineSource) fs.writeFileSync(baselineSource,execFileSync('git',['show','902cebda:src/pages/ResultEntrySimple.jsx'],{cwd:root}));
-    const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:99})};await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{withLicenceIpc:true});handlers.get('db:verifyUser')(event,'admin','synthetic-admin-password');
+    const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:99})};await registerApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,{});handlers.get('db:verifyUser')(event,'admin','synthetic-admin-password');
     const component = baselineSource ? `/src/pages/${path.basename(baselineSource)}` : '/src/pages/ResultEntrySimple.jsx';
     fs.writeFileSync(harness,`<div id="root"></div><script type="module">
       import React from 'react'; import {createRoot} from 'react-dom/client';

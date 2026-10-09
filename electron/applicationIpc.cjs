@@ -10,8 +10,8 @@ const permissions={...referencePermissions,read:'staff',registerPatientOrder:'st
 function registerApplicationIpc(ipcMain,db,services={}){
  const candidates=new Map();
  const auth=services.authorization || createAuthorization(db,{onRevoke:services.onRevoke,isTrusted:services.isTrusted});
- registerReferenceIpc(ipcMain,db,{authorization:auth,licensing:services.licensing});
- const handle=(name,fn)=>ipcMain.handle('db:'+name,(event,...args)=>{auth.trusted(event);const permission=permissions[name];if(permission==='disabled')return guardGenericSql();const actor=auth.requireActor(event,permission);require('./licenceGate.cjs').requireLicence(name,services.licensing);return fn(event,actor,...args);});
+ registerReferenceIpc(ipcMain,db,{authorization:auth});
+ const handle=(name,fn)=>ipcMain.handle('db:'+name,(event,...args)=>{auth.trusted(event);const permission=permissions[name];if(permission==='disabled')return guardGenericSql();const actor=auth.requireActor(event,permission);return fn(event,actor,...args);});
  const audited=(actor,action,fn)=>{ops.atomic(db,()=>ops.audit(db,actor,action+'-requested'));const result=fn();ops.atomic(db,()=>ops.audit(db,actor,action+'-completed'));return result;};
  for(const name of ['init','query','run','get','all'])handle(name,()=>{});
  handle('read',(event,actor,name,args)=>{const reads=require('./readCatalogue.json');if(Object.hasOwn(reads,name))auth.requireActor(event,reads[name].permission);return ops.read(db,name,args);});

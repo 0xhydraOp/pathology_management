@@ -1,3 +1,5 @@
+> Historical verification record: applies to the version/date below. Current offline behavior and readiness are documented in README.md and OFFLINE_RELEASE.md; historical activation instructions do not apply.
+
 # Supported runtime and dependency security verification
 
 Verified **8 October 2026** on Windows 11 x64 using synthetic databases only. This report supersedes the dependency blockers in the earlier T001 and Electron 33 QA reports; those documents retain their historical results.

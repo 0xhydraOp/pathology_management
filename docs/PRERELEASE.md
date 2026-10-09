@@ -1,3 +1,5 @@
+> Historical verification record: applies to the version/date below. Current offline behavior and readiness are documented in README.md and OFFLINE_RELEASE.md; historical activation instructions do not apply.
+
 # 1.1.0-rc.1 — activation-pending evaluation prerelease
 
 This document describes the immutable released build at commit `42db0dc`. Later feature-branch work does not update its binaries, tag or published verification. Subsequent owner pagination, MFA-contract and LFS findings are documented separately in OWNER_ADMINISTRATION.md, MFA_CONTRACT.md and LFS_INSPECTION.md; the release-time limitations below remain historical facts for that build.

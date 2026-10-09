@@ -1,3 +1,5 @@
+> Historical verification record: applies to the version/date below. Current offline behavior and readiness are documented in README.md and OFFLINE_RELEASE.md; historical activation instructions do not apply.
+
 # Post-prerelease security verification
 
 Review started from `42db0dcbd536e3823bdb9fbdf8c69bc881b327a3`; verification completed 8–9 October 2026. The published `v1.1.0-rc.1` tag, notes and four release assets remain unchanged. No Cloudflare resources, account settings or secrets were created or changed.

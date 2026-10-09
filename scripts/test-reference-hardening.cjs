@@ -1,4 +1,4 @@
-const {registerLicensedReferenceFixture}=require('./registerLicensedFixture.cjs');
+const {registerReferenceFixture}=require('./registerApplicationFixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('fs'),os=require('os'),path=require('path');
@@ -117,7 +117,7 @@ test('critical unit mismatch and conflicting thresholds do not select the first 
  assert.equal(db.referenceFor(9001,{age:30,sex:null},'mg/L').critical,null);
 }));
 test('direct IPC calls require a session and audit the authenticated actor',()=>fixture(async(db)=>{
- const handlers=new Map();await registerLicensedReferenceFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
+ const handlers=new Map();await registerReferenceFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
  const sender=Object.assign(new EventEmitter(),{id:91}),event={sender};const invoke=(name,...args)=>handlers.get('db:'+name)(event,...args);
  assert.throws(()=>invoke('approveReferenceDraft',1),/authorized/i);assert.throws(()=>invoke('issueReport',9001),/authorized/i);
  invoke('verifyUser','admin','synthetic-admin-password');const active=db.listReferenceSets(9001).find(s=>s.status==='approved');

@@ -1,7 +1,7 @@
 {
   "name": "mondal-diagnostic-centre",
-  "version": "1.1.0-rc.1",
-  "description": "Patholy Management System",
+  "version": "1.1.0-rc.2",
+  "description": "Patholy Management System \u2014 fully offline pathology laboratory workspace",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=1 electron .\"",
     "build:icon": "node scripts/build-icon.mjs",
-    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js scripts/test-reference-intervals.cjs scripts/test-reference-hardening.cjs scripts/test-print-profile.cjs scripts/test-authorization.cjs scripts/test-recovery.cjs scripts/test-administrator-recovery.cjs scripts/test-licensing-client.cjs scripts/test-licensing-scheduler.cjs scripts/test-onboarding.cjs scripts/test-licensing-ipc.cjs scripts/test-billing-integrity.cjs",
+    "test": "node scripts/test-system.js && node --test scripts/test-result-integrity.js scripts/test-reference-intervals.cjs scripts/test-reference-hardening.cjs scripts/test-print-profile.cjs scripts/test-authorization.cjs scripts/test-recovery.cjs scripts/test-administrator-recovery.cjs scripts/test-onboarding.cjs scripts/test-billing-integrity.cjs scripts/test-offline-migration.cjs",
     "release": "node scripts/create-release.js",
     "electron:build": "npm run build:icon && vite build && electron-builder && node scripts/package-install-zip.js",
     "release:clean": "node scripts/clean-release.js",
@@ -75,8 +75,8 @@
         "to": "third-party-licenses"
       },
       {
-        "from": "docs/PRERELEASE.md",
-        "to": "PRERELEASE.md"
+        "from": "docs/OFFLINE_RELEASE.md",
+        "to": "OFFLINE_RELEASE.md"
       }
     ],
     "win": {
@@ -90,7 +90,7 @@
       ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": true,
-      "artifactName": "Patholy Management System Activation-Pending Prerelease Setup 1.1.0-rc.1.exe"
+      "artifactName": "Patholy Management System Offline Setup ${version}.exe"
     },
     "forceCodeSigning": false,
     "nsis": {
@@ -110,10 +110,7 @@
       "license": "build/license.txt",
       "deleteAppDataOnUninstall": false
     },
-    "icon": "build/icon.ico",
-    "extraMetadata": {
-      "patholyActivationPendingPrerelease": true
-    }
+    "icon": "build/icon.ico"
   },
   "overrides": {
     "concurrently": {

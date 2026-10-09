@@ -1,6 +1,5 @@
 import { APP_NAME, APP_VERSION } from '../utils/product';
 import WorkspaceIcon from './WorkspaceIcon';
-import LicenceBanner from './LicenceBanner';
 ﻿import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
@@ -21,7 +20,6 @@ const TITLE_MAP = {
   '/referrer-commission': 'Referrer Commission',
   '/rate-chart': 'Test Prices',
   '/settings': 'Settings',
-  '/activation': 'Licence & activation',
 };
 
 function HotkeyHandler() {
@@ -119,7 +117,6 @@ export default function Layout({ children, onLogout }) {
 
   return (
     <div data-ui="layout" style={styles.layout} className="app-layout">
-      <LicenceBanner />
       {!dbReady && (
         <div data-ui="dbBanner" style={styles.dbBanner} className="no-print">
           Database not available. Run <strong>npm run electron:dev</strong> (not npm run dev). Buttons will not work in browser-only mode.

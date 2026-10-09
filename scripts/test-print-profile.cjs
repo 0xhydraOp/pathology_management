@@ -1,4 +1,4 @@
-const {registerLicensedReferenceFixture}=require('./registerLicensedFixture.cjs');
+const {registerReferenceFixture}=require('./registerApplicationFixture.cjs');
 const{test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('fs'),os=require('os'),path=require('path');const Database=require('../electron/database');
 async function fixture(fn){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lab-print-profile-'));let db=new Database(dir,{migrateLegacy:false});try{await db.init();if(db.credentialState().setupRequired)db.setupAdmin('admin','synthetic-admin-password');const reopen=async()=>{db.close();db=new Database(dir,{migrateLegacy:false});await db.init();return db;};await fn(db,reopen,dir);}finally{db.close();fs.rmSync(dir,{recursive:true,force:true});}}
@@ -12,7 +12,7 @@ test('local print profile validates geometry, authorizes updates and survives re
 }));
 test('direct profile IPC rejects unauthenticated/staff calls and audits the authenticated admin',()=>fixture(async db=>{
  const {EventEmitter}=require('events'),{registerReferenceIpc,guardGenericSql}=require('../electron/referenceIpc.cjs');
- const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:77})};await registerLicensedReferenceFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
+ const handlers=new Map(),event={sender:Object.assign(new EventEmitter(),{id:77})};await registerReferenceFixture({handle:(name,fn)=>handlers.set(name,fn)},db);
  const invoke=(method,...args)=>handlers.get('db:'+method)(event,...args),profile=db.getPrintProfile();
  assert.throws(()=>invoke('setPrintProfile',profile),/authorized/i);
  db.run("INSERT INTO users(id,username,password_hash,role) SELECT 9001,'synthetic-staff',password_hash,'staff' FROM users WHERE id=1");invoke('verifyUser','synthetic-staff','synthetic-admin-password');assert.throws(()=>invoke('setPrintProfile',profile),/admin/i);

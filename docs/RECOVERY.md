@@ -1,3 +1,7 @@
+# Fully offline recovery
+
+Setup, login, backup/restore and packaged administrator recovery require no network or remote account. No activation material is required. Keep recovery copies protected by OS permissions and disk encryption.
+
 # Credentials, backups and recovery
 
 ## First use and password changes

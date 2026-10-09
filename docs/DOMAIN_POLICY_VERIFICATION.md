@@ -1,3 +1,5 @@
+> Historical verification record: applies to the version/date below. Current offline behavior and readiness are documented in README.md and OFFLINE_RELEASE.md; historical activation instructions do not apply.
+
 # Domain, manual-key policy and public briefing verification
 
 Verified 9 October 2026 from feature branch baseline `5dbe03e135a41980cf095aaa7269b60acc703390`. No deployment, DNS mutation, account change, paid charge or release publication occurred. `v1.1.0-rc.1` remains at `42db0dc` with its original artifacts.

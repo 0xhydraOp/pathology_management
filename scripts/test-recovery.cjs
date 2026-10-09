@@ -1,4 +1,4 @@
-const {registerLicensedApplicationFixture}=require('./registerLicensedFixture.cjs');
+const {registerApplicationFixture}=require('./registerApplicationFixture.cjs');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),{EventEmitter}=require('events');
 const Database=require('../electron/database'),recovery=require('../electron/recovery.cjs'),credentials=require('../electron/credentials.cjs'),{registerApplicationIpc}=require('../electron/applicationIpc.cjs');
 const password='synthetic-unique-password';
@@ -13,7 +13,7 @@ test('a session expiring while a restore selector is open fails before reading o
  assert.equal(f.call(f.admin,'getSession'),null);assert.deepEqual(fs.readFileSync(db.dbPath),original);
 }));
 async function fixture(fn){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lab-recovery-'));let db=new Database(dir,{migrateLegacy:false});try{await db.init();await fn({db,dir});}finally{db.close();fs.rmSync(dir,{recursive:true,force:true});}}
-async function ipc(db,services={}){const handlers=new Map(),event=id=>({sender:Object.assign(new EventEmitter(),{id})}),admin=event(1),staff=event(2),anonymous=event(3);const {authorization:auth}=await registerLicensedApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,services);return {admin,staff,anonymous,auth,call:(e,name,...args)=>handlers.get('db:'+name)(e,...args)};}
+async function ipc(db,services={}){const handlers=new Map(),event=id=>({sender:Object.assign(new EventEmitter(),{id})}),admin=event(1),staff=event(2),anonymous=event(3);const {authorization:auth}=await registerApplicationFixture({handle:(name,fn)=>handlers.set(name,fn)},db,services);return {admin,staff,anonymous,auth,call:(e,name,...args)=>handlers.get('db:'+name)(e,...args)};}
 test('incomplete schemas, unusable users, orphan clinical relationships and unsupported migrations reject before restore',()=>fixture(async({db})=>{
  db.setupAdmin('admin',password);const original=fs.readFileSync(db.dbPath);
  for(const [sql,message]of [["DROP INDEX one_approved_reference",/schema/],["DELETE FROM users",/administrator/],["DROP TABLE test_rates",/schema|table/],["UPDATE users SET password_hash='invalid'",/authentication/],["INSERT INTO parameter_critical_rules(parameter_id) VALUES(999999)",/relationships/],["INSERT INTO reference_migrations VALUES(99,'synthetic')",/newer/],["INSERT INTO orders(id,patient_id,order_date) VALUES(9001,999999,'2026-10-08')",/relationships/]]){

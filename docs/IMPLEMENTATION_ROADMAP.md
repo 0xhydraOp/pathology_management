@@ -1,3 +1,5 @@
+> Current scope update (10 October 2026): Patholy is fully offline. The former licensing milestone is cancelled and superseded by the offline-conversion candidate. Historical T001 planning/results below are retained for context.
+
 # Implementation roadmap
 
 T001 establishes a reproducible baseline and fixes numeric result integrity. No licensing, deployment, branding, billing, or clinical catalogue changes belong to T001.

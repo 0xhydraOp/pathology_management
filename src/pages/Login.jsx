@@ -1,14 +1,13 @@
 import { APP_TITLE } from '../utils/product';
 import { useState, useEffect } from 'react';
-import ActivationSetup from '../components/ActivationSetup';
 
 export default function Login({ onLogin }) {
   const [setup, setSetup] = useState(false);
-  const [checking,setChecking]=useState(true),[activation,setActivation]=useState(null),[recoveryRequired,setRecoveryRequired]=useState(false),[setupLicence,setSetupLicence]=useState(null);
+  const [checking,setChecking]=useState(true),[recoveryRequired,setRecoveryRequired]=useState(false);
   const [restricted,setRestricted]=useState(null);
   const [nextPassword,setNextPassword]=useState('');
   const [confirmation,setConfirmation]=useState('');
-  async function checkSetup(){const credentials=await window.db.credentialState();setRecoveryRequired(Boolean(credentials.recoveryRequired));if(credentials.setupRequired&&!credentials.recoveryRequired){const onboarding=await window.licensing.getOnboardingState();if(!onboarding.freshInstallation)throw new Error('Installation setup requires review. Close the app and follow the recovery guide.');setSetupLicence(onboarding.licensing);setActivation(onboarding.licensing.allowed?null:onboarding.licensing);setSetup(Boolean(onboarding.licensing.allowed));}else{setSetup(false);setActivation(null);}}
+  async function checkSetup(){const credentials=await window.db.credentialState();setRecoveryRequired(Boolean(credentials.recoveryRequired));setSetup(Boolean(credentials.setupRequired&&!credentials.recoveryRequired));}
   useEffect(()=>{let live=true;(async()=>{try{await checkSetup();const user=await window.db?.getSession?.();if(live&&user?.requiresPasswordChange)setRestricted(user);}catch(e){if(live)setError(e.message);}finally{if(live)setChecking(false);}})();return()=>{live=false;};},[]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -47,7 +46,6 @@ export default function Login({ onLogin }) {
   };
 
   if(checking)return <div className="login-page" data-ui="container"><div data-ui="card"><h1>{APP_TITLE}</h1><p role="status">Checking installation setup…</p></div></div>;
-  if(activation)return <ActivationSetup status={activation} onActivated={checkSetup}/>;
   if(recoveryRequired)return <div className="login-page" data-ui="container"><div data-ui="card"><h1>{APP_TITLE}</h1><h2>Administrator recovery required</h2><p>Existing lab records were found without an administrator account. The database has not been replaced. Close the app, preserve the data directory and follow RECOVERY.md or restore a verified backup.</p></div></div>;
   return (
     <div data-ui="container" style={styles.container} className="login-page">
@@ -56,8 +54,8 @@ export default function Login({ onLogin }) {
           <img data-ui="logo" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Logo" style={styles.logo} />
         </div>
         <h1 data-ui="labName" style={styles.labName}>{APP_TITLE}</h1>
-        {APP_TITLE.includes('-rc.')&&<p role="note">{setupLicence?.syntheticFixture?'Synthetic QA build. Use isolated test data only.':setup&&setupLicence?.allowed?'Activation verified. Complete local administrator setup before signing in.':'Release candidate. Confirm activation readiness before production lab use. Existing-record viewing, issued reprints and recovery remain available.'}</p>}
-        <p data-ui="subtitle" style={styles.subtitle}>{setup?'Step 2 of 3 · Create your administrator account':restricted?'Replace the legacy default password':'Step 3 · Sign in to your lab workspace'}</p>
+        {APP_TITLE.includes('-rc.')&&<p role="note">Release candidate. Validate backup, recovery and printing before production lab use.</p>}
+        <p data-ui="subtitle" style={styles.subtitle}>{setup?'Create your local administrator account':restricted?'Replace the legacy default password':'Sign in to your lab workspace'}</p>
         {(setup||restricted)&&<p>Use a unique password of at least 12 characters. There is no default or hidden recovery account.</p>}
 
         <form data-ui="form" style={styles.form} onSubmit={handleSubmit}>
