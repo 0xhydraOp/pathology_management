@@ -47,3 +47,7 @@ Website files are intentionally unchanged; their activation/licence wording is o
 ## MIT licence
 
 [MIT](LICENSE), copyright 2026 **Robiul Islam Molla**. Recipients may reuse, modify and redistribute this project's code under MIT. MIT does not relicense dependencies; [third-party notices](THIRD_PARTY_NOTICES.md) accompany the distribution.
+
+## Code signing policy
+
+Free SignPath Foundation signing is being prepared, subject to provider approval. The published v1.1.0 build remains unsigned. See the [proposed code signing policy](docs/CODE_SIGNING_POLICY.md) for maintainer roles, privacy, prerequisites and the app/installer signing sequence. No signing service is enabled yet.
